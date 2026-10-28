@@ -15,13 +15,16 @@ The server reads `config/explorerscompass/unlocking_rules.json` at startup. A ne
 
 Each named rule contains:
 
-- `unlocks`: exactly one of `structures` (an array of structure IDs) or `structureSet` (a structure-set ID).
-- `condition`: a visit, a completed advancement, or a nested `any`/`all` array of conditions. Arrays must be nonempty.
-- `description` (optional): literal player-facing text. Use `\n` for line breaks. Without it the compass generates a readable requirements summary.
+- `unlocks`: a nonempty array. Entries may name structures or structure sets; set members are expanded and the results are deduplicated.
+- `condition`: one visit or advancement condition. Nested `any`/`all` condition groups are not supported.
 
-A visit condition has `type: "visit"` and exactly one of `structure`, `structures`, or `structureSet`. `match` may be `any` (the default) or `all`. One instance of each structure type is sufficient for `all`; visits count across dimensions. An advancement condition has `type: "advancement"` and a nonempty `advancements` array, even for one advancement. Its `match` is `any` by default or `all` to require every listed advancement.
+The compass generates player-facing requirement text from each condition. The former `description` field is no longer accepted.
 
-Explicit rules override the default. Multiple rules targeting the same structure are alternatives: any satisfied rule is enough. `lockedUntilVisited` applies only to structures without an explicit rule and requires a visit to that structure type.
+A visit condition has `type: "visit"` and a nonempty `structures` array. Entries may name structures or structure sets. `match` may be `any` (the default) or `all` across the expanded, deduplicated structure types. One instance of each structure type is sufficient for `all`; visits count across dimensions. An advancement condition has `type: "advancement"` and a nonempty `advancements` array, even for one advancement. Its `match` is `any` by default or `all` to require every listed advancement.
+
+`structures` selectors support `*` for zero or more characters. Patterns match complete IDs in both the structure and structure-set registries, including namespace; omitting the namespace means `minecraft`. `?` is not supported. If the same ID names a structure and a structure set, the structure takes precedence and a warning is logged. Advancement IDs remain exact. Patterns resolve at startup and on `/explorerscompass reloadRules`. Unmatched patterns produce warnings. An exact but unavailable visit ID remains an unsatisfied requirement; a visit selection that resolves to nothing never satisfies `all`.
+
+Explicit rules override the default. If multiple rules target the same structure, the rule farther down in the file supplies its condition and requirement text. The server warns with the structure ID and the line numbers of the matching `unlocks` entries, including entries that expand from patterns or structure sets. `lockedUntilVisited` applies only to structures without an explicit rule and requires a visit to that structure type.
 
 New visits and advancement progress can immediately add to a player's saved unlocked structures. Opening the compass also evaluates current conditions. The open screen uses the snapshot received when opened; reopen it after progress, commands, or rule changes. Saved unlocked structures (including default-unlocked structures) persist through lost requirements, config edits, and restarts. There is no automatic relocking.
 
@@ -53,4 +56,4 @@ Permission level 2 is required. `<player>` accepts an online name, a name in `us
 
 `reloadRules` replaces rule definitions without evaluating players or modifying their saved data. Existing compass screens refresh on reopening. Later progress events use the new rules.
 
-Invalid individual rules are logged and skipped; the default or other valid rules then apply. Unavailable targets are skipped with warnings. Unavailable visit/advancement requirements cannot match (and an empty set never satisfies `all`). An unreadable or malformed file logs an error and falls back to `unlocked` with no rules; it does not overwrite the file.
+Invalid individual rules are logged and skipped; the default or other valid rules then apply. The former `structure`, `structureSet`, and `structureSets` fields and nested condition groups are invalid and must be updated manually. Unavailable targets are skipped with warnings. Unavailable visit/advancement requirements cannot match (and an empty set never satisfies `all`). An unreadable or malformed file logs an error and falls back to `unlocked` with no rules; it does not overwrite the file.

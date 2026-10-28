@@ -1,7 +1,7 @@
 package com.chaosthedude.explorerscompass.unlocking;
 
 import java.io.IOException;
-import java.io.Reader;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -13,7 +13,9 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Function;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -21,6 +23,8 @@ import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.advancement.Advancement;
 import net.minecraft.advancement.AdvancementFrame;
@@ -38,16 +42,17 @@ public final class UnlockingRules {
     private static UnlockingRules active = new UnlockingRules();
     private boolean defaultUnlocked = true;
     private final Map<String, Rule> rules = new LinkedHashMap<>();
-    private final Map<Identifier, List<Rule>> byStructure = new LinkedHashMap<>();
+    private final Map<Identifier, Rule> byStructure = new LinkedHashMap<>();
 
     private record Condition(Predicate<Progress> test, Function<Progress, RequirementNode> display,
                              Set<Identifier> visits, Set<Identifier> advancements) {}
-    private record Rule(Set<Identifier> targets, Condition condition, String description) {}
+    private record Rule(Set<Identifier> targets, Condition condition) {}
 
     public static UnlockingRules get() { return active; }
 
     interface Catalog {
         Set<Identifier> structures();
+        Set<Identifier> structureSets();
         Set<Identifier> structureSet(Identifier id);
         boolean advancementExists(Identifier id);
         Text advancementTitle(Identifier id);
@@ -63,6 +68,7 @@ public final class UnlockingRules {
     private static Catalog catalog(MinecraftServer server) {
         return new Catalog() {
             public Set<Identifier> structures() { return server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds(); }
+            public Set<Identifier> structureSets() { return server.getRegistryManager().get(RegistryKeys.STRUCTURE_SET).getIds(); }
             public Set<Identifier> structureSet(Identifier id) { return setMembers(server, id); }
             public boolean advancementExists(Identifier id) { return server.getAdvancementLoader().get(id) != null; }
             public Text advancementTitle(Identifier id) {
@@ -104,9 +110,8 @@ public final class UnlockingRules {
         try {
             Files.createDirectories(file.getParent());
             if (!Files.exists(file)) Files.writeString(file, "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n");
-            try (Reader reader = Files.newBufferedReader(file)) {
-                return parse(JsonParser.parseReader(reader).getAsJsonObject(), catalog);
-            }
+            String source = Files.readString(file);
+            return parse(source, catalog);
         } catch (IOException | RuntimeException e) {
             LOGGER.error("Cannot load {}. Using default unlocked with no rules.", file, e);
             return new UnlockingRules();
@@ -114,7 +119,17 @@ public final class UnlockingRules {
     }
 
     static UnlockingRules parse(JsonObject root, Catalog catalog) {
+        return parse(root, catalog, Map.of());
+    }
+
+    static UnlockingRules parse(String source, Catalog catalog) {
+        return parse(JsonParser.parseString(source).getAsJsonObject(), catalog, unlockLines(source));
+    }
+
+    private static UnlockingRules parse(JsonObject root, Catalog catalog, Map<String, List<Integer>> lines) {
         UnlockingRules result = new UnlockingRules();
+        Map<Identifier, List<Integer>> declarationLines = new LinkedHashMap<>();
+        Set<Identifier> duplicates = new LinkedHashSet<>();
         String mode = root.has("default") ? string(root, "default") : "unlocked";
         if (!mode.equals("unlocked") && !mode.equals("lockedUntilVisited")) throw invalid("Unknown default: " + mode);
         result.defaultUnlocked = mode.equals("unlocked");
@@ -122,15 +137,29 @@ public final class UnlockingRules {
         for (Map.Entry<String, JsonElement> entry : entries.entrySet()) {
             try {
                 JsonObject value = entry.getValue().getAsJsonObject();
-                Set<Identifier> targets = targets(catalog, value.getAsJsonObject("unlocks"));
-                Condition condition = condition(catalog, value.getAsJsonObject("condition"), 0);
-                String description = value.has("description") ? string(value, "description") : null;
-                Rule rule = new Rule(targets, condition, description);
+                for (String key : value.keySet())
+                    if (!Set.of("unlocks", "condition").contains(key)) throw invalid("Unknown rule field: " + key);
+                Map<Identifier, List<Integer>> targetLines = new LinkedHashMap<>();
+                Set<Identifier> targets = targets(catalog, value.get("unlocks"),
+                        lines.getOrDefault(entry.getKey(), List.of()), targetLines);
+                Condition condition = condition(catalog, value.getAsJsonObject("condition"));
+                Rule rule = new Rule(targets, condition);
                 result.rules.put(entry.getKey(), rule);
-                for (Identifier id : targets) result.byStructure.computeIfAbsent(id, ignored -> new ArrayList<>()).add(rule);
+                for (Identifier id : targets) {
+                    if (result.byStructure.put(id, rule) != null) duplicates.add(id);
+                    declarationLines.computeIfAbsent(id, ignored -> new ArrayList<>())
+                            .addAll(targetLines.getOrDefault(id, List.of()));
+                }
             } catch (RuntimeException e) {
                 LOGGER.error("Skipping invalid rule '{}' in unlocking_rules.json: {}", entry.getKey(), e.getMessage());
             }
+        }
+        for (Identifier id : duplicates) {
+            List<Integer> positions = declarationLines.get(id);
+            String listed = positions.isEmpty() ? "unknown" : positions.stream()
+                    .map(UnlockingRules::line).collect(Collectors.joining(", "));
+            warn("Structure " + id + " is listed under unlocks on lines " + listed
+                    + "; the last condition takes precedence");
         }
         return result;
     }
@@ -157,7 +186,8 @@ public final class UnlockingRules {
         for (Identifier id : structures) {
             if (!byStructure.containsKey(id) && (defaultUnlocked || progress.visited(id))) earned.add(id);
         }
-        for (Rule rule : rules.values()) if (rule.condition.test.test(progress)) earned.addAll(rule.targets);
+        for (Map.Entry<Identifier, Rule> entry : byStructure.entrySet())
+            if (entry.getValue().condition.test.test(progress)) earned.add(entry.getKey());
         return earned;
     }
 
@@ -172,10 +202,11 @@ public final class UnlockingRules {
     Set<Identifier> earnedOnProgress(Progress progress, Identifier visit, Identifier advancement) {
         Set<Identifier> earned = new LinkedHashSet<>();
         if (visit != null && !byStructure.containsKey(visit)) earned.add(visit);
-        for (Rule rule : rules.values()) {
+        for (Map.Entry<Identifier, Rule> entry : byStructure.entrySet()) {
+            Rule rule = entry.getValue();
             if (((visit != null && rule.condition.visits.contains(visit))
                     || (advancement != null && rule.condition.advancements.contains(advancement)))
-                    && rule.condition.test.test(progress)) earned.addAll(rule.targets);
+                    && rule.condition.test.test(progress)) earned.add(entry.getKey());
         }
         return earned;
     }
@@ -191,22 +222,16 @@ public final class UnlockingRules {
     }
 
     RequirementNode requirements(Identifier id, Progress progress) {
-        List<Rule> matching = byStructure.get(id);
-        if (matching == null) return visitNode(Set.of(id), true, Set.of(id), progress);
-        List<RequirementNode> descriptions = matching.stream().map(rule -> rule.description == null
-                ? rule.condition.display.apply(progress)
-                : new RequirementNode(Text.literal(rule.description), rule.condition.test.test(progress), false, true, List.of())).toList();
-        return descriptions.size() == 1 ? descriptions.get(0)
-                : new RequirementNode(Text.literal("Do any of:"), descriptions.stream().anyMatch(RequirementNode::checked), true, descriptions);
+        Rule rule = byStructure.get(id);
+        if (rule == null) return visitNode(Set.of(id), true, Set.of(id), progress);
+        return rule.condition.display.apply(progress);
     }
 
-    private static Set<Identifier> targets(Catalog catalog, JsonObject json) {
-        for (String key : json.keySet())
-            if (!key.equals("structures") && !key.equals("structureSet")) throw invalid("Unknown unlock selector: " + key);
-        selector(json, "structures", "structureSet");
-        Set<Identifier> ids;
-        if (json.has("structures")) ids = ids(json.get("structures"));
-        else ids = catalog.structureSet(identifier(string(json, "structureSet")));
+    private static Set<Identifier> targets(Catalog catalog, JsonElement json, List<Integer> lines,
+                                           Map<Identifier, List<Integer>> targetLines) {
+        Set<Identifier> ids = resolveStructures(catalog, patterns(json), false,
+                (id, index) -> targetLines.computeIfAbsent(id, ignored -> new ArrayList<>())
+                        .add(index < lines.size() ? lines.get(index) : null));
         Set<Identifier> known = catalog.structures();
         return ids.stream().filter(id -> {
             if (known.contains(id)) return true;
@@ -222,27 +247,13 @@ public final class UnlockingRules {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private static Condition condition(Catalog catalog, JsonObject json, int depth) {
-        if (json == null || depth > 64) throw invalid("Missing or excessively nested condition");
-        selector(json, "type", "any", "all");
-        if (!json.has("type")) {
-            boolean all = json.has("all");
-            var array = json.getAsJsonArray(all ? "all" : "any");
-            if (array.isEmpty()) throw invalid("Condition groups cannot be empty");
-            List<Condition> children = new ArrayList<>();
-            for (JsonElement child : array) children.add(condition(catalog, child.getAsJsonObject(), depth + 1));
-            Set<Identifier> visits = new LinkedHashSet<>(), advancements = new LinkedHashSet<>();
-            children.forEach(child -> { visits.addAll(child.visits); advancements.addAll(child.advancements); });
-            return new Condition(player -> all ? children.stream().allMatch(child -> child.test.test(player))
-                    : children.stream().anyMatch(child -> child.test.test(player)),
-                    player -> {
-                        List<RequirementNode> nodes = children.stream().map(child -> child.display.apply(player)).toList();
-                        return new RequirementNode(Text.literal(all ? "Do all of:" : "Do any of:"),
-                                all ? nodes.stream().allMatch(RequirementNode::checked) : nodes.stream().anyMatch(RequirementNode::checked), true, nodes);
-                    }, visits, advancements);
-        }
+    private static Condition condition(Catalog catalog, JsonObject json) {
+        if (json == null) throw invalid("Missing condition");
+        if (json.has("any") || json.has("all")) throw invalid("Condition groups are no longer supported; use one condition per rule");
         String type = string(json, "type");
         if (type.equals("advancement")) {
+            for (String key : json.keySet())
+                if (!Set.of("type", "advancements", "match").contains(key)) throw invalid("Unknown advancement condition field: " + key);
             if (!json.has("advancements") || !json.get("advancements").isJsonArray() || json.has("id"))
                 throw invalid("Advancement conditions require an advancements array");
             Set<Identifier> required = ids(json.get("advancements"));
@@ -257,23 +268,22 @@ public final class UnlockingRules {
                             Formatting color = catalog.advancementColor(id);
                             Text description = catalog.advancementDescription(id);
                             return new RequirementNode(catalog.advancementTitle(id).copy().formatted(color),
-                                    catalog.advancementExists(id) && progress.completed(id), false, false, List.of(),
+                                    catalog.advancementExists(id) && progress.completed(id), false, List.of(),
                                     description == null ? null : description.copy().formatted(color));
                         }).toList();
                         boolean checked = all ? leaves.stream().allMatch(RequirementNode::checked)
                                 : leaves.stream().anyMatch(RequirementNode::checked);
                         String label = required.size() == 1 ? "Complete Advancement:"
-                                : all ? "Complete each of these advancements:" : "Complete any of these advancements:";
+                                : all ? "Complete all Advancements:" : "Complete any Advancements:";
                         return new RequirementNode(Text.literal(label), checked, leaves);
                     }, Set.of(), required);
         }
         if (!type.equals("visit")) throw invalid("Unknown condition type " + type);
-        selector(json, "structure", "structures", "structureSet");
+        for (String key : json.keySet())
+            if (!Set.of("type", "structures", "match").contains(key)) throw invalid("Unknown visit condition field: " + key);
         String match = json.has("match") ? string(json, "match") : "any";
         if (!match.equals("any") && !match.equals("all")) throw invalid("Unknown visit match " + match);
-        Set<Identifier> required = json.has("structure") ? Set.of(identifier(string(json, "structure")))
-                : json.has("structures") ? ids(json.get("structures"))
-                : catalog.structureSet(identifier(string(json, "structureSet")));
+        Set<Identifier> required = resolveStructures(catalog, json, true);
         Set<Identifier> known = catalog.structures();
         for (Identifier id : required) if (!known.contains(id)) warn("Unavailable visit requirement " + id);
         boolean all = match.equals("all");
@@ -290,14 +300,127 @@ public final class UnlockingRules {
                 known.contains(id) && progress.visited(id), List.of())).toList();
         boolean checked = !children.isEmpty() && (all ? children.stream().allMatch(RequirementNode::checked)
                 : children.stream().anyMatch(RequirementNode::checked));
-        return new RequirementNode(Text.literal(required.size() == 1 ? "Visit:" : all ? "Visit each of:" : "Visit any of:"), checked, children);
+        String label = required.size() == 1 ? "Visit Structure:"
+                : all ? "Visit all Structures:" : "Visit any Structure:";
+        return new RequirementNode(Text.literal(label), checked, children);
     }
 
-    private static void selector(JsonObject json, String... keys) {
-        if (json == null) throw invalid("Missing selector");
-        int count = 0;
-        for (String key : keys) if (json.has(key)) count++;
-        if (count != 1) throw invalid("Choose exactly one of " + String.join(", ", keys));
+    private static Set<Identifier> resolveStructures(Catalog catalog, JsonObject json, boolean visit) {
+        if (json == null || !json.has("structures")) throw invalid("Specify structures");
+        return resolveStructures(catalog, patterns(json.get("structures")), visit, (id, index) -> {});
+    }
+
+    private static Set<Identifier> resolveStructures(Catalog catalog, List<String> patterns, boolean visit,
+                                                      BiConsumer<Identifier, Integer> origin) {
+        Set<Identifier> result = new LinkedHashSet<>();
+        Set<Identifier> structures = catalog.structures();
+        Set<Identifier> structureSets = catalog.structureSets();
+        Set<Identifier> available = new LinkedHashSet<>(structures);
+        available.addAll(structureSets);
+        for (int index = 0; index < patterns.size(); index++) {
+            String pattern = patterns.get(index);
+            for (Identifier id : resolvePattern(pattern, available, visit)) {
+                if (structures.contains(id)) {
+                    if (structureSets.contains(id))
+                        warn("Both a structure and structure set use " + id + "; treating it as a single structure");
+                    result.add(id);
+                    origin.accept(id, index);
+                } else if (structureSets.contains(id)) {
+                    for (Identifier member : catalog.structureSet(id)) {
+                        result.add(member);
+                        origin.accept(member, index);
+                    }
+                } else if (visit) {
+                    result.add(id);
+                    origin.accept(id, index);
+                }
+            }
+        }
+        return result;
+    }
+
+    private static String line(Integer value) { return value == null ? "unknown" : value.toString(); }
+
+    /** Read source locations separately because Gson's JSON tree does not retain them. */
+    static Map<String, List<Integer>> unlockLines(String source) {
+        Map<String, List<Integer>> result = new LinkedHashMap<>();
+        try (JsonReader reader = new JsonReader(new StringReader(source))) {
+            reader.setLenient(true);
+            reader.beginObject();
+            while (reader.hasNext()) {
+                if (!reader.nextName().equals("rules") || reader.peek() != JsonToken.BEGIN_OBJECT) {
+                    reader.skipValue();
+                    continue;
+                }
+                reader.beginObject();
+                while (reader.hasNext()) {
+                    String ruleName = reader.nextName();
+                    List<Integer> positions = new ArrayList<>();
+                    result.put(ruleName, positions);
+                    if (reader.peek() != JsonToken.BEGIN_OBJECT) { reader.skipValue(); continue; }
+                    reader.beginObject();
+                    while (reader.hasNext()) {
+                        if (!reader.nextName().equals("unlocks") || reader.peek() != JsonToken.BEGIN_ARRAY) {
+                            reader.skipValue();
+                            continue;
+                        }
+                        reader.beginArray();
+                        while (reader.hasNext()) {
+                            if (reader.peek() == JsonToken.STRING) {
+                                reader.nextString();
+                                var location = Pattern.compile("line (\\d+)").matcher(reader.toString());
+                                positions.add(location.find() ? Integer.parseInt(location.group(1)) : null);
+                            } else {
+                                reader.skipValue();
+                                positions.add(null);
+                            }
+                        }
+                        reader.endArray();
+                    }
+                    reader.endObject();
+                }
+                reader.endObject();
+            }
+            reader.endObject();
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("Could not read unlock selector line numbers", e);
+        }
+        return result;
+    }
+
+    private static List<String> patterns(JsonElement json) {
+        if (json == null || !json.isJsonArray() || json.getAsJsonArray().isEmpty())
+            throw invalid("Structure selector must be a nonempty array of IDs or patterns");
+        List<String> result = new ArrayList<>();
+        for (JsonElement value : json.getAsJsonArray()) {
+            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
+                throw invalid("Structure IDs and patterns must be strings");
+            result.add(value.getAsString());
+        }
+        return result;
+    }
+
+    private static Set<Identifier> resolvePattern(String value, Set<Identifier> available, boolean keepMissing) {
+        String normalized = value.contains(":") ? value : "minecraft:" + value;
+        Identifier validated = Identifier.tryParse(normalized.replace('*', 'a'));
+        if (validated == null || normalized.indexOf(':') != normalized.lastIndexOf(':'))
+            throw invalid("Invalid structure ID or pattern " + value);
+        if (!normalized.contains("*")) {
+            Identifier id = identifier(normalized);
+            if (available.contains(id)) return Set.of(id);
+            warn("Unavailable structure or structure set " + id);
+            return keepMissing ? Set.of(id) : Set.of();
+        }
+        StringBuilder regex = new StringBuilder("^");
+        for (char c : normalized.toCharArray()) {
+            if (c == '*') regex.append(".*");
+            else regex.append(Pattern.quote(String.valueOf(c)));
+        }
+        Pattern compiled = Pattern.compile(regex.append('$').toString());
+        Set<Identifier> matches = available.stream().filter(id -> compiled.matcher(id.toString()).matches())
+                .sorted().collect(Collectors.toCollection(LinkedHashSet::new));
+        if (matches.isEmpty()) warn("No structure or structure set matches pattern " + value);
+        return matches;
     }
     private static Set<Identifier> ids(JsonElement json) {
         Set<Identifier> result = new LinkedHashSet<>();

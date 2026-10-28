@@ -18,7 +18,7 @@ final class LockedRequirementsView {
     private static final int BUTTON_BORDER = 0xff909090;
     private final TextRenderer renderer;
     private final RequirementNode requirements;
-    private record Row(OrderedText text, int indent, Boolean ticked, boolean bulletless,
+    private record Row(OrderedText text, int indent, Boolean ticked, boolean heading,
                        Text tooltipTitle, Text tooltipDescription) {}
     private List<Row> lines = List.of();
     private int screenWidth = -1, screenHeight = -1;
@@ -50,7 +50,6 @@ final class LockedRequirementsView {
 
     private void addNode(RequirementNode node, int depth, boolean inLogicalGroup) {
         boolean grouped = inLogicalGroup || node.logicalGroup();
-        boolean bulletless = node.description();
         int indent = Math.min(depth * 14, Math.max(0, width - 80));
         String[] paragraphs = node.label().getString().split("\n", -1);
         boolean first = true;
@@ -60,8 +59,9 @@ final class LockedRequirementsView {
                     Math.max(1, width - 44 - indent));
             if (wrapped.isEmpty()) wrapped = List.of(Text.empty().asOrderedText());
             for (OrderedText line : wrapped) {
-                lines.add(new Row(line, indent, first && !bulletless ? grouped && node.checked() : null,
-                        bulletless, node.tooltipDescription() == null ? null : node.label(), node.tooltipDescription()));
+                lines.add(new Row(line, indent, first && depth > 0 ? grouped && node.checked() : null,
+                        depth == 0,
+                        node.tooltipDescription() == null ? null : node.label(), node.tooltipDescription()));
                 first = false;
             }
         }
@@ -93,7 +93,7 @@ final class LockedRequirementsView {
             int rowY = bodyTop() + i * lineHeight - (int) scroll;
             if (row.ticked != null) context.drawText(renderer, row.ticked ? "✔" : "•",
                     x + 12 + row.indent, rowY, row.ticked ? 0xffffffff : 0xffc0c0c0, true);
-            int textX = x + (row.bulletless ? 10 : 23) + row.indent;
+            int textX = x + (row.heading ? 12 : 23) + row.indent;
             context.drawText(renderer, row.text, textX, rowY, 0xffffff, true);
             if (row.tooltipDescription != null && mouseX >= textX && mouseX < textX + renderer.getWidth(row.text)
                     && mouseY >= Math.max(rowY, bodyTop())

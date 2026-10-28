@@ -1,25 +1,71 @@
 {
   "default": "lockedUntilVisited",
   "rules": {
-    "nether_access": {
-      "unlocks": {
-        "structures": ["minecraft:fortress", "minecraft:bastion_remnant"]
-      },
-      "description": "Visit any village and complete Stone Age.",
+    "visit_any_set": {
+      "unlocks": [
+        "minecraft:ancient_city"
+      ],
       "condition": {
-        "all": [
-          {"type": "visit", "structureSet": "minecraft:villages", "match": "any"},
-          {"type": "advancement", "advancements": ["minecraft:story/mine_stone"]}
+        "type": "visit",
+        "match": "any",
+        "structures": [
+          "minecraft:villages"
         ]
       }
     },
-    "village_access": {
-      "unlocks": {"structureSet": "minecraft:villages"},
+    "visit_all_combined": {
+      "unlocks": [
+        "minecraft:desert_pyramid",
+        "minecraft:desert_pyramids"
+      ],
       "condition": {
-        "any": [
-          {"type": "visit", "structures": ["minecraft:fortress", "minecraft:stronghold"], "match": "all"},
-          {"type": "advancement", "advancements": ["minecraft:story/mine_diamond", "minecraft:end/dragon_egg"], "match": "all"}
-        ]
+        "type": "visit",
+        "structures": [
+          "minecraft:ancient_city",
+          "minecraft:strongholds"
+        ],
+        "match": "all"
+      }
+    },
+    "advancement_any": {
+      "unlocks": [
+        "minecraft:nether_complexes"
+      ],
+      "condition": {
+        "type": "advancement",
+        "advancements": [
+          "minecraft:story/mine_stone",
+          "minecraft:story/mine_diamond"
+        ],
+        "match": "any"
+      }
+    },
+    "advancement_all_and_wildcards": {
+      "unlocks": [
+        "minecraft:village_*",
+        "minecraft:stronghold",
+        "minecraft:ancient_cit*"
+      ],
+      "condition": {
+        "type": "advancement",
+        "advancements": [
+          "minecraft:story/mine_stone",
+          "minecraft:story/mine_diamond"
+        ],
+        "match": "all"
+      }
+    },
+    "visit_wildcards": {
+      "unlocks": [
+        "minecraft:shipwreck"
+      ],
+      "condition": {
+        "type": "visit",
+        "structures": [
+          "minecraft:fortres*",
+          "minecraft:ocean_ruin*"
+        ],
+        "match": "any"
       }
     }
   }
