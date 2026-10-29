@@ -144,7 +144,6 @@ public class StructureUtils {
 		return (int) MathHelper.sqrt((float) startPos.getSquaredDistance(new BlockPos(x, startPos.getY(), z)));
 	}
 
-	@Environment(EnvType.CLIENT)
 	public static String getStructureName(Identifier id) {
 		if (id == null) {
 			return "";

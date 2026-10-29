@@ -28,6 +28,8 @@ public class ExplorersCompassClient implements ClientModInitializer {
 	
 	@Override
 	public void onInitializeClient() {
+		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
+			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestClientIntegration.register();
 		ClientPlayNetworking.registerGlobalReceiver(SyncPacket.ID, SyncPacket::apply);
 		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, SearchResultPacket::apply);
 		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, UnlockToastPacket::apply);

@@ -176,18 +176,33 @@ public final class UnlockingRules {
 
     /** Called on compass open or when the compass advancement is earned. */
     public void evaluateOnOpen(ServerPlayerEntity player) {
-        int added = UnlockedStructures.get(player.getServer()).add(player.getUuid(),
-                earnedOnOpen(catalog(player.getServer()).structures(), progress(player)));
+        FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
+        UnlockedStructures state = UnlockedStructures.get(player.getServer());
+        Set<Identifier> earned = earnedOnOpen(catalog(player.getServer()).structures(), progress(player), rewards,
+                state.claimedFtbRewards(player.getUuid()));
+        int added = state.add(player.getUuid(), earned);
         UnlockNotifications.newlyAdded(player, added);
     }
 
     Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress) {
+        return earnedOnOpen(structures, progress, Set.of());
+    }
+
+    Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress,
+                                 FtbStructureRewards.Snapshot rewards, Set<Long> claimedRewardIds) {
+        Set<Identifier> earned = earnedOnOpen(structures, progress, rewards.quests().keySet());
+        for (long rewardId : claimedRewardIds) earned.addAll(rewards.targets(rewardId));
+        return earned;
+    }
+
+    Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress, Set<Identifier> rewardCovered) {
         Set<Identifier> earned = new LinkedHashSet<>();
         for (Identifier id : structures) {
-            if (!byStructure.containsKey(id) && (defaultUnlocked || progress.visited(id))) earned.add(id);
+            if (!rewardCovered.contains(id) && !byStructure.containsKey(id)
+                    && (defaultUnlocked || progress.visited(id))) earned.add(id);
         }
         for (Map.Entry<Identifier, Rule> entry : byStructure.entrySet())
-            if (entry.getValue().condition.test.test(progress)) earned.add(entry.getKey());
+            if (!rewardCovered.contains(entry.getKey()) && entry.getValue().condition.test.test(progress)) earned.add(entry.getKey());
         return earned;
     }
 
@@ -195,16 +210,21 @@ public final class UnlockingRules {
     public void onProgress(ServerPlayerEntity player, Identifier visit, Identifier advancement) {
         MinecraftServer server = player.getServer();
         if (server == null || server.getOverworld() == null) return;
-        int added = UnlockedStructures.get(server).add(player.getUuid(), earnedOnProgress(progress(player), visit, advancement));
+        int added = UnlockedStructures.get(server).add(player.getUuid(), earnedOnProgress(progress(player), visit, advancement,
+                FtbStructureRewards.snapshot(player).quests().keySet()));
         UnlockNotifications.newlyAdded(player, added);
     }
 
     Set<Identifier> earnedOnProgress(Progress progress, Identifier visit, Identifier advancement) {
+        return earnedOnProgress(progress, visit, advancement, Set.of());
+    }
+
+    Set<Identifier> earnedOnProgress(Progress progress, Identifier visit, Identifier advancement, Set<Identifier> rewardCovered) {
         Set<Identifier> earned = new LinkedHashSet<>();
-        if (visit != null && !byStructure.containsKey(visit)) earned.add(visit);
+        if (visit != null && !rewardCovered.contains(visit) && !byStructure.containsKey(visit)) earned.add(visit);
         for (Map.Entry<Identifier, Rule> entry : byStructure.entrySet()) {
             Rule rule = entry.getValue();
-            if (((visit != null && rule.condition.visits.contains(visit))
+            if (!rewardCovered.contains(entry.getKey()) && ((visit != null && rule.condition.visits.contains(visit))
                     || (advancement != null && rule.condition.advancements.contains(advancement)))
                     && rule.condition.test.test(progress)) earned.add(entry.getKey());
         }
@@ -214,9 +234,11 @@ public final class UnlockingRules {
     public Map<Identifier, RequirementNode> lockedRequirements(ServerPlayerEntity player, List<Identifier> structures) {
         Map<Identifier, RequirementNode> result = new LinkedHashMap<>();
         Progress progress = progress(player);
+        FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
         for (Identifier id : structures) {
             if (isUnlocked(player.getServer(), player.getUuid(), id)) continue;
-            result.put(id, requirements(id, progress));
+            List<FtbStructureRewards.Quest> quests = rewards.quests().get(id);
+            result.put(id, quests == null ? requirements(id, progress) : questNode(quests));
         }
         return result;
     }
@@ -225,6 +247,27 @@ public final class UnlockingRules {
         Rule rule = byStructure.get(id);
         if (rule == null) return visitNode(Set.of(id), true, Set.of(id), progress);
         return rule.condition.display.apply(progress);
+    }
+
+    static RequirementNode questNode(List<FtbStructureRewards.Quest> quests) {
+        Map<Long, FtbStructureRewards.Quest> distinct = new LinkedHashMap<>();
+        quests.forEach(quest -> distinct.putIfAbsent(quest.id(), quest));
+        List<RequirementNode> children = distinct.values().stream()
+                .map(quest -> new RequirementNode(quest.title(), false, List.of())).toList();
+        return new RequirementNode(Text.literal(children.size() == 1 ? "Complete Quest:" : "Complete any Quest:"),
+                false, children);
+    }
+
+    /** Resolve reward selectors with the same structure-first and wildcard semantics as JSON unlock targets. */
+    public static Set<Identifier> resolveRewardTargets(MinecraftServer server, List<String> selectors) {
+        return resolveRewardTargets(catalog(server), selectors);
+    }
+
+    static Set<Identifier> resolveRewardTargets(Catalog catalog, List<String> selectors) {
+        if (selectors.isEmpty()) return Set.of();
+        Set<Identifier> known = catalog.structures();
+        return resolveStructures(catalog, selectors, false, (id, index) -> {}).stream()
+                .filter(known::contains).collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private static Set<Identifier> targets(Catalog catalog, JsonElement json, List<Integer> lines,

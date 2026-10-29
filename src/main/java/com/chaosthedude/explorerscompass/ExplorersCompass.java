@@ -59,6 +59,8 @@ public class ExplorersCompass implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ExplorersCompassConfig.load();
+		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
+			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(
                 com.chaosthedude.explorerscompass.unlocking.UnlockingRules::reload);
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server ->

@@ -26,6 +26,14 @@ A visit condition has `type: "visit"` and a nonempty `structures` array. Entries
 
 Explicit rules override the default. If multiple rules target the same structure, the rule farther down in the file supplies its condition and requirement text. The server warns with the structure ID and the line numbers of the matching `unlocks` entries, including entries that expand from patterns or structure sets. `lockedUntilVisited` applies only to structures without an explicit rule and requires a visit to that structure type.
 
+## FTB Quests rewards
+
+When FTB Quests is installed, its reward editor offers **Unlock Structures**. Its `structures` list accepts structure IDs, structure-set IDs, and `*` patterns, just like JSON `unlocks`. An SNBT reward looks like `{ id: "0123456789ABCDEF", type: "explorerscompass:unlock_structures", structures: ["minecraft:fortress", "minecraft:villages"] }`. Claiming it grants the resolved structures to the receiving player. Completing the quest alone does not grant them.
+
+The reward uses a static compass icon. Its title shows **Unlock Structure** for one resolved structure or **Unlock N Structures** for several. Hold Left Alt over the reward to see up to ten structure names; if there are more, the tooltip shows the remaining count.
+
+An FTB reward takes precedence over a JSON unlocking rule for every structure it currently targets. New players see those structures locked until they claim a reward; adding a reward does not relock anyone who already unlocked a structure. Multiple rewards are alternatives. The locked requirements window shows the distinct quest names under **Complete Quest:** or **Complete any Quest:**. A previously claimed reward is reevaluated when the player opens the compass, so newly added targets unlock then and an admin-locked target is restored. If the last reward for a structure is removed, the JSON rule or configured default applies on the next open. Saved unlocks are never erased by these edits.
+
 New visits and advancement progress can immediately add to a player's saved unlocked structures. Opening the compass also evaluates current conditions. The open screen uses the snapshot received when opened; reopen it after progress, commands, or rule changes. Saved unlocked structures (including default-unlocked structures) persist through lost requirements, config edits, and restarts. There is no automatic relocking.
 
 Locked entries remain visible and show a requirements dialog on search attempts. Search Listed skips them. Requirement text wraps in a panel no taller than half the screen; use the wheel, scrollbar, arrow keys, Page Up/Down, or Home/End to scroll. Hover an advancement name to see its title and description. Previously found compass locations remain usable.

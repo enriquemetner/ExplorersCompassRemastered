@@ -1,5 +1,5 @@
 plugins {
-	id 'fabric-loom' version '1.2-SNAPSHOT'
+	id 'fabric-loom' version '1.7-SNAPSHOT'
 	id 'maven-publish'
 }
 
@@ -11,11 +11,8 @@ base {
 }
 
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
+	maven { url = 'https://maven.architectury.dev/' }
+	maven { url = 'https://maven.ftb.dev/releases/' }
 }
 
 dependencies {
@@ -26,6 +23,10 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+	// Needed by the FTB mods in the development run directory, but not by this mod.
+	modLocalRuntime 'dev.architectury:architectury-fabric:9.2.14'
+	modCompileOnly 'dev.ftb.mods:ftb-quests-fabric:2001.4.22'
+	modCompileOnly 'dev.ftb.mods:ftb-library-fabric:2001.2.13'
 	implementation 'com.electronwill.night-config:toml:3.9.0'
 	include 'com.electronwill.night-config:toml:3.9.0'
 	implementation 'com.electronwill.night-config:core:3.9.0'

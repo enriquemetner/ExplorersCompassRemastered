@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
 import java.util.UUID;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.google.gson.JsonParser;
@@ -56,6 +57,71 @@ class UnlockingRulesTest {
         assertEquals(Set.of(A), rules("{\"default\":\"lockedUntilVisited\"}").earnedOnOpen(STRUCTURES, p));
         UnlockingRules rules = rules("{\"default\":\"unlocked\",\"rules\":{\"test\":" + rule("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}") + "}}");
         assertEquals(Set.of(A, C), rules.earnedOnOpen(STRUCTURES, p));
+    }
+
+    @Test void ftbRewardsTakePrecedenceWithoutRelockingSavedStructures() {
+        UnlockingRules rules = rules("{\"default\":\"unlocked\",\"rules\":{\"visit\":"
+                + rule("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}") + "}}");
+        Progress progress = new Progress();
+        progress.visits.add(A);
+        assertFalse(rules.earnedOnOpen(STRUCTURES, progress, Set.of(B, C)).contains(B));
+        assertFalse(rules.earnedOnOpen(STRUCTURES, progress, Set.of(B, C)).contains(C));
+        assertFalse(rules.earnedOnProgress(progress, A, null, Set.of(B)).contains(B));
+        // Removing the last reward restores the JSON rule or default on the next open.
+        assertTrue(rules.earnedOnOpen(STRUCTURES, progress, Set.of()).contains(B));
+        assertTrue(rules.earnedOnOpen(STRUCTURES, progress, Set.of()).contains(C));
+        UnlockingRules visitedDefault = rules("{\"default\":\"lockedUntilVisited\"}");
+        assertFalse(visitedDefault.earnedOnOpen(STRUCTURES, progress, Set.of()).contains(C));
+    }
+
+    @Test void ftbRewardSelectorsExpandSetsAndWildcards() {
+        assertEquals(STRUCTURES, UnlockingRules.resolveRewardTargets(catalog,
+                List.of("minecraft:test_set", "minecraft:strong*")));
+        assertEquals(Set.of(B), UnlockingRules.resolveRewardTargets(catalog, List.of("fortress")));
+        assertThrows(IllegalArgumentException.class,
+                () -> UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortres?")));
+    }
+
+    @Test void anyClaimedFtbRewardUnlocksCurrentTargetsAfterEditsOrRelocking() {
+        UnlockingRules rules = rules("{\"default\":\"lockedUntilVisited\"}");
+        FtbStructureRewards.Quest first = new FtbStructureRewards.Quest(1L, Text.literal("First"));
+        FtbStructureRewards.Quest second = new FtbStructureRewards.Quest(2L, Text.literal("Second"));
+        FtbStructureRewards.Snapshot before = new FtbStructureRewards.Snapshot(
+                java.util.Map.of(B, List.of(first, second)), java.util.Map.of(10L, Set.of(B), 20L, Set.of(B)));
+        assertFalse(rules.earnedOnOpen(STRUCTURES, new Progress(), before, Set.of()).contains(B));
+        assertTrue(rules.earnedOnOpen(STRUCTURES, new Progress(), before, Set.of(10L)).contains(B));
+        FtbStructureRewards.Snapshot edited = new FtbStructureRewards.Snapshot(
+                java.util.Map.of(B, List.of(first, second), C, List.of(first)),
+                java.util.Map.of(10L, Set.of(B, C), 20L, Set.of(B)));
+        assertEquals(Set.of(B, C), rules.earnedOnOpen(STRUCTURES, new Progress(), edited, Set.of(10L)));
+        // Reapplying a claimed reward after a command lock restores the same target.
+        UnlockedStructures saved = new UnlockedStructures();
+        UUID player = UUID.randomUUID();
+        saved.add(player, Set.of(B));
+        saved.remove(player, Set.of(B));
+        saved.add(player, rules.earnedOnOpen(STRUCTURES, new Progress(), edited, Set.of(10L)));
+        assertTrue(saved.contains(player, B));
+    }
+
+    @Test void ftbClaimHistoryPersistsAndQuestRequirementsUseDistinctTitles() {
+        UUID player = UUID.randomUUID();
+        UnlockedStructures saved = new UnlockedStructures();
+        saved.recordFtbClaim(player, 12L);
+        saved.add(player, Set.of(A));
+        saved = UnlockedStructures.fromNbt(saved.writeNbt(new NbtCompound()));
+        assertEquals(Set.of(12L), saved.claimedFtbRewards(player));
+        saved.remove(player, Set.of(A));
+        assertFalse(saved.contains(player, A));
+        assertEquals(Set.of(12L), saved.claimedFtbRewards(player));
+        RequirementNode single = UnlockingRules.questNode(List.of(new FtbStructureRewards.Quest(1L, Text.literal("First"))));
+        assertEquals("Complete Quest:", single.label().getString());
+        assertEquals("First", single.children().get(0).label().getString());
+        RequirementNode multiple = UnlockingRules.questNode(List.of(
+                new FtbStructureRewards.Quest(1L, Text.literal("First")),
+                new FtbStructureRewards.Quest(1L, Text.literal("First")),
+                new FtbStructureRewards.Quest(2L, Text.literal("Second"))));
+        assertEquals("Complete any Quest:", multiple.label().getString());
+        assertEquals(2, multiple.children().size());
     }
 
     @Test void conditionGroupsAreRejectedAndVisitProgressUnlocksImmediately() {
