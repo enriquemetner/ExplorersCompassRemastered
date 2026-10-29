@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.List;
 import java.util.UUID;
+import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.google.gson.JsonParser;
 import net.minecraft.nbt.NbtCompound;
@@ -80,6 +81,18 @@ class UnlockingRulesTest {
         assertEquals(Set.of(B), UnlockingRules.resolveRewardTargets(catalog, List.of("fortress")));
         assertThrows(IllegalArgumentException.class,
                 () -> UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortres?")));
+    }
+
+    @Test void ftbSelectorsExcludeCommonBlacklistedStructures() {
+        List<String> previous = ExplorersCompassConfig.structureBlacklist;
+        try {
+            ExplorersCompassConfig.structureBlacklist = List.of("minecraft:ancient_*", "minecraft:fortress");
+            assertEquals(Set.of(C), UnlockingRules.resolveRewardTargets(catalog,
+                    List.of("minecraft:test_set", "minecraft:strong*", "minecraft:ancient_city")));
+            assertTrue(UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortress")).isEmpty());
+        } finally {
+            ExplorersCompassConfig.structureBlacklist = previous;
+        }
     }
 
     @Test void anyClaimedFtbRewardUnlocksCurrentTargetsAfterEditsOrRelocking() {

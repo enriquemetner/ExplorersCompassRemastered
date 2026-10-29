@@ -20,6 +20,7 @@ import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
+import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -267,7 +268,8 @@ public final class UnlockingRules {
         if (selectors.isEmpty()) return Set.of();
         Set<Identifier> known = catalog.structures();
         return resolveStructures(catalog, selectors, false, (id, index) -> {}).stream()
-                .filter(known::contains).collect(Collectors.toCollection(LinkedHashSet::new));
+                .filter(known::contains).filter(id -> !StructureUtils.structureIdIsBlacklisted(id))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private static Set<Identifier> targets(Catalog catalog, JsonElement json, List<Integer> lines,

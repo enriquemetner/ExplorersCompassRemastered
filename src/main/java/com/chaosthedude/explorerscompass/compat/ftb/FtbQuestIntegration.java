@@ -3,7 +3,6 @@ package com.chaosthedude.explorerscompass.compat.ftb;
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.unlocking.FtbStructureRewards;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
-import com.chaosthedude.explorerscompass.util.StructureUtils;
 import dev.ftb.mods.ftblibrary.config.ConfigGroup;
 import dev.ftb.mods.ftblibrary.config.StringConfig;
 import dev.ftb.mods.ftblibrary.icon.Icon;
@@ -35,7 +34,7 @@ import org.lwjgl.glfw.GLFW;
 /** Loaded only when FTB Quests is installed. */
 public final class FtbQuestIntegration {
     public static final Identifier PREVIEW_PACKET_ID = new Identifier(ExplorersCompass.MODID, "ftb_reward_preview");
-    private static final Identifier REWARD_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/ftb_reward_compass.png");
+    static final Identifier REWARD_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/ftb_reward_compass.png");
     private static RewardType type;
 
     private FtbQuestIntegration() {}
@@ -44,6 +43,7 @@ public final class FtbQuestIntegration {
         type = RewardTypes.register(new Identifier(ExplorersCompass.MODID, "unlock_structures"),
                 UnlockStructuresReward::new, () -> Icon.getIcon(REWARD_ICON));
         type.setDisplayName(Text.translatable("ftb_reward.explorerscompass.unlock_structures"));
+        FtbVisitStructuresTask.register();
         FtbStructureRewards.register(FtbQuestIntegration::snapshot);
     }
 
@@ -173,11 +173,7 @@ public final class FtbQuestIntegration {
                 tooltip.add(Text.translatable("ftb_reward.explorerscompass.no_matches").formatted(Formatting.GRAY));
                 return;
             }
-            for (Identifier id : preview.structures())
-                tooltip.add(Text.literal(StructureUtils.getStructureName(id)).formatted(Formatting.AQUA));
-            int remaining = preview.totalCount() - preview.structures().size();
-            if (remaining > 0) tooltip.add(Text.translatable("ftb_reward.explorerscompass.more", remaining)
-                    .formatted(Formatting.WHITE, Formatting.ITALIC));
+            FtbStructureTooltip.addNames(tooltip, preview.structures());
         }
 
         private Set<Identifier> resolve(net.minecraft.server.MinecraftServer server) {

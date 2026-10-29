@@ -98,9 +98,14 @@ public class StructureUtils {
 	}
 
 	public static boolean structureIsBlacklisted(ServerWorld world, Structure structure) {
+		return structureIdIsBlacklisted(getIDForStructure(world, structure));
+	}
+
+	public static boolean structureIdIsBlacklisted(Identifier id) {
+		if (id == null) return false;
 		final List<String> structureBlacklist = ExplorersCompassConfig.structureBlacklist;
 		for (String structureKey : structureBlacklist) {
-			if (getIDForStructure(world, structure).toString().matches(convertToRegex(structureKey))) {
+			if (id.toString().matches(convertToRegex(structureKey))) {
 				return true;
 			}
 		}

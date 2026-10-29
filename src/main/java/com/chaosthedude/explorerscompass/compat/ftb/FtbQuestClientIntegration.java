@@ -14,6 +14,7 @@ import net.minecraft.nbt.NbtCompound;
 /** Loaded only on clients with FTB Quests installed. */
 public final class FtbQuestClientIntegration {
     private static final Map<Long, FtbRewardPreview> pendingPreviews = new HashMap<>();
+    private static final Map<Long, FtbRewardPreview> pendingTaskPreviews = new HashMap<>();
     private static ClientQuestFile pendingFile;
 
     private FtbQuestClientIntegration() {}
@@ -52,7 +53,23 @@ public final class FtbQuestClientIntegration {
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             pendingPreviews.clear();
+            pendingTaskPreviews.clear();
             pendingFile = null;
+        });
+        ClientPlayNetworking.registerGlobalReceiver(FtbVisitStructuresTask.PREVIEW_PACKET_ID, (client, handler, buf, sender) -> {
+            long taskId = buf.readLong();
+            FtbRewardPreview preview = FtbRewardPreview.read(buf);
+            client.execute(() -> {
+                ClientQuestFile file = ClientQuestFile.INSTANCE;
+                if (file == null) return;
+                useFile(file);
+                if (file.getBase(taskId) instanceof FtbVisitStructuresTask task) {
+                    task.setPreview(preview);
+                    task.editedFromGUI();
+                } else {
+                    pendingTaskPreviews.put(taskId, preview);
+                }
+            });
         });
         ClientPlayNetworking.registerGlobalReceiver(FtbQuestIntegration.PREVIEW_PACKET_ID, (client, handler, buf, sender) -> {
             long rewardId = buf.readLong();
@@ -88,9 +105,17 @@ public final class FtbQuestClientIntegration {
         // FTB refreshes its ID map and visible buttons immediately after onCreated returns.
     }
 
+    static void applyPendingTaskPreview(FtbVisitStructuresTask task) {
+        if (!(task.getQuestFile() instanceof ClientQuestFile file)) return;
+        useFile(file);
+        FtbRewardPreview preview = pendingTaskPreviews.remove(task.getId());
+        if (preview != null) task.setPreview(preview);
+    }
+
     private static void useFile(ClientQuestFile file) {
         if (pendingFile != file) {
             pendingPreviews.clear();
+            pendingTaskPreviews.clear();
             pendingFile = file;
         }
     }

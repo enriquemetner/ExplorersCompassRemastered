@@ -27,9 +27,9 @@ class FtbRewardPreviewTest {
         for (int i = 11; i >= 0; i--) targets.add(new Identifier("test:structure_" + String.format("%02d", i)));
         FtbRewardPreview client = transfer(targets);
         assertEquals(12, client.totalCount());
-        assertEquals(10, client.structures().size());
+        assertEquals(12, client.structures().size());
         assertEquals(new Identifier("test:structure_00"), client.structures().get(0));
-        assertEquals(new Identifier("test:structure_09"), client.structures().get(9));
+        assertEquals(new Identifier("test:structure_11"), client.structures().get(11));
 
         Identifier replacement = new Identifier("minecraft:ancient_city");
         client = transfer(Set.of(replacement));
@@ -58,5 +58,15 @@ class FtbRewardPreviewTest {
                 buf.release();
             }
         }
+    }
+
+    @Test void longTooltipsCycleThroughEveryNameAndWrapAround() {
+        List<Identifier> names = transfer(Set.of(
+                new Identifier("test:one"), new Identifier("test:two"),
+                new Identifier("test:three"), new Identifier("test:four"))).structures();
+        assertEquals(names, FtbStructureTooltip.visibleNames(names, 4, 17));
+        assertEquals(List.of(names.get(2), names.get(3)), FtbStructureTooltip.visibleNames(names, 2, 2));
+        assertEquals(List.of(names.get(3), names.get(0)), FtbStructureTooltip.visibleNames(names, 2, 3));
+        assertEquals(List.of(names.get(0), names.get(1)), FtbStructureTooltip.visibleNames(names, 2, 4));
     }
 }
