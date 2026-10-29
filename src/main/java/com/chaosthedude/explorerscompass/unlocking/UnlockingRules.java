@@ -253,7 +253,7 @@ public final class UnlockingRules {
         Map<Long, FtbStructureRewards.Quest> distinct = new LinkedHashMap<>();
         quests.forEach(quest -> distinct.putIfAbsent(quest.id(), quest));
         List<RequirementNode> children = distinct.values().stream()
-                .map(quest -> new RequirementNode(quest.title(), false, List.of())).toList();
+                .map(quest -> new RequirementNode(quest.title(), false, List.of(), quest.id())).toList();
         return new RequirementNode(Text.literal(children.size() == 1 ? "Complete Quest:" : "Complete any Quest:"),
                 false, children);
     }

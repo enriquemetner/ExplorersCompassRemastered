@@ -8,5 +8,12 @@
   "ftb_reward.explorerscompass.hold_alt": "Hold [Left Alt] to show more",
   "ftb_reward.explorerscompass.no_matches": "No matching structures",
   "ftb_reward.explorerscompass.more": "and %s more...",
-  "ftb_reward.explorerscompass.structures": "Structures"
+  "ftb_reward.explorerscompass.structures": "Structures",
+  "gui.explorerscompass.hidden_quest_title": "[Hidden Quest Title]",
+  "gui.explorerscompass.open_quest_tooltip": "Click to open in Quest Book",
+  "gui.explorerscompass.quest_hidden_progress": "This quest can't be opened until you progress further.",
+  "gui.explorerscompass.quest_hidden_until_complete": "This quest is hidden until complete.",
+  "gui.explorerscompass.open_quest_chapter": "Open Quest Chapter instead?",
+  "gui.explorerscompass.open": "Open",
+  "gui.explorerscompass.cancel": "Cancel"
 }

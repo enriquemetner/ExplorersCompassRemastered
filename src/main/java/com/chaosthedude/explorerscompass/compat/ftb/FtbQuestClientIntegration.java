@@ -1,10 +1,15 @@
 package com.chaosthedude.explorerscompass.compat.ftb;
 
 import dev.ftb.mods.ftbquests.client.ClientQuestFile;
+import dev.ftb.mods.ftbquests.client.gui.quests.QuestScreen;
+import dev.ftb.mods.ftbquests.quest.Quest;
+import dev.ftb.mods.ftbquests.quest.QuestObject;
+import dev.ftb.mods.ftbquests.quest.TeamData;
 import java.util.HashMap;
 import java.util.Map;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.nbt.NbtCompound;
 
 /** Loaded only on clients with FTB Quests installed. */
 public final class FtbQuestClientIntegration {
@@ -14,6 +19,37 @@ public final class FtbQuestClientIntegration {
     private FtbQuestClientIntegration() {}
 
     public static void register() {
+        FtbQuestNavigation.register(new FtbQuestNavigation.Provider() {
+            @Override public FtbQuestNavigation.QuestInfo info(long questId) {
+                Quest quest = quest(questId);
+                ClientQuestFile file = ClientQuestFile.INSTANCE;
+                if (quest == null || file == null || file.selfTeamData == null) return null;
+                TeamData team = file.selfTeamData;
+                boolean completed = team.isCompleted(quest);
+                NbtCompound settings = new NbtCompound();
+                quest.writeData(settings);
+                boolean visible = quest.isVisible(team) && quest.getChapter().isVisible(team);
+                return new FtbQuestNavigation.QuestInfo(quest.getTitle(),
+                        visible && (file.canEdit() || !quest.hideDetailsUntilStartable() || team.canStartTasks(quest)),
+                        quest.getHideTextUntilComplete().get(false) && !completed,
+                        !visible && settings.getBoolean("invisible") && !completed);
+            }
+
+            @Override public void openQuest(long questId) {
+                Quest quest = quest(questId);
+                if (quest != null) ClientQuestFile.openGui(quest, true);
+            }
+
+            @Override public void openChapter(long questId) {
+                Quest quest = quest(questId);
+                if (quest == null) return;
+                QuestScreen screen = ClientQuestFile.openGui();
+                if (screen != null) {
+                    screen.closeQuest();
+                    screen.open(quest.getChapter(), false);
+                }
+            }
+        });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             pendingPreviews.clear();
             pendingFile = null;
@@ -35,6 +71,13 @@ public final class FtbQuestClientIntegration {
                 }
             });
         });
+    }
+
+    private static Quest quest(long questId) {
+        ClientQuestFile file = ClientQuestFile.INSTANCE;
+        if (file == null) return null;
+        QuestObject object = file.get(questId);
+        return object instanceof Quest quest ? quest : null;
     }
 
     static void applyPendingPreview(FtbQuestIntegration.UnlockStructuresReward reward) {

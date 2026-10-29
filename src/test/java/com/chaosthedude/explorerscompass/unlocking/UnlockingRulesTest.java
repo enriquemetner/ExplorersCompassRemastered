@@ -116,12 +116,18 @@ class UnlockingRulesTest {
         RequirementNode single = UnlockingRules.questNode(List.of(new FtbStructureRewards.Quest(1L, Text.literal("First"))));
         assertEquals("Complete Quest:", single.label().getString());
         assertEquals("First", single.children().get(0).label().getString());
+        assertEquals(1L, single.children().get(0).questId());
         RequirementNode multiple = UnlockingRules.questNode(List.of(
                 new FtbStructureRewards.Quest(1L, Text.literal("First")),
                 new FtbStructureRewards.Quest(1L, Text.literal("First")),
                 new FtbStructureRewards.Quest(2L, Text.literal("Second"))));
         assertEquals("Complete any Quest:", multiple.label().getString());
         assertEquals(2, multiple.children().size());
+        PacketByteBuf questPacket = new PacketByteBuf(Unpooled.buffer());
+        multiple.write(questPacket);
+        RequirementNode restored = RequirementNode.read(questPacket);
+        assertEquals(1L, restored.children().get(0).questId());
+        assertEquals(2L, restored.children().get(1).questId());
     }
 
     @Test void conditionGroupsAreRejectedAndVisitProgressUnlocksImmediately() {

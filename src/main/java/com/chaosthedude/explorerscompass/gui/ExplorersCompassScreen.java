@@ -1247,7 +1247,9 @@ public class ExplorersCompassScreen extends Screen {
 			return true;
 		}
         if (dialog != Dialog.NONE) {
-            if (par1 == 256) dismissDialog();
+            if (par1 == 256) {
+                if (dialog != Dialog.LOCKED || !lockedRequirementsView.closeQuestPopup()) dismissDialog();
+            }
             else if (dialog == Dialog.LOCKED) lockedRequirementsView.keyPressed(par1);
             return true;
         }
