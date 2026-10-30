@@ -65,6 +65,18 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.release = 17
 }
 
+def java17Launcher = javaToolchains.launcherFor {
+	languageVersion = JavaLanguageVersion.of(17)
+}
+
+tasks.withType(Test).configureEach {
+	javaLauncher = java17Launcher
+}
+
+tasks.withType(JavaExec).configureEach {
+	javaLauncher = java17Launcher
+}
+
 test {
 	useJUnitPlatform()
 	workingDir layout.buildDirectory.dir('test-run')
@@ -72,6 +84,10 @@ test {
 }
 
 java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+
 	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
 	// if it is present.
 	// If you remove this line, sources will not be generated.
