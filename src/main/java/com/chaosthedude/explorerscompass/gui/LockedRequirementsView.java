@@ -19,6 +19,7 @@ final class LockedRequirementsView {
     private static final int BUTTON_BORDER = 0xff909090;
     private final TextRenderer renderer;
     private final RequirementNode requirements;
+    private final Runnable onQuestBookOpened;
     private record Row(OrderedText text, int indent, Boolean ticked, boolean heading, boolean bullet,
                        Text tooltipTitle, Text tooltipDescription, Long questId) {}
     private record QuestPopup(long questId, Text title, boolean invisibleUntilCompleted) {}
@@ -31,9 +32,10 @@ final class LockedRequirementsView {
     private boolean dragging;
     private QuestPopup questPopup;
 
-    LockedRequirementsView(TextRenderer renderer, RequirementNode requirements) {
+    LockedRequirementsView(TextRenderer renderer, RequirementNode requirements, Runnable onQuestBookOpened) {
         this.renderer = renderer;
         this.requirements = requirements;
+        this.onQuestBookOpened = onQuestBookOpened;
         this.lineHeight = renderer.fontHeight + 3;
     }
 
@@ -55,7 +57,7 @@ final class LockedRequirementsView {
 
     private void addNode(RequirementNode node, int depth, boolean inLogicalGroup, boolean bullet) {
         boolean grouped = inLogicalGroup || node.logicalGroup();
-        int indent = Math.min(depth * 14, Math.max(0, width - 80));
+        int indent = Math.min(Math.max(0, depth - 1) * 14, Math.max(0, width - 80));
         FtbQuestNavigation.QuestInfo questInfo = node.questId() == null ? null : FtbQuestNavigation.info(node.questId());
         Text label = questInfo != null && questInfo.hiddenTitle()
                 ? Text.translatable("gui.explorerscompass.hidden_quest_title") : node.label();
@@ -73,8 +75,9 @@ final class LockedRequirementsView {
                 first = false;
             }
         }
-        for (RequirementNode child : node.children())
-            addNode(child, depth + 1, grouped, node.children().size() > 1 && child.questId() != null);
+        for (RequirementNode child : node.children()) {
+            addNode(child, depth + 1, grouped, child.children().isEmpty());
+        }
     }
 
     private int bodyTop() { return y + 30; }
@@ -155,7 +158,9 @@ final class LockedRequirementsView {
         if (questRow != null) {
             FtbQuestNavigation.QuestInfo info = FtbQuestNavigation.info(questRow.questId);
             if (info != null) {
-                if (info.openable()) FtbQuestNavigation.openQuest(questRow.questId);
+                if (info.openable()) {
+                    if (FtbQuestNavigation.openQuest(questRow.questId)) onQuestBookOpened.run();
+                }
                 else questPopup = new QuestPopup(questRow.questId, info.title(), info.invisibleUntilCompleted());
             }
             return false;
@@ -239,7 +244,7 @@ final class LockedRequirementsView {
         if (mouseX >= p.openX && mouseX < p.openX + 70 && mouseY >= p.buttonY && mouseY < p.buttonY + 20) {
             long questId = questPopup.questId;
             questPopup = null;
-            FtbQuestNavigation.openChapter(questId);
+            if (FtbQuestNavigation.openChapter(questId)) onQuestBookOpened.run();
         } else if (mouseX < p.x - 1 || mouseX >= p.x + p.width + 1 || mouseY < p.y - 1
                 || mouseY >= p.y + p.height + 1 || (mouseX >= p.cancelX && mouseX < p.cancelX + 70
                 && mouseY >= p.buttonY && mouseY < p.buttonY + 20)) {

@@ -10,11 +10,13 @@ import dev.ftb.mods.ftblibrary.ui.Widget;
 import dev.ftb.mods.ftblibrary.util.TooltipList;
 import dev.ftb.mods.ftbquests.quest.Quest;
 import dev.ftb.mods.ftbquests.quest.ServerQuestFile;
+import dev.ftb.mods.ftbquests.quest.TeamData;
 import dev.ftb.mods.ftbquests.quest.reward.Reward;
 import dev.ftb.mods.ftbquests.quest.reward.RewardType;
 import dev.ftb.mods.ftbquests.quest.reward.RewardTypes;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,18 +54,21 @@ public final class FtbQuestIntegration {
         if (file == null || file.isLoading()) return FtbStructureRewards.Snapshot.EMPTY;
         Map<Identifier, LinkedHashMap<Long, FtbStructureRewards.Quest>> quests = new LinkedHashMap<>();
         Map<Long, Set<Identifier>> targets = new LinkedHashMap<>();
+        Set<Long> claimedRewardIds = new LinkedHashSet<>();
+        TeamData team = TeamData.get(player);
         file.forAllQuests(quest -> {
             for (Reward reward : quest.getRewards()) {
                 if (!(reward instanceof UnlockStructuresReward unlock)) continue;
                 Set<Identifier> resolved = unlock.resolve(player);
                 targets.put(unlock.getId(), resolved);
+                if (team.isRewardClaimed(player.getUuid(), unlock)) claimedRewardIds.add(unlock.getId());
                 for (Identifier id : resolved) quests.computeIfAbsent(id, ignored -> new LinkedHashMap<>())
                         .putIfAbsent(quest.getId(), new FtbStructureRewards.Quest(quest.getId(), quest.getTitle()));
             }
         });
         Map<Identifier, List<FtbStructureRewards.Quest>> entries = new LinkedHashMap<>();
         quests.forEach((id, named) -> entries.put(id, List.copyOf(named.values())));
-        return new FtbStructureRewards.Snapshot(entries, targets);
+        return new FtbStructureRewards.Snapshot(entries, targets, claimedRewardIds);
     }
 
     public static final class UnlockStructuresReward extends Reward {
@@ -78,7 +83,7 @@ public final class FtbQuestIntegration {
         }
 
         @Override public void claim(ServerPlayerEntity player, boolean notify) {
-            FtbStructureRewards.claimed(player, getId(), resolve(player));
+            FtbStructureRewards.claimed(player, resolve(player));
         }
 
         @Override public void writeData(NbtCompound nbt) {

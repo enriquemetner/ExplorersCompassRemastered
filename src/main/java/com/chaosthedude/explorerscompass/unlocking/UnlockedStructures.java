@@ -19,7 +19,6 @@ public final class UnlockedStructures extends PersistentState {
     private final Map<UUID, Set<Identifier>> unlockedStructures = new HashMap<>();
     private final Set<UUID> notificationsEnabled = new HashSet<>();
     private final Map<UUID, Set<Identifier>> pendingNotifications = new HashMap<>();
-    private final Map<UUID, Set<Long>> claimedFtbRewards = new HashMap<>();
 
     public static UnlockedStructures get(MinecraftServer server) {
         return server.getOverworld().getPersistentStateManager().getOrCreate(
@@ -28,14 +27,6 @@ public final class UnlockedStructures extends PersistentState {
 
     public boolean contains(UUID player, Identifier structure) {
         return unlockedStructures.getOrDefault(player, Set.of()).contains(structure);
-    }
-
-    public Set<Long> claimedFtbRewards(UUID player) {
-        return Set.copyOf(claimedFtbRewards.getOrDefault(player, Set.of()));
-    }
-
-    public void recordFtbClaim(UUID player, long rewardId) {
-        if (claimedFtbRewards.computeIfAbsent(player, ignored -> new HashSet<>()).add(rewardId)) markDirty();
     }
 
     public Set<Identifier> getStructures(UUID player) {
@@ -115,9 +106,6 @@ public final class UnlockedStructures extends PersistentState {
                 if (id != null) pending.add(id);
             }
             if (!pending.isEmpty()) state.pendingNotifications.put(uuid, pending);
-            Set<Long> claimed = new HashSet<>();
-            for (long id : player.getLongArray("ClaimedFtbRewards")) claimed.add(id);
-            if (!claimed.isEmpty()) state.claimedFtbRewards.put(uuid, claimed);
         }
         return state;
     }
@@ -128,7 +116,6 @@ public final class UnlockedStructures extends PersistentState {
         Set<UUID> uuids = new HashSet<>(unlockedStructures.keySet());
         uuids.addAll(notificationsEnabled);
         uuids.addAll(pendingNotifications.keySet());
-        uuids.addAll(claimedFtbRewards.keySet());
         uuids.forEach(uuid -> {
             NbtCompound player = new NbtCompound();
             player.putUuid("UUID", uuid);
@@ -139,8 +126,6 @@ public final class UnlockedStructures extends PersistentState {
             NbtList queued = new NbtList();
             pendingNotifications.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> queued.add(NbtString.of(id.toString())));
             player.put("PendingNotifications", queued);
-            player.putLongArray("ClaimedFtbRewards", claimedFtbRewards.getOrDefault(uuid, Set.of()).stream()
-                    .mapToLong(Long::longValue).sorted().toArray());
             players.add(player);
         });
         nbt.put("Players", players);

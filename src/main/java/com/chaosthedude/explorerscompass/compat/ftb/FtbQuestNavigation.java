@@ -8,8 +8,8 @@ public final class FtbQuestNavigation {
 
     public interface Provider {
         QuestInfo info(long questId);
-        void openQuest(long questId);
-        void openChapter(long questId);
+        boolean openQuest(long questId);
+        boolean openChapter(long questId);
     }
 
     private static Provider provider;
@@ -18,6 +18,6 @@ public final class FtbQuestNavigation {
 
     public static void register(Provider implementation) { provider = implementation; }
     public static QuestInfo info(long questId) { return provider == null ? null : provider.info(questId); }
-    public static void openQuest(long questId) { if (provider != null) provider.openQuest(questId); }
-    public static void openChapter(long questId) { if (provider != null) provider.openChapter(questId); }
+    public static boolean openQuest(long questId) { return provider != null && provider.openQuest(questId); }
+    public static boolean openChapter(long questId) { return provider != null && provider.openChapter(questId); }
 }

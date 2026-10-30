@@ -100,32 +100,41 @@ class UnlockingRulesTest {
         FtbStructureRewards.Quest first = new FtbStructureRewards.Quest(1L, Text.literal("First"));
         FtbStructureRewards.Quest second = new FtbStructureRewards.Quest(2L, Text.literal("Second"));
         FtbStructureRewards.Snapshot before = new FtbStructureRewards.Snapshot(
-                java.util.Map.of(B, List.of(first, second)), java.util.Map.of(10L, Set.of(B), 20L, Set.of(B)));
-        assertFalse(rules.earnedOnOpen(STRUCTURES, new Progress(), before, Set.of()).contains(B));
-        assertTrue(rules.earnedOnOpen(STRUCTURES, new Progress(), before, Set.of(10L)).contains(B));
+                java.util.Map.of(B, List.of(first, second)), java.util.Map.of(10L, Set.of(B), 20L, Set.of(B)), Set.of());
+        assertFalse(rules.earnedOnOpen(STRUCTURES, new Progress(), before).contains(B));
         FtbStructureRewards.Snapshot edited = new FtbStructureRewards.Snapshot(
                 java.util.Map.of(B, List.of(first, second), C, List.of(first)),
-                java.util.Map.of(10L, Set.of(B, C), 20L, Set.of(B)));
-        assertEquals(Set.of(B, C), rules.earnedOnOpen(STRUCTURES, new Progress(), edited, Set.of(10L)));
+                java.util.Map.of(10L, Set.of(B, C), 20L, Set.of(B)), Set.of(10L));
+        assertEquals(Set.of(B, C), rules.earnedOnOpen(STRUCTURES, new Progress(), edited));
         // Reapplying a claimed reward after a command lock restores the same target.
         UnlockedStructures saved = new UnlockedStructures();
         UUID player = UUID.randomUUID();
         saved.add(player, Set.of(B));
         saved.remove(player, Set.of(B));
-        saved.add(player, rules.earnedOnOpen(STRUCTURES, new Progress(), edited, Set.of(10L)));
+        saved.add(player, rules.earnedOnOpen(STRUCTURES, new Progress(), edited));
         assertTrue(saved.contains(player, B));
+
+        // FTB resetting the reward clears its claim. A later command lock must now stick.
+        FtbStructureRewards.Snapshot reset = new FtbStructureRewards.Snapshot(
+                edited.quests(), edited.rewardTargets(), Set.of());
+        saved.remove(player, Set.of(B, C));
+        saved.add(player, rules.earnedOnOpen(STRUCTURES, new Progress(), reset));
+        assertFalse(saved.contains(player, B));
+        assertFalse(saved.contains(player, C));
+        // A fresh claim of either reward restores only that reward's current targets.
+        FtbStructureRewards.Snapshot reclaimed = new FtbStructureRewards.Snapshot(
+                edited.quests(), edited.rewardTargets(), Set.of(20L));
+        assertEquals(Set.of(B), rules.earnedOnOpen(STRUCTURES, new Progress(), reclaimed));
     }
 
-    @Test void ftbClaimHistoryPersistsAndQuestRequirementsUseDistinctTitles() {
+    @Test void unlockedStructuresPersistAndQuestRequirementsUseDistinctTitles() {
         UUID player = UUID.randomUUID();
         UnlockedStructures saved = new UnlockedStructures();
-        saved.recordFtbClaim(player, 12L);
         saved.add(player, Set.of(A));
         saved = UnlockedStructures.fromNbt(saved.writeNbt(new NbtCompound()));
-        assertEquals(Set.of(12L), saved.claimedFtbRewards(player));
+        assertTrue(saved.contains(player, A));
         saved.remove(player, Set.of(A));
         assertFalse(saved.contains(player, A));
-        assertEquals(Set.of(12L), saved.claimedFtbRewards(player));
         RequirementNode single = UnlockingRules.questNode(List.of(new FtbStructureRewards.Quest(1L, Text.literal("First"))));
         assertEquals("Complete Quest:", single.label().getString());
         assertEquals("First", single.children().get(0).label().getString());

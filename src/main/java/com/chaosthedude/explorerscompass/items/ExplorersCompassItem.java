@@ -148,15 +148,7 @@ public class ExplorersCompassItem extends Item {
 				final ItemStack stack = ItemUtils.getHeldItem(player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
 				GuiWrapper.openGUI(world, player, stack);
 			} else {
-				final ServerWorld serverWorld = (ServerWorld) world;
-				final ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-				UnlockingRules.get().evaluateOnOpen(serverPlayer);
-				final boolean canTeleport = ExplorersCompassConfig.allowTeleport && PlayerUtils.canTeleport(player);
-				final boolean hasInfiniteXp = player.getAbilities().creativeMode;
-				final List<Identifier> allowedStructures = StructureUtils.getAllowedStructureIDs(serverWorld);
-				final ListMultimap<Identifier, Identifier> dimensionsForAllowedStructures = StructureUtils.getGeneratingDimensionIDsForAllowedStructures(serverWorld, allowedStructures);
-				final Map<Identifier, Identifier> structureIDsToGroupIDs = StructureUtils.getStructureIDsToGroupIDs(serverWorld);
-				ServerPlayNetworking.send(serverPlayer, SyncPacket.ID, new SyncPacket(canTeleport, ExplorersCompassConfig.allowExcludeVisited, hasInfiniteXp, ExplorersCompassConfig.defaultXpCost, ExplorersCompassConfig.allowSearchWithoutEnoughXp, allowedStructures, dimensionsForAllowedStructures, structureIDsToGroupIDs, UnlockingRules.get().lockedRequirements(serverPlayer, allowedStructures)));
+				syncScreen((ServerPlayerEntity) player);
 			}
 		} else {
 			cancelSearch(player, -1);
@@ -165,6 +157,21 @@ public class ExplorersCompassItem extends Item {
 		}
 
 		return TypedActionResult.pass(player.getStackInHand(hand));
+	}
+
+	/** Re-evaluate and synchronize the compass when opened or returned to from the Quest Book. */
+	public void syncScreen(ServerPlayerEntity player) {
+		ServerWorld world = player.getServerWorld();
+		UnlockingRules.get().evaluateOnOpen(player);
+		boolean canTeleport = ExplorersCompassConfig.allowTeleport && PlayerUtils.canTeleport(player);
+		boolean hasInfiniteXp = player.getAbilities().creativeMode;
+		List<Identifier> allowedStructures = StructureUtils.getAllowedStructureIDs(world);
+		ListMultimap<Identifier, Identifier> dimensionsForAllowedStructures = StructureUtils.getGeneratingDimensionIDsForAllowedStructures(world, allowedStructures);
+		Map<Identifier, Identifier> structureIDsToGroupIDs = StructureUtils.getStructureIDsToGroupIDs(world);
+		ServerPlayNetworking.send(player, SyncPacket.ID, new SyncPacket(canTeleport, ExplorersCompassConfig.allowExcludeVisited,
+				hasInfiniteXp, ExplorersCompassConfig.defaultXpCost, ExplorersCompassConfig.allowSearchWithoutEnoughXp,
+				allowedStructures, dimensionsForAllowedStructures, structureIDsToGroupIDs,
+				UnlockingRules.get().lockedRequirements(player, allowedStructures)));
 	}
 
 	@Override

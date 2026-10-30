@@ -179,8 +179,7 @@ public final class UnlockingRules {
     public void evaluateOnOpen(ServerPlayerEntity player) {
         FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
-        Set<Identifier> earned = earnedOnOpen(catalog(player.getServer()).structures(), progress(player), rewards,
-                state.claimedFtbRewards(player.getUuid()));
+        Set<Identifier> earned = earnedOnOpen(catalog(player.getServer()).structures(), progress(player), rewards);
         int added = state.add(player.getUuid(), earned);
         UnlockNotifications.newlyAdded(player, added);
     }
@@ -189,10 +188,9 @@ public final class UnlockingRules {
         return earnedOnOpen(structures, progress, Set.of());
     }
 
-    Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress,
-                                 FtbStructureRewards.Snapshot rewards, Set<Long> claimedRewardIds) {
+    Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress, FtbStructureRewards.Snapshot rewards) {
         Set<Identifier> earned = earnedOnOpen(structures, progress, rewards.quests().keySet());
-        for (long rewardId : claimedRewardIds) earned.addAll(rewards.targets(rewardId));
+        for (long rewardId : rewards.claimedRewardIds()) earned.addAll(rewards.targets(rewardId));
         return earned;
     }
 

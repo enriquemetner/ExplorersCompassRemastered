@@ -36,19 +36,21 @@ public final class FtbQuestClientIntegration {
                         !visible && settings.getBoolean("invisible") && !completed);
             }
 
-            @Override public void openQuest(long questId) {
+            @Override public boolean openQuest(long questId) {
                 Quest quest = quest(questId);
-                if (quest != null) ClientQuestFile.openGui(quest, true);
+                return quest != null && ClientQuestFile.openGui(quest, true) != null;
             }
 
-            @Override public void openChapter(long questId) {
+            @Override public boolean openChapter(long questId) {
                 Quest quest = quest(questId);
-                if (quest == null) return;
+                if (quest == null) return false;
                 QuestScreen screen = ClientQuestFile.openGui();
                 if (screen != null) {
                     screen.closeQuest();
                     screen.open(quest.getChapter(), false);
+                    return true;
                 }
+                return false;
             }
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {

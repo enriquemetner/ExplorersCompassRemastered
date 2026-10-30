@@ -21,6 +21,7 @@ import com.chaosthedude.explorerscompass.network.SearchListedPacket;
 import com.chaosthedude.explorerscompass.network.CancelSearchPacket;
 import com.chaosthedude.explorerscompass.network.ContinueSearchPacket;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
+import com.chaosthedude.explorerscompass.network.RefreshCompassPacket;
 import com.chaosthedude.explorerscompass.network.TeleportPacket;
 import com.chaosthedude.explorerscompass.sorting.SortCriterion;
 import com.chaosthedude.explorerscompass.util.CompassState;
@@ -155,6 +156,11 @@ public class ExplorersCompassScreen extends Screen {
     private enum Dialog { NONE, LOCKED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, REJECTED }
     private Dialog dialog = Dialog.NONE;
     private LockedRequirementsView lockedRequirementsView;
+    private Identifier lockedRequirementsId;
+    private boolean refreshAfterQuestBook;
+    private boolean restoreQuestListAfterSync;
+    private Identifier questReturnSelection;
+    private double questReturnScroll;
     private int insufficientXpCost;
     private long dialogStarted;
     private long notFoundCompassUpdated;
@@ -288,6 +294,11 @@ public class ExplorersCompassScreen extends Screen {
 		processSearchTerm();
 		if (isStructureView()) selectionList.focusStructure(foundStructureId);
 		focusActiveSearchField();
+		if (refreshAfterQuestBook && client.getNetworkHandler() != null) {
+			refreshAfterQuestBook = false;
+			ExplorersCompass.synced = false;
+			ClientPlayNetworking.send(RefreshCompassPacket.ID, new RefreshCompassPacket());
+		}
 	}
 
 	@Override
@@ -312,6 +323,17 @@ public class ExplorersCompassScreen extends Screen {
 
 		// Check if the allowed structure list has synced
 		if (ExplorersCompass.synced) {
+			if (dialog == Dialog.LOCKED && lockedRequirementsId != null) {
+				var updated = ExplorersCompass.lockedRequirements.get(lockedRequirementsId);
+				if (updated == null) {
+					dialog = Dialog.NONE;
+					lockedRequirementsView = null;
+					lockedRequirementsId = null;
+				} else {
+					lockedRequirementsView = new LockedRequirementsView(textRenderer, updated,
+							this::rememberQuestBookReturn);
+				}
+			}
 			entryFiltersId = null;
 			remove(selectionList);
 			allowedStructureIDs = new ArrayList<Identifier>(ExplorersCompass.allowedStructureIDs);
@@ -328,7 +350,14 @@ public class ExplorersCompassScreen extends Screen {
 			updateViewButtons();
 			rebuildFilterOptions();
 			processSearchTerm();
-			if (isStructureView()) selectionList.focusStructure(foundStructureId);
+			if (isStructureView()) {
+				if (restoreQuestListAfterSync) {
+					if (questReturnSelection != null) selectionList.focusStructure(questReturnSelection);
+					else selectionList.setSelected(null);
+					selectionList.setScrollAmount(questReturnScroll);
+				} else selectionList.focusStructure(foundStructureId);
+			}
+			restoreQuestListAfterSync = false;
 			focusActiveSearchField();
 
 			ExplorersCompass.synced = false;
@@ -1387,7 +1416,7 @@ public class ExplorersCompassScreen extends Screen {
     private boolean beginSearch(Identifier id, boolean group) {
         if (dialog != Dialog.NONE || id == null) return false;
         if (isStructureLocked(id)) {
-            showLockedRequirements(ExplorersCompass.lockedRequirements.get(id));
+            showLockedRequirements(id, ExplorersCompass.lockedRequirements.get(id));
             return false;
         }
         if (!validDimension(id, group)) {
@@ -1422,7 +1451,7 @@ public class ExplorersCompassScreen extends Screen {
         if (selected.isEmpty()) return;
         selected = selected.stream().filter(id -> !isStructureLocked(id)).toList();
         if (selected.isEmpty()) {
-            showLockedRequirements(new com.chaosthedude.explorerscompass.unlocking.RequirementNode(
+            showLockedRequirements(null, new com.chaosthedude.explorerscompass.unlocking.RequirementNode(
                     Text.literal("There are no unlocked structures in the current list."), false, java.util.List.of()));
             return;
         }
@@ -1502,6 +1531,8 @@ public class ExplorersCompassScreen extends Screen {
             ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(activeRequestId));
         }
 		dialog = Dialog.NONE;
+		lockedRequirementsView = null;
+		lockedRequirementsId = null;
 		focusActiveSearchField();
     }
 
@@ -1643,8 +1674,16 @@ public class ExplorersCompassScreen extends Screen {
         return ExplorersCompass.lockedRequirements.containsKey(id);
     }
 
-    private void showLockedRequirements(com.chaosthedude.explorerscompass.unlocking.RequirementNode requirements) {
-        lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements);
+    private void rememberQuestBookReturn() {
+        refreshAfterQuestBook = true;
+        restoreQuestListAfterSync = true;
+        questReturnSelection = selectionList.hasSelection() ? selectionList.getSelectedOrNull().getStructureID() : null;
+        questReturnScroll = selectionList.getScrollAmount();
+    }
+
+    private void showLockedRequirements(Identifier id, com.chaosthedude.explorerscompass.unlocking.RequirementNode requirements) {
+        lockedRequirementsId = id;
+        lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements, this::rememberQuestBookReturn);
         dialog = Dialog.LOCKED;
     }
 
