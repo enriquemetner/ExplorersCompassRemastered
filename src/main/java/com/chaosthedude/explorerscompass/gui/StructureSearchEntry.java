@@ -18,6 +18,7 @@ import net.minecraft.util.Util;
 
 @Environment(EnvType.CLIENT)
 public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<StructureSearchEntry> {
+	private static final Identifier LOCK_TEXTURE = new Identifier(ExplorersCompass.MODID, "textures/gui/lock.png");
 
 	private final MinecraftClient client;
 	private final ExplorersCompassScreen parentScreen;
@@ -58,8 +59,13 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, buttonHovered ? 0xff424242 : 0xff242424);
         context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("more"), buttonX + buttonWidth / 2, buttonY + 4, 0xffffff);
 		if (locked) {
-			context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Locked"),
-                    left + width / 2, top + (height - client.textRenderer.fontHeight) / 2, 0xff5555);
+			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+			RenderSystem.enableBlend();
+			context.getMatrices().push();
+			context.getMatrices().translate(0, 0, 10);
+			context.drawTexture(LOCK_TEXTURE, left + (width - 11) / 2, top + (height - 14) / 2,
+					11, 14, 0, 0, 11, 14, 11, 14);
+			context.getMatrices().pop();
         }
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 	}
