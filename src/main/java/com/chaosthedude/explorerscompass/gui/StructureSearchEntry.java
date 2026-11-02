@@ -74,8 +74,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         boolean buttonHovered = structuresList.isActionButtonClick(this, mouseX, mouseY);
         context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, 0xff909090);
         context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, buttonHovered ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal(parentScreen.isStructureHidden(structureID)
-                ? "Undo" : "hide"), buttonX + buttonWidth / 2, buttonY + 4, 0xffffff);
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("more"), buttonX + buttonWidth / 2, buttonY + 4, 0xffffff);
 		if (locked) {
 			context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Locked"),
                     left + width / 2, top + (height - client.textRenderer.fontHeight) / 2, 0xff5555);
@@ -94,7 +93,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 			}
 			if (structuresList.isActionButtonClick(this, mouseX, mouseY)) {
 				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
-				parentScreen.toggleStructureHidden(structureID);
+				parentScreen.openEntryDetails(structureID);
 				lastClickTime = 0;
 				return true;
 			}

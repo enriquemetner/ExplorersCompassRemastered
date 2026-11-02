@@ -157,6 +157,7 @@ public class ExplorersCompassScreen extends Screen {
 	private TransparentTextField filterSearchTextField;
 	private TransparentTextField hiddenSearchTextField;
 	private StructureSearchList selectionList;
+	private EntryDetailsPopup entryDetails;
 	private final Set<Identifier> pendingHiddenStructures = new HashSet<>();
 	private String hiddenSearchText = "";
 	private boolean filtersOpen;
@@ -281,6 +282,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseScrolled(double scroll1, double scroll2, double scroll3) {
+		if (entryDetails != null) { entryDetails.scroll(scroll3, width, height); return true; }
 		if (entryFiltersId != null) {
 			List<EntryFilterRow> rows = entryFilterRows();
 			entryFilterFirstRow = MathHelper.clamp(entryFilterFirstRow - (int) Math.signum(scroll3), 0,
@@ -429,7 +431,7 @@ public class ExplorersCompassScreen extends Screen {
 		super.render(context, mouseX, mouseY, partialTicks);
 		renderExcludeButton(context, excludeVisitedButton, "Exclude Visited", FilterSelections.excludeVisited(), mouseX, mouseY);
 		renderExcludeButton(context, excludeLockedButton, "Exclude Locked", FilterSelections.excludeLocked(), mouseX, mouseY);
-		if (searchListedButton.visible && searchListedButton.isMouseOver(mouseX, mouseY)) {
+		if (entryDetails == null && searchListedButton.visible && searchListedButton.isMouseOver(mouseX, mouseY)) {
 			drawQuestionTooltip(context, "Searches for any structure from the current list after applied filters and search bar results.", mouseX, mouseY);
 		}
 		renderCrossIcon(context, cancelButton);
@@ -453,12 +455,11 @@ public class ExplorersCompassScreen extends Screen {
 		if (settingsOpen) {
 			renderSettingsTooltip(context, mouseX, mouseY);
 		}
-		if (isStructureView() && dialog == Dialog.NONE && entryFiltersId == null && !sortMenuOpen && selectionList.isHideButtonHovered(mouseX, mouseY)) {
-			drawQuestionTooltip(context, "Removes the structure from the list on this client, across all worlds and servers. You can undo this in Settings.", mouseX, mouseY);
-		}
+
 		if (sortMenuOpen) renderSortMenu(context, mouseX, mouseY);
 		if (entryFiltersId != null) renderEntryFilters(context, mouseX, mouseY);
         if (dialog != Dialog.NONE) renderSearchDialog(context, mouseX, mouseY);
+		if (entryDetails != null) entryDetails.render(context, width, height, mouseX, mouseY);
 	}
 
 	private int sortMenuWidth() {
@@ -788,6 +789,23 @@ public class ExplorersCompassScreen extends Screen {
 		if (!values.add(value)) {
 			values.remove(value);
 		}
+	}
+
+	public void openEntryDetails(Identifier id) {
+		if (sortMenuOpen) closeSortMenu();
+		draggingStructureScrollbar = false;
+		setDragging(false);
+		setFocused(null);
+		searchTextField.setFocused(false);
+		entryDetails = new EntryDetailsPopup(client, id, () -> isStructureHidden(id),
+				() -> toggleStructureHidden(id), this::closeEntryDetails);
+	}
+
+	private void closeEntryDetails() {
+		entryDetails = null;
+		pendingHiddenStructures.clear();
+		processSearchTerm();
+		focusActiveSearchField();
 	}
 
 	public void openEntryFilters(Identifier id) {
@@ -1144,7 +1162,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
-		draggingStructureScrollbar = button == 0 && dialog == Dialog.NONE
+		draggingStructureScrollbar = entryDetails == null && button == 0 && dialog == Dialog.NONE
 				&& entryFiltersId == null && !filtersOpen && !settingsOpen && !hiddenStructuresOpen && !sortMenuOpen
 				&& selectionList != null && selectionList.isScrollbarAt(mouseX, mouseY);
 		try {
@@ -1152,11 +1170,12 @@ public class ExplorersCompassScreen extends Screen {
 		} finally {
 			// Minecraft routes drag events to the focused child. Keep the list focused
 			// after grabbing its scrollbar instead of returning focus to search.
-			if (client.currentScreen == this && dialog == Dialog.NONE && entryFiltersId == null && !sortMenuOpen && !draggingStructureScrollbar) focusActiveSearchField();
+			if (client.currentScreen == this && entryDetails == null && dialog == Dialog.NONE && entryFiltersId == null && !sortMenuOpen && !draggingStructureScrollbar) focusActiveSearchField();
 		}
 	}
 
 	private boolean handleMouseClicked(double mouseX, double mouseY, int button) {
+		if (entryDetails != null) { entryDetails.click(mouseX, mouseY, button, width, height); return true; }
 		if (entryFiltersId != null) return clickEntryFilters(mouseX, mouseY, button);
 		if (sortMenuOpen) return clickSortMenu(mouseX, mouseY, button);
         if (dialog == Dialog.LOCKED) {
@@ -1259,6 +1278,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void focusActiveSearchField() {
+		if (entryDetails != null) return;
 		TransparentTextField active = activeSearchField();
 		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, hiddenSearchTextField}) {
 			if (field != null && field != active) field.setFocused(false);
@@ -1273,6 +1293,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+		if (entryDetails != null) { entryDetails.drag(mouseY, width, height); return true; }
 		if (entryFiltersId != null) return true;
         if (dialog == Dialog.LOCKED) { lockedRequirementsView.drag(mouseY); return true; }
 		if (draggedScrollbar != null && button == 0) {
@@ -1297,6 +1318,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+		if (entryDetails != null) { entryDetails.release(); return true; }
 		if (entryFiltersId != null) return true;
         if (draggingStructureScrollbar && button == 0) {
             draggingStructureScrollbar = false;
@@ -1320,6 +1342,10 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean keyPressed(int par1, int par2, int par3) {
+		if (entryDetails != null) {
+			if (par1 == 256) closeEntryDetails();
+			return true;
+		}
 		if (entryFiltersId != null) {
 			if (par1 == 256) entryFiltersId = null;
 			return true;
@@ -1368,7 +1394,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean charTyped(char typedChar, int keyCode) {
-		if (dialog != Dialog.NONE || entryFiltersId != null || sortMenuOpen) return true;
+		if (entryDetails != null || dialog != Dialog.NONE || entryFiltersId != null || sortMenuOpen) return true;
 		boolean ret = super.charTyped(typedChar, keyCode);
 		focusActiveSearchField();
 		return ret;

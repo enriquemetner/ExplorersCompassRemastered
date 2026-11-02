@@ -256,13 +256,6 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		return false;
 	}
 
-	public boolean isHideButtonHovered(double mouseX, double mouseY) {
-		if (!isMouseOver(mouseX, mouseY)) return false;
-		StructureSearchEntry entry = getEntryAtPosition(mouseX, mouseY);
-		return entry != null && !parentScreen.isStructureHidden(entry.getStructureID())
-				&& isActionButtonClick(entry, mouseX, mouseY);
-	}
-
 	public ExplorersCompassScreen getParentScreen() {
 		return parentScreen;
 	}
