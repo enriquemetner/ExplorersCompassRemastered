@@ -69,7 +69,10 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SETTINGS_ROW_HEIGHT = 30;
 	private static final int SETTINGS_CONTROL_WIDTH = 90;
 	private static final int SETTINGS_OFFSET_ROW = 2;
-	private static final int SETTINGS_HIDDEN_ROW = 14;
+	private static final int SETTINGS_HIDDEN_ROW = 17;
+	private static final int SETTINGS_PAUSE_ROW = 13;
+	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 14;
+	private static final int SETTINGS_TELEPORT_ROW = 15;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
 	private static final int HIDE_BUTTON_WIDTH = 100;
@@ -90,7 +93,10 @@ public class ExplorersCompassScreen extends Screen {
 		"Close UI when located",
 		"Clear Filters on Close",
 		"Clear Search Bar on Close",
-		"Pause Game When Open (Singleplayer)",
+		"Singleplayer & Creative",
+		"Pause Game When Open",
+		"Unlock All Structures in Creative",
+		"Show Teleport Only in Creative",
 		"Other",
 		"Hidden Structures",
 	};
@@ -107,7 +113,10 @@ public class ExplorersCompassScreen extends Screen {
 		"Close the compass screen when a structure is located.",
 		"Clear selected structure filters when you close the compass screen.",
 		"Clears the search bar when you close the compass screen.",
-		"Pauses singleplayer while the compass screen is open, except while locating a structure.",
+		null,
+		"Pauses singleplayer while the compass screen is open, except while locating a structure. Searches need the game to keep ticking to make progress.",
+		"Temporarily unlock all structures while in Creative mode. Changing the mode back relocks previously locked structures.",
+		"Show the Teleport button only in Creative Mode. Teleport permission is still required.",
 		null,
 		"View and restore structures hidden on this client.",
 	};
@@ -130,6 +139,8 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget clearOnCloseButton;
 	private ButtonWidget clearSearchBarOnCloseButton;
 	private ButtonWidget pauseGameWhenOpenButton;
+	private ButtonWidget creativeUnlocksAllButton;
+	private ButtonWidget showTeleportOnlyInCreativeButton;
 	private ButtonWidget closeOnFoundButton;
 	private ButtonWidget checkedFiltersFirstButton;
 	private ButtonWidget adjustRowsToFitViewButton;
@@ -200,6 +211,7 @@ public class ExplorersCompassScreen extends Screen {
     private boolean showFoundDistance;
 	private double filterScroll;
 	private int settingsFirstRow;
+	private boolean lastCreativeBypass;
 	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN }
 	private ScrollPanel draggedScrollbar;
 	private boolean draggingStructureScrollbar;
@@ -328,6 +340,16 @@ public class ExplorersCompassScreen extends Screen {
 		searchTextField.tick();
 		filterSearchTextField.tick();
 		hiddenSearchTextField.tick();
+		if (lastCreativeBypass != creativeBypassActive()) {
+			lastCreativeBypass = creativeBypassActive();
+			if (lastCreativeBypass && dialog == Dialog.LOCKED) {
+				dialog = Dialog.NONE;
+				lockedRequirementsView = null;
+				lockedRequirementsId = null;
+			}
+			processSearchTerm();
+		}
+		teleportButton.visible = isStructureView() && showTeleportButton();
 
 		boolean hasSelection = selectionList.hasSelection();
 		boolean selectionMatchesFound = hasSelection && foundStructureId != null && selectionList.getSelectedOrNull().getStructureID().equals(foundStructureId);
@@ -336,7 +358,7 @@ public class ExplorersCompassScreen extends Screen {
 		clearFiltersButton.active = !FilterSelections.isEmpty();
 		clearFiltersTopButton.active = !FilterSelections.isEmpty();
 		searchListedButton.active = isStructureView() && structureIDsMatchingSearch.stream().anyMatch(id -> !isStructureHidden(id));
-		teleportButton.active = isStructureView() && selectionMatchesFound;
+		teleportButton.active = teleportButton.visible && selectionMatchesFound;
 		sortOrderButton.active = isStructureView();
 
 		// Check if the allowed structure list has synced
@@ -361,7 +383,7 @@ public class ExplorersCompassScreen extends Screen {
 				addDrawableChild(selectionList);
 			}
 
-			teleportButton.visible = isStructureView() && ExplorersCompass.canTeleport;
+			teleportButton.visible = isStructureView() && showTeleportButton();
 			positionFilterButtons();
 			positionTopButtons();
 			positionFilterSearchField();
@@ -1017,6 +1039,8 @@ public class ExplorersCompassScreen extends Screen {
 		clearOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearFiltersOnClose));
 		clearSearchBarOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearSearchBarOnClose));
 		pauseGameWhenOpenButton.setMessage(onOff(ExplorersCompassConfig.pauseGameWhenOpen));
+		creativeUnlocksAllButton.setMessage(onOff(ExplorersCompassConfig.creativeUnlocksAll));
+		showTeleportOnlyInCreativeButton.setMessage(onOff(ExplorersCompassConfig.showTeleportOnlyInCreative));
 		checkedFiltersFirstButton.setMessage(onOff(ExplorersCompassConfig.checkedFiltersFirst));
 		closeOnFoundButton.setMessage(onOff(ExplorersCompassConfig.closeOnFound));
 		adjustRowsToFitViewButton.setMessage(onOff(ExplorersCompassConfig.adjustRowsToFitView));
@@ -1153,7 +1177,7 @@ public class ExplorersCompassScreen extends Screen {
                 int x = dialogX(), y = dialogY(), w = dialogWidth();
                 if (dialog == Dialog.INFO && mouseX >= x + (w - 70) / 2 && mouseX < x + (w + 70) / 2 && mouseY >= y + dialogHeight() - 30 && mouseY < y + dialogHeight() - 10) dismissDialog();
                 else if (dialog == Dialog.SEARCHING && mouseX >= x + (w - 70) / 2 && mouseX < x + (w + 70) / 2 && mouseY >= y + searchingBackY() && mouseY < y + searchingBackY() + 20) dismissDialog();
-                else if (dialog == Dialog.FOUND && ExplorersCompass.canTeleport && mouseX >= x + (w - 100) / 2 && mouseX < x + (w + 100) / 2 && mouseY >= y + 94 && mouseY < y + 114) teleport();
+				else if (dialog == Dialog.FOUND && showTeleportButton() && mouseX >= x + (w - 100) / 2 && mouseX < x + (w + 100) / 2 && mouseY >= y + 94 && mouseY < y + 114) teleport();
                 else if (dialog == Dialog.FOUND && mouseX >= foundBackX() && mouseX < foundBackX() + FOUND_ACTION_BUTTON_WIDTH
                         && mouseY >= foundActionsY() && mouseY < foundActionsY() + 20) dismissDialog();
                 else if (dialog == Dialog.FOUND && mouseX >= foundCloseX() && mouseX < foundCloseX() + FOUND_ACTION_BUTTON_WIDTH
@@ -1472,7 +1496,7 @@ public class ExplorersCompassScreen extends Screen {
 		if (isStructureHidden(structureID)) return;
         boolean started = beginSearch(structureID, false);
 		finalizePendingHides();
-        if (started) ClientPlayNetworking.send(SearchPacket.ID, new SearchPacket(structureID, false, FilterSelections.excludeVisited(), activeRequestId));
+        if (started) ClientPlayNetworking.send(SearchPacket.ID, new SearchPacket(structureID, false, FilterSelections.excludeVisited(), ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
     }
 
     private void searchListed() {
@@ -1505,7 +1529,7 @@ public class ExplorersCompassScreen extends Screen {
         activeRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
         dialog = Dialog.SEARCHING;
         dialogStarted = System.currentTimeMillis();
-        ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(eligible, FilterSelections.excludeVisited(), activeRequestId));
+        ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(eligible, FilterSelections.excludeVisited(), ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
     }
 
     public void onSearchResult(int requestId, int result, int radius, boolean canContinue, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance) {
@@ -1624,9 +1648,9 @@ public class ExplorersCompassScreen extends Screen {
     private int notFoundBackY() { return notFoundHideY() + 23; }
 	private int foundBackX() { return dialogX() + (dialogWidth() - FOUND_ACTION_BUTTON_WIDTH * 2 - FOUND_ACTION_BUTTON_GAP) / 2; }
 	private int foundCloseX() { return foundBackX() + FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP; }
-	private int foundActionsY() { return dialogY() + (ExplorersCompass.canTeleport ? 117 : 94); }
+	private int foundActionsY() { return dialogY() + (showTeleportButton() ? 117 : 94); }
     private Text wrongDimensionCountText() { return Text.literal("Wrong dimension for " + listedSkippedCount + (listedSkippedCount == 1 ? " structure" : " structures")); }
-    private int dialogHeight() { if (dialog == Dialog.INFO) return textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68; return dialog == Dialog.WRONG_DIMENSION ? textRenderer.fontHeight + 12 : dialog == Dialog.INSUFFICIENT_XP ? textRenderer.fontHeight * 2 + 16 : dialog == Dialog.SEARCHING ? searchingBackY() + 25 : dialog == Dialog.FOUND ? (ExplorersCompass.canTeleport ? 142 : 119) : dialog == Dialog.NOT_FOUND ? notFoundBackY() + 25 : 80; }
+    private int dialogHeight() { if (dialog == Dialog.INFO) return textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68; return dialog == Dialog.WRONG_DIMENSION ? textRenderer.fontHeight + 12 : dialog == Dialog.INSUFFICIENT_XP ? textRenderer.fontHeight * 2 + 16 : dialog == Dialog.SEARCHING ? searchingBackY() + 25 : dialog == Dialog.FOUND ? (showTeleportButton() ? 142 : 119) : dialog == Dialog.NOT_FOUND ? notFoundBackY() + 25 : 80; }
     private int dialogX() { return (width - dialogWidth()) / 2; }
     private int dialogY() { return (height - dialogHeight()) / 2; }
 
@@ -1702,8 +1726,17 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     public boolean isStructureLocked(Identifier id) {
-        return ExplorersCompass.lockedRequirements.containsKey(id);
+		return !creativeBypassActive() && ExplorersCompass.lockedRequirements.containsKey(id);
     }
+
+	private boolean creativeBypassActive() {
+		return ExplorersCompassConfig.creativeUnlocksAll && player != null && player.getAbilities().creativeMode;
+	}
+
+	private boolean showTeleportButton() {
+		return ExplorersCompass.canTeleport && (!ExplorersCompassConfig.showTeleportOnlyInCreative
+				|| (player != null && player.getAbilities().creativeMode));
+	}
 
     private void rememberQuestBookReturn() {
         refreshAfterQuestBook = true;
@@ -1784,7 +1817,7 @@ public class ExplorersCompassScreen extends Screen {
             for (int i = 0; i < locationLines.length; i++) {
                 context.drawTextWithShadow(textRenderer, Language.getInstance().reorder(textRenderer.trimToWidth(locationLines[i], rightWidth)), rightX, y + 50 + i * 12, 0xffffff);
             }
-            if (ExplorersCompass.canTeleport) {
+			if (showTeleportButton()) {
                 drawDialogButton(context, Text.literal("Teleport").getString(), x + (w - 100) / 2, y + 94, 100, mouseX, mouseY);
             }
             drawDialogButton(context, Text.literal("Back").getString(), foundBackX(), foundActionsY(), FOUND_ACTION_BUTTON_WIDTH, mouseX, mouseY);
@@ -2037,8 +2070,18 @@ public class ExplorersCompassScreen extends Screen {
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 		}));
-		pauseGameWhenOpenButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(12), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+		pauseGameWhenOpenButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_PAUSE_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
 			ExplorersCompassConfig.pauseGameWhenOpen = !ExplorersCompassConfig.pauseGameWhenOpen;
+			ExplorersCompassConfig.saveClient();
+			updateSettingsButtonLabels();
+		}));
+		creativeUnlocksAllButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CREATIVE_UNLOCK_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+			ExplorersCompassConfig.creativeUnlocksAll = !ExplorersCompassConfig.creativeUnlocksAll;
+			ExplorersCompassConfig.saveClient();
+			updateSettingsButtonLabels();
+		}));
+		showTeleportOnlyInCreativeButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_TELEPORT_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+			ExplorersCompassConfig.showTeleportOnlyInCreative = !ExplorersCompassConfig.showTeleportOnlyInCreative;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 		}));
@@ -2204,8 +2247,11 @@ public class ExplorersCompassScreen extends Screen {
 		clearOnCloseButton.visible = settingsOpen;
 		checkedFiltersFirstButton.visible = settingsOpen;
 		adjustRowsToFitViewButton.visible = settingsOpen;
+		pauseGameWhenOpenButton.visible = settingsOpen;
+		creativeUnlocksAllButton.visible = settingsOpen;
+		showTeleportOnlyInCreativeButton.visible = settingsOpen;
 		cancelButton.visible = true;
-		teleportButton.visible = isStructureView() && ExplorersCompass.canTeleport;
+		teleportButton.visible = isStructureView() && showTeleportButton();
 		clearFiltersTopButton.visible = filtersOpen;
 		excludeVisitedButton.visible = filtersOpen && ExplorersCompass.canExcludeVisited;
 		excludeLockedButton.visible = filtersOpen;
@@ -2221,7 +2267,9 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(closeOnFoundButton, 9);
 		placeSetting(clearOnCloseButton, 10);
 		placeSetting(clearSearchBarOnCloseButton, 11);
-		placeSetting(pauseGameWhenOpenButton, 12);
+		placeSetting(pauseGameWhenOpenButton, SETTINGS_PAUSE_ROW);
+		placeSetting(creativeUnlocksAllButton, SETTINGS_CREATIVE_UNLOCK_ROW);
+		placeSetting(showTeleportOnlyInCreativeButton, SETTINGS_TELEPORT_ROW);
 		placeSetting(hiddenStructuresButton, SETTINGS_HIDDEN_ROW);
 	}
 

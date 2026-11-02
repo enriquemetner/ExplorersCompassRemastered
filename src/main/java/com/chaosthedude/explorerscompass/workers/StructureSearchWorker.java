@@ -35,6 +35,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	protected List<Structure> structureSet;
 	protected Identifier structureOrGroupId;
 	protected boolean excludeVisited;
+	protected boolean creativeBypass;
 	protected int samples;
 	protected boolean finished;
 	protected int lastRadiusThreshold;
@@ -68,6 +69,10 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 		this.radiusLimit = radiusLimit;
 	}
 
+	public void setCreativeBypass(boolean creativeBypass) {
+		this.creativeBypass = creativeBypass;
+	}
+
 	public boolean canWorkAt(int radiusLimit) {
 		return !finished && samples < ExplorersCompassConfig.maxSamples && getRadius() < radiusLimit;
 	}
@@ -92,7 +97,8 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	protected Pair<BlockPos, Structure> getStructureGeneratingAt(ChunkPos chunkPos) {
 		for (Structure structure : structureSet) {
             Identifier id = StructureUtils.getIDForStructure(level, structure);
-            if (id == null || !com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(level.getServer(), player.getUuid(), id)) continue;
+            if (id == null || (!(creativeBypass && player.getAbilities().creativeMode)
+					&& !com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(level.getServer(), player.getUuid(), id))) continue;
 			StructurePresence result = level.getStructureAccessor().getStructurePresence(chunkPos, structure, false);
 			if (result != StructurePresence.START_NOT_PRESENT) {
 				if (result == StructurePresence.START_PRESENT) {

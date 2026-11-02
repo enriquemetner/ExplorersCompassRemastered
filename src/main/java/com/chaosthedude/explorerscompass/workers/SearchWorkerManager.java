@@ -32,7 +32,7 @@ public class SearchWorkerManager {
 		workers = new ArrayList<StructureSearchWorker<?>>();
 	}
 
-	public void createWorkers(ServerWorld world, PlayerEntity player, ItemStack stack, List<Structure> structures, Identifier structureOrGroupId, boolean excludeVisited, BlockPos startPos) {
+	public void createWorkers(ServerWorld world, PlayerEntity player, ItemStack stack, List<Structure> structures, Identifier structureOrGroupId, boolean excludeVisited, boolean creativeBypass, BlockPos startPos) {
 		workers.clear();
 		index = 0;
 
@@ -57,6 +57,7 @@ public class SearchWorkerManager {
 			} else {
 				workers.add(new GenericSearchWorker(world, player, stack, startPos, placement, placementStructures, structureOrGroupId, excludeVisited, id));
 			}
+			workers.get(workers.size() - 1).setCreativeBypass(creativeBypass);
 		}
 	}
 

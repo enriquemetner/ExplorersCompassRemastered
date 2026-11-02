@@ -38,6 +38,8 @@ New visits and advancement progress can immediately add to a player's saved unlo
 
 Locked entries remain visible and show a requirements dialog on search attempts. Search Listed skips them. Requirement text wraps in a panel no taller than half the screen; use the wheel, scrollbar, arrow keys, Page Up/Down, or Home/End to scroll. Hover an advancement name to see its title and description. Previously found compass locations remain usable.
 
+The client setting **Unlock All Structures in Creative** temporarily treats locked entries as unlocked while the player is in Creative mode. The server verifies Creative mode for searches, including multiplayer searches. This does not grant saved unlocks; normal locks return when the player leaves Creative mode.
+
 ## Operator commands
 
 Permission level 2 is required. `<player>` accepts an online name, a name in `usercache.json`, or a UUID. Names not found in the cache require a UUID.

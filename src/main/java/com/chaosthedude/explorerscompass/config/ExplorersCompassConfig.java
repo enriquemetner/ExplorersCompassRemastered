@@ -29,7 +29,6 @@ public class ExplorersCompassConfig {
 	private static final String COMMON_BLACKLIST = "common_blacklist.toml";
 	private static final String HIDDEN_STRUCTURES = "hidden_structures.toml";
 
-	public static boolean allowTeleport = true;
 	public static boolean allowExcludeVisited = true;
 	public static boolean relockOnReload = false;
 	public static boolean displayCoordinates = true;
@@ -43,6 +42,8 @@ public class ExplorersCompassConfig {
 
 	public static boolean displayWithChatOpen = true;
 	public static boolean pauseGameWhenOpen = false;
+	public static boolean creativeUnlocksAll = false;
+	public static boolean showTeleportOnlyInCreative = true;
 	public static boolean clearFiltersOnClose = true;
 	public static boolean clearSearchBarOnClose = true;
 	public static boolean closeOnFound = true;
@@ -68,10 +69,25 @@ public class ExplorersCompassConfig {
 		try {
 			Files.createDirectories(directory());
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
-			loadCommon(readOrCreate(COMMON));
+			CommentedConfig common = readOrCreate(COMMON);
+			loadCommon(common);
+			if (common.get("permissions.allowTeleport") != null) {
+				common.remove("permissions.allowTeleport");
+				write(directory().resolve(COMMON), common);
+			}
 			structureBlacklist = strings(readOrCreate(COMMON_BLACKLIST), "structureBlacklist", structureBlacklist);
 			if (client) {
-				loadClient(readOrCreate(CLIENT));
+				CommentedConfig clientConfig = readOrCreate(CLIENT);
+				boolean migrateClient = clientConfig.get("behavior.pauseGameWhenOpen") != null
+						|| clientConfig.get("singleplayerAndCreative.pauseGameWhenOpen") == null
+						|| clientConfig.get("singleplayerAndCreative.creativeUnlocksAll") == null
+						|| clientConfig.get("singleplayerAndCreative.showTeleportOnlyInCreative") == null;
+				loadClient(clientConfig);
+				if (migrateClient) {
+					clientConfig.remove("behavior.pauseGameWhenOpen");
+					writeClient(clientConfig);
+					write(directory().resolve(CLIENT), clientConfig);
+				}
 				hiddenStructures = strings(readOrCreate(HIDDEN_STRUCTURES), "hiddenStructures", hiddenStructures);
 			}
 		} catch (IOException e) {
@@ -148,7 +164,6 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void loadCommon(CommentedConfig config) {
-		allowTeleport = bool(config, "permissions.allowTeleport", allowTeleport);
 		allowExcludeVisited = bool(config, "search.allowExcludeVisited", allowExcludeVisited);
 		relockOnReload = bool(config, "unlocking.relockOnReload", relockOnReload);
 		displayCoordinates = bool(config, "compass.displayCoordinates", displayCoordinates);
@@ -161,7 +176,11 @@ public class ExplorersCompassConfig {
 
 	private static void loadClient(CommentedConfig config) {
 		displayWithChatOpen = bool(config, "overlay.displayWithChatOpen", displayWithChatOpen);
-		pauseGameWhenOpen = bool(config, "behavior.pauseGameWhenOpen", pauseGameWhenOpen);
+		pauseGameWhenOpen = config.get("singleplayerAndCreative.pauseGameWhenOpen") != null
+				? bool(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen)
+				: bool(config, "behavior.pauseGameWhenOpen", pauseGameWhenOpen);
+		creativeUnlocksAll = bool(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll);
+		showTeleportOnlyInCreative = bool(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative);
 		clearFiltersOnClose = bool(config, "behavior.clearFiltersOnClose", clearFiltersOnClose);
 		clearSearchBarOnClose = bool(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose);
 		closeOnFound = bool(config, "behavior.closeOnFound", closeOnFound);
@@ -188,7 +207,6 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeCommon(CommentedConfig config) {
-		put(config, "permissions.allowTeleport", allowTeleport, "Allow teleporting to a located structure when permitted by player permissions.");
 		put(config, "search.allowExcludeVisited", allowExcludeVisited, "Allow players to exclude visited structure instances from searches. Visits are always recorded.");
 		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
@@ -209,7 +227,10 @@ public class ExplorersCompassConfig {
 		put(config, "behavior.closeOnFound", closeOnFound, "Close the compass screen after finding a structure.");
 		put(config, "behavior.clearFiltersOnClose", clearFiltersOnClose, "Clear filters when the compass screen closes.");
 		put(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose, "Clear the search bar when the compass screen closes.");
-		put(config, "behavior.pauseGameWhenOpen", pauseGameWhenOpen, "Pause single-player while the compass screen is open.");
+		config.remove("behavior.pauseGameWhenOpen");
+		put(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen, "Pause singleplayer while the compass screen is open, except while locating a structure.");
+		put(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll, "Temporarily unlock all structures while in Creative mode without changing saved unlocks.");
+		put(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative, "Show the Teleport button only in Creative mode. Teleport permission is still required.");
 		put(config, "sorting.sortOrder", sortOrder, "Order of the four structure sorting keys.");
 	}
 

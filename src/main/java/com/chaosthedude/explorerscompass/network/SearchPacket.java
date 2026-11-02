@@ -18,11 +18,12 @@ public class SearchPacket extends PacketByteBuf {
 
 	public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "search");
 
-	public SearchPacket(Identifier structureOrGroupId, boolean isGroup, boolean excludeVisited, int requestId) {
+	public SearchPacket(Identifier structureOrGroupId, boolean isGroup, boolean excludeVisited, boolean creativeUnlocksAll, int requestId) {
 		super(Unpooled.buffer());
 		writeIdentifier(structureOrGroupId);
 		writeBoolean(isGroup);
 		writeBoolean(excludeVisited);
+		writeBoolean(creativeUnlocksAll);
 		writeInt(requestId);
 	}
 
@@ -30,6 +31,7 @@ public class SearchPacket extends PacketByteBuf {
 		final Identifier structureOrGroupId = buf.readIdentifier();
 		final boolean isGroup = buf.readBoolean();
 		final boolean excludeVisited = buf.readBoolean();
+		final boolean creativeUnlocksAll = buf.readBoolean();
 		final int requestId = buf.readInt();
 
 		server.execute(() -> {
@@ -37,7 +39,7 @@ public class SearchPacket extends PacketByteBuf {
 			if (!stack.isEmpty()) {
 				final ExplorersCompassItem explorersCompass = (ExplorersCompassItem) stack.getItem();
 				final ServerWorld world = (ServerWorld) player.getEntityWorld();
-				explorersCompass.searchForStructure(world, player, player.getBlockPos(), structureOrGroupId, isGroup, excludeVisited, stack, requestId);
+				explorersCompass.searchForStructure(world, player, player.getBlockPos(), structureOrGroupId, isGroup, excludeVisited, creativeUnlocksAll, stack, requestId);
 			} else {
 				SearchResultPacket.send(player, requestId, SearchResultPacket.REJECTED, 0);
 			}
