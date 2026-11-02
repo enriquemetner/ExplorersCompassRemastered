@@ -50,7 +50,71 @@ loom {
 			runDir "run-clean"
 			configName = "Minecraft Client (Clean)"
 		}
+		playerOne {
+			client()
+			runDir 'run-multiplayer/player1'
+			configName = 'Multiplayer Test - Player1'
+			programArgs '--username', 'Player1', '--server', '127.0.0.1', '--port', '25565'
+		}
+		playerTwo {
+			client()
+			runDir 'run-multiplayer/player2'
+			configName = 'Multiplayer Test - Player2'
+			programArgs '--username', 'Player2', '--server', '127.0.0.1', '--port', '25565'
+		}
+		multiplayerServer {
+			server()
+			runDir 'run-multiplayer/server'
+			configName = 'Multiplayer Test - Local Server'
+			programArgs 'nogui'
+		}
 	}
+}
+
+// Seed isolated test folders once; subsequent launches preserve edits and worlds.
+tasks.register('prepareMultiplayerTest') {
+	doLast {
+		['player1', 'player2', 'server'].each { name ->
+			def target = file("run-multiplayer/${name}")
+			target.mkdirs()
+			copy {
+				from 'run/config'
+				into new File(target, 'config')
+				eachFile { entry ->
+					if (new File(target, "config/${entry.path}").exists()) entry.exclude()
+				}
+			}
+			fileTree('run/mods').matching { include '*.jar' }.each { mod ->
+				boolean clientOnly = false
+				new java.util.zip.ZipFile(mod).withCloseable { zip ->
+					def metadata = zip.getEntry('fabric.mod.json')
+					if (metadata != null) zip.getInputStream(metadata).withCloseable { stream ->
+						clientOnly = new groovy.json.JsonSlurper().parse(stream).environment == 'client'
+					}
+				}
+				def destination = new File(target, "mods/${mod.name}")
+				if (!(name == 'server' && clientOnly) && !destination.exists()) {
+					destination.parentFile.mkdirs()
+					java.nio.file.Files.copy(mod.toPath(), destination.toPath())
+				}
+			}
+		}
+		def properties = file('run-multiplayer/server/server.properties')
+		if (!properties.exists()) properties.text = '''server-ip=127.0.0.1
+server-port=25565
+online-mode=false
+gamemode=creative
+difficulty=normal
+spawn-protection=0
+motd=Explorer's Compass local multiplayer test
+'''
+		def eula = file('run-multiplayer/server/eula.txt')
+		if (!eula.exists()) eula.text = '# Read https://aka.ms/MinecraftEULA before changing this to true\neula=false\n'
+	}
+}
+
+['runPlayerOne', 'runPlayerTwo', 'runMultiplayerServer'].each { taskName ->
+	tasks.named(taskName).configure { dependsOn 'prepareMultiplayerTest' }
 }
 
 processResources {

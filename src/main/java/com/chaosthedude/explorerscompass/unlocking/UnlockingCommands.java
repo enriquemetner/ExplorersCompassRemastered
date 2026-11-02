@@ -24,6 +24,7 @@ import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Formatting;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
@@ -31,9 +32,14 @@ import static net.minecraft.server.command.CommandManager.literal;
 public final class UnlockingCommands {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(literal("explorerscompass").requires(source -> source.hasPermissionLevel(2))
-                .then(literal("reloadRules").executes(context -> {
+                .then(literal("reload").executes(context -> {
                     int count = UnlockingRules.reload(context.getSource().getServer());
-                    context.getSource().sendFeedback(() -> Text.literal("Loaded " + count + " unlocking rules. Player data was not changed. Check the server log for warnings."), true);
+                    if (count < 0) throw error("Could not reload Explorer's Compass unlocking rules. See the server log; active rules and player data were kept.");
+                    UnlockReloads.commandReload(context.getSource().getServer());
+                    context.getSource().sendFeedback(() -> Text.literal(com.chaosthedude.explorerscompass.config.ExplorersCompassConfig.relockOnReload
+                            ? "Reloaded Explorer's Compass unlocking rules from file and relocked all structures."
+                            : "Reloaded Explorer's Compass unlocking rules from file."), false);
+                    context.getSource().sendFeedback(() -> Text.literal("Note: reloading Explorer's Compass data is a developer convenience tool and not recommended for use on live servers.").formatted(Formatting.GOLD), false);
                     return count;
                 }))
                 .then(literal("lock").then(structureTargets(false)))

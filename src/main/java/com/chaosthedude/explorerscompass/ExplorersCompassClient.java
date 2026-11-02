@@ -2,9 +2,11 @@ package com.chaosthedude.explorerscompass;
 
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
+import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
 import com.chaosthedude.explorerscompass.network.UnlockToastPacket;
 import com.chaosthedude.explorerscompass.network.RepairDurabilityPacket;
+import com.chaosthedude.explorerscompass.network.RulesChangedPacket;
 import com.chaosthedude.explorerscompass.recipe.CompassRepairRecipe;
 import com.chaosthedude.explorerscompass.util.CompassState;
 
@@ -30,11 +32,16 @@ public class ExplorersCompassClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestClientIntegration.register();
-		ClientPlayNetworking.registerGlobalReceiver(SyncPacket.ID, SyncPacket::apply);
-		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, SearchResultPacket::apply);
-		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, UnlockToastPacket::apply);
-		ClientPlayNetworking.registerGlobalReceiver(RepairDurabilityPacket.ID, RepairDurabilityPacket::apply);
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> CompassRepairRecipe.clearServerDurability());
+		ClientPlayNetworking.registerGlobalReceiver(SyncPacket.ID, ClientPacketHandlers::applySync);
+		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, ClientPacketHandlers::applySearchResult);
+		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, ClientPacketHandlers::applyUnlockToast);
+		ClientPlayNetworking.registerGlobalReceiver(RepairDurabilityPacket.ID, ClientPacketHandlers::applyRepairDurability);
+		ClientPlayNetworking.registerGlobalReceiver(RulesChangedPacket.ID, ClientPacketHandlers::applyRulesChanged);
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            CompassRepairRecipe.clearServerDurability();
+            ClientPacketHandlers.shownNoticeRevision = 0;
+            ClientPacketHandlers.pendingNoticeRevision = 0;
+        });
 		
 		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM, new Identifier("angle"), new ClampedModelPredicateProvider() {
 			private double rotation;

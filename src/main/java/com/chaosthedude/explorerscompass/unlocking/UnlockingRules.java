@@ -41,6 +41,7 @@ import net.minecraft.util.Identifier;
 public final class UnlockingRules {
     private static final Logger LOGGER = LogManager.getLogger("explorerscompass");
     private static UnlockingRules active = new UnlockingRules();
+    private static String activeDefinition = "";
     private boolean defaultUnlocked = true;
     private final Map<String, Rule> rules = new LinkedHashMap<>();
     private final Map<Identifier, Rule> byStructure = new LinkedHashMap<>();
@@ -98,13 +99,25 @@ public final class UnlockingRules {
         };
     }
 
-    public static void clear() { active = new UnlockingRules(); }
+    public static void clear() { active = new UnlockingRules(); activeDefinition = ""; }
+
+    public static String definition() { return activeDefinition; }
 
     public static int reload(MinecraftServer server) {
         Path file = FabricLoader.getInstance().getConfigDir().resolve("explorerscompass/unlocking_rules.json");
-        active = loadFile(file, catalog(server));
-        LOGGER.info("Loaded {} structure unlocking rules", active.rules.size());
-        return active.rules.size();
+        try {
+            Files.createDirectories(file.getParent());
+            if (!Files.exists(file)) Files.writeString(file, "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n");
+            String source = Files.readString(file);
+            UnlockingRules loaded = parse(source, catalog(server));
+            active = loaded;
+            activeDefinition = JsonParser.parseString(source).toString();
+            LOGGER.info("Loaded {} structure unlocking rules", active.rules.size());
+            return active.rules.size();
+        } catch (IOException | RuntimeException e) {
+            LOGGER.error("Could not reload {}. Keeping active unlocking rules.", file, e);
+            return -1;
+        }
     }
 
     static UnlockingRules loadFile(Path file, Catalog catalog) {
@@ -177,11 +190,14 @@ public final class UnlockingRules {
 
     /** Called on compass open or when the compass advancement is earned. */
     public void evaluateOnOpen(ServerPlayerEntity player) {
-        FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
-        UnlockedStructures state = UnlockedStructures.get(player.getServer());
-        Set<Identifier> earned = earnedOnOpen(catalog(player.getServer()).structures(), progress(player), rewards);
-        int added = state.add(player.getUuid(), earned);
+        int added = evaluateSilently(player);
         UnlockNotifications.newlyAdded(player, added);
+    }
+
+    public int evaluateSilently(ServerPlayerEntity player) {
+        FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
+        Set<Identifier> earned = earnedOnOpen(catalog(player.getServer()).structures(), progress(player), rewards);
+        return UnlockedStructures.get(player.getServer()).add(player.getUuid(), earned);
     }
 
     Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress) {

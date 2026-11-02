@@ -17,12 +17,17 @@ public final class FtbStructureRewards {
         public Set<Identifier> targets(long rewardId) { return rewardTargets.getOrDefault(rewardId, Set.of()); }
     }
     public interface Provider { Snapshot snapshot(ServerPlayerEntity player); }
+    public interface Definitions { String current(); }
 
     private static Provider provider;
+    private static Definitions definitions;
 
     private FtbStructureRewards() {}
 
     public static void register(Provider source) { provider = source; }
+    public static void registerDefinitions(Definitions source) { definitions = source; }
+    /** Null while an installed FTB quest book has not finished loading. */
+    public static String definition() { return definitions == null ? "" : definitions.current(); }
     public static Snapshot snapshot(ServerPlayerEntity player) {
         return provider == null ? Snapshot.EMPTY : provider.snapshot(player);
     }

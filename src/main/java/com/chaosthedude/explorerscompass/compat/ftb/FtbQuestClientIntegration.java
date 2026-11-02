@@ -30,7 +30,7 @@ public final class FtbQuestClientIntegration {
                 NbtCompound settings = new NbtCompound();
                 quest.writeData(settings);
                 boolean visible = quest.isVisible(team) && quest.getChapter().isVisible(team);
-                return new FtbQuestNavigation.QuestInfo(quest.getTitle(),
+                return new FtbQuestNavigation.QuestInfo(quest.getMutableTitle(),
                         visible && (file.canEdit() || !quest.hideDetailsUntilStartable() || team.canStartTasks(quest)),
                         quest.getHideTextUntilComplete().get(false) && !completed,
                         !visible && settings.getBoolean("invisible") && !completed);

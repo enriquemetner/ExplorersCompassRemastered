@@ -47,6 +47,33 @@ public final class FtbQuestIntegration {
         type.setDisplayName(Text.translatable("ftb_reward.explorerscompass.unlock_structures"));
         FtbVisitStructuresTask.register();
         FtbStructureRewards.register(FtbQuestIntegration::snapshot);
+        FtbStructureRewards.registerDefinitions(FtbQuestIntegration::definition);
+    }
+
+    private static String definition() {
+        ServerQuestFile file = ServerQuestFile.INSTANCE;
+        if (file == null || file.isLoading()) return null;
+        java.util.SortedMap<Long, String> relevant = new java.util.TreeMap<>();
+        file.forAllQuests(quest -> {
+            boolean used = quest.getTasks().stream().anyMatch(task -> task instanceof FtbVisitStructuresTask)
+                    || quest.getRewards().stream().anyMatch(reward -> reward instanceof UnlockStructuresReward);
+            if (!used) return;
+            NbtCompound data = new NbtCompound();
+            quest.writeData(data);
+            java.util.SortedMap<Long, String> components = new java.util.TreeMap<>();
+            quest.getTasks().forEach(task -> {
+                NbtCompound part = new NbtCompound();
+                task.writeData(part);
+                components.put(task.getId(), part.toString());
+            });
+            quest.getRewards().forEach(reward -> {
+                NbtCompound part = new NbtCompound();
+                reward.writeData(part);
+                components.put(reward.getId(), part.toString());
+            });
+            relevant.put(quest.getId(), data + ":" + components);
+        });
+        return relevant.toString();
     }
 
     private static FtbStructureRewards.Snapshot snapshot(ServerPlayerEntity player) {
@@ -63,12 +90,25 @@ public final class FtbQuestIntegration {
                 targets.put(unlock.getId(), resolved);
                 if (team.isRewardClaimed(player.getUuid(), unlock)) claimedRewardIds.add(unlock.getId());
                 for (Identifier id : resolved) quests.computeIfAbsent(id, ignored -> new LinkedHashMap<>())
-                        .putIfAbsent(quest.getId(), new FtbStructureRewards.Quest(quest.getId(), quest.getTitle()));
+                        .putIfAbsent(quest.getId(), new FtbStructureRewards.Quest(quest.getId(), serverQuestTitle(quest)));
             }
         });
         Map<Identifier, List<FtbStructureRewards.Quest>> entries = new LinkedHashMap<>();
         quests.forEach((id, named) -> entries.put(id, List.copyOf(named.values())));
         return new FtbStructureRewards.Snapshot(entries, targets, claimedRewardIds);
+    }
+
+    // FTB's getTitle/getMutableTitle are stripped from dedicated servers.
+    private static Text serverQuestTitle(Quest quest) {
+        String title = quest.getRawTitle();
+        if (title.isEmpty()) return Text.literal("Quest " + quest.getCodeString());
+        if (title.stripLeading().startsWith("{") || title.stripLeading().startsWith("[")) {
+            try {
+                Text parsed = Text.Serializer.fromJson(title);
+                if (parsed != null) return parsed;
+            } catch (RuntimeException ignored) { }
+        }
+        return Text.literal(title);
     }
 
     public static final class UnlockStructuresReward extends Reward {

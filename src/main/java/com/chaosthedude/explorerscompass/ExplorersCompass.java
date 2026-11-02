@@ -60,12 +60,15 @@ public class ExplorersCompass implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ExplorersCompassConfig.load();
+        com.chaosthedude.explorerscompass.network.AcknowledgeNoticePacket.register();
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(
-                com.chaosthedude.explorerscompass.unlocking.UnlockingRules::reload);
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server ->
-                com.chaosthedude.explorerscompass.unlocking.UnlockingRules.clear());
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server ->
+                com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server));
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            com.chaosthedude.explorerscompass.unlocking.UnlockingRules.clear();
+            com.chaosthedude.explorerscompass.unlocking.UnlockReloads.clear();
+        });
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 com.chaosthedude.explorerscompass.unlocking.UnlockingCommands.register(dispatcher));
 
@@ -82,9 +85,12 @@ public class ExplorersCompass implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(RefreshCompassPacket.ID, RefreshCompassPacket::apply);
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> EXPLORERS_COMPASS_ITEM.cancelSearch(handler.player, -1));
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> VisitedStructures.get(server).forgetPosition(handler.player.getUuid()));
+		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+				com.chaosthedude.explorerscompass.unlocking.UnlockReloads.left(handler.player.getUuid()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
 				RepairDurabilityPacket.send(handler.player, ExplorersCompassConfig.compassDurability));
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			com.chaosthedude.explorerscompass.unlocking.UnlockReloads.tick(server);
 			if (server.getTicks() % 20 != 0 || server.getPlayerManager().getPlayerList().isEmpty()) return;
 			VisitedStructures history = VisitedStructures.get(server);
 			for (net.minecraft.server.network.ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {

@@ -1,12 +1,8 @@
 package com.chaosthedude.explorerscompass.network;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
-import com.chaosthedude.explorerscompass.gui.ExplorersCompassScreen;
 import io.netty.buffer.Unpooled;
-import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
@@ -47,27 +43,4 @@ public class SearchResultPacket extends PacketByteBuf {
         ServerPlayNetworking.send(player, ID, new SearchResultPacket(requestId, result, radius, canContinue, foundId, foundX, foundZ, displayCoordinates, displayDistance));
     }
 
-    public static void apply(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
-        int requestId = buf.readInt(), result = buf.readInt(), radius = buf.readInt();
-        boolean canContinue = buf.readBoolean();
-        Identifier foundId = null;
-        int foundX = 0, foundZ = 0;
-        boolean displayCoordinates = false, displayDistance = false;
-        if (buf.readBoolean()) {
-            foundId = buf.readIdentifier();
-            foundX = buf.readInt();
-            foundZ = buf.readInt();
-            displayCoordinates = buf.readBoolean();
-            displayDistance = buf.readBoolean();
-        }
-        final Identifier resultId = foundId;
-        final int resultX = foundX, resultZ = foundZ;
-        final boolean showCoordinates = displayCoordinates;
-        final boolean showDistance = displayDistance;
-        client.execute(() -> {
-            if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onSearchResult(requestId, result, radius, canContinue, resultId, resultX, resultZ, showCoordinates, showDistance);
-            }
-        });
-    }
 }

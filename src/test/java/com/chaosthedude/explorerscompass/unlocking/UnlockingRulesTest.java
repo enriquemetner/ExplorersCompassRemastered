@@ -27,6 +27,44 @@ class UnlockingRulesTest {
     private static final Identifier ADVANCEMENT = new Identifier("minecraft:story/mine_stone");
     private static final Identifier DRAGON_EGG = new Identifier("minecraft:end/dragon_egg");
     private static final Identifier SET = new Identifier("minecraft:test_set");
+
+    @Test void updateNoticesCollapsePersistAndIgnoreStaleAcknowledgments() {
+        UUID player = UUID.randomUUID();
+        UnlockedStructures state = new UnlockedStructures();
+        state.queueReload(Set.of(player), true, true);
+        long oldRevision = state.noticeRevision(player);
+        state.takePendingRelock(player);
+        state.queueReload(Set.of(player), false, true);
+        long newest = state.noticeRevision(player);
+        assertTrue(newest > oldRevision);
+        state = UnlockedStructures.fromNbt(state.writeNbt(new NbtCompound()));
+        assertTrue(state.noticeRelocked(player));
+        state.acknowledgeNotice(player, oldRevision);
+        assertEquals(newest, state.noticeRevision(player));
+        state.acknowledgeNotice(player, newest);
+        assertEquals(0, state.noticeRevision(player));
+        assertFalse(state.noticeRelocked(player));
+    }
+
+    @Test void reloadHistoryAndOfflineWorkSurviveRestart() {
+        UUID player = UUID.randomUUID();
+        UnlockedStructures saved = new UnlockedStructures();
+        saved.add(player, Set.of(A));
+        saved.enableNotifications(player);
+        assertFalse(saved.updateDefinitionHistory("first"));
+        assertFalse(saved.updateDefinitionHistory("first"));
+        assertTrue(saved.updateDefinitionHistory("second"));
+        saved.queueReload(saved.knownPlayers(), true, true);
+        saved = UnlockedStructures.fromNbt(saved.writeNbt(new NbtCompound()));
+        assertEquals("second", saved.definitionHistory());
+        assertTrue(saved.takePendingRelock(player));
+        assertFalse(saved.takePendingRelock(player));
+        assertTrue(saved.takePendingReloadNotice(player));
+        assertFalse(saved.takePendingReloadNotice(player));
+        saved.clearStructures(player);
+        assertTrue(saved.getStructures(player).isEmpty());
+        assertTrue(saved.notificationsEnabled(player));
+    }
     private static final Set<Identifier> STRUCTURES = Set.of(A, B, C);
     private final UnlockingRules.Catalog catalog = new UnlockingRules.Catalog() {
         public Set<Identifier> structures() { return STRUCTURES; }

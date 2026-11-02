@@ -38,6 +38,22 @@ import net.minecraft.world.World;
 import net.minecraft.world.gen.structure.Structure;
 
 public class ExplorersCompassItem extends Item {
+    private Identifier getTrackedStructure(ServerPlayerEntity player) {
+        ItemStack held = ItemUtils.getHeldItem(player, this);
+        return !held.isEmpty() && getState(held) == CompassState.FOUND ? getStructureID(held) : null;
+    }
+    public void validateTarget(ServerPlayerEntity player, ItemStack stack) {
+        if (stack.getItem() != this || getState(stack) != CompassState.FOUND) return;
+        Identifier id = getStructureID(stack);
+        if (!player.getServer().getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).containsId(id)
+                || StructureUtils.structureIdIsBlacklisted(id)
+                || !UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), id)) clearCompassTarget(stack);
+    }
+    @Override public void inventoryTick(ItemStack stack, World world, net.minecraft.entity.Entity entity, int slot, boolean selected) {
+        if (!world.isClient && entity instanceof ServerPlayerEntity player
+                && com.chaosthedude.explorerscompass.unlocking.UnlockReloads.ready(player.getUuid())) validateTarget(player, stack);
+    }
+
 
 	public static final String NAME = "explorerscompass";
 	public static final int INITIAL_SEARCH_RADIUS = 10000;
@@ -171,7 +187,10 @@ public class ExplorersCompassItem extends Item {
 		ServerPlayNetworking.send(player, SyncPacket.ID, new SyncPacket(canTeleport, ExplorersCompassConfig.allowExcludeVisited,
 				hasInfiniteXp, ExplorersCompassConfig.defaultXpCost, ExplorersCompassConfig.allowSearchWithoutEnoughXp,
 				allowedStructures, dimensionsForAllowedStructures, structureIDsToGroupIDs,
-				UnlockingRules.get().lockedRequirements(player, allowedStructures)));
+				UnlockingRules.get().lockedRequirements(player, allowedStructures),
+                com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRevision(player.getUuid()),
+                com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRelocked(player.getUuid()),
+                getTrackedStructure(player)));
 	}
 
 	@Override

@@ -31,6 +31,7 @@ public class ExplorersCompassConfig {
 
 	public static boolean allowTeleport = true;
 	public static boolean allowExcludeVisited = true;
+	public static boolean relockOnReload = false;
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
 	public static int maxSamples = 100000;
@@ -149,6 +150,7 @@ public class ExplorersCompassConfig {
 	private static void loadCommon(CommentedConfig config) {
 		allowTeleport = bool(config, "permissions.allowTeleport", allowTeleport);
 		allowExcludeVisited = bool(config, "search.allowExcludeVisited", allowExcludeVisited);
+		relockOnReload = bool(config, "unlocking.relockOnReload", relockOnReload);
 		displayCoordinates = bool(config, "compass.displayCoordinates", displayCoordinates);
 		displayDistance = bool(config, "compass.displayDistance", displayDistance);
 		maxSamples = number(config, "search.maxSamples", maxSamples, 1);
@@ -188,6 +190,7 @@ public class ExplorersCompassConfig {
 	private static void writeCommon(CommentedConfig config) {
 		put(config, "permissions.allowTeleport", allowTeleport, "Allow teleporting to a located structure when permitted by player permissions.");
 		put(config, "search.allowExcludeVisited", allowExcludeVisited, "Allow players to exclude visited structure instances from searches. Visits are always recorded.");
+		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
 		put(config, "compass.displayDistance", displayDistance, "Show distance to located structures.");
 		put(config, "search.maxSamples", maxSamples, "Maximum search samples; must be at least 1.");
