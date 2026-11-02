@@ -61,10 +61,10 @@ public final class UnlockReloads {
                 boolean startup = observedDefinition == null;
                 observedDefinition = current;
                 UnlockedStructures state = UnlockedStructures.get(server);
-                boolean changedSinceSaved = state.updateDefinitionHistory(current);
                 if (startup) {
-                    state.queueReload(state.knownPlayers(), ExplorersCompassConfig.relockOnReload, changedSinceSaved);
+                    prepareStartup(state, current, ExplorersCompassConfig.relockOnReload);
                 } else {
+                    state.updateDefinitionHistory(current);
                     updatePlayers(server, Set.copyOf(recentEditors), true);
                 }
             }
@@ -73,6 +73,12 @@ public final class UnlockReloads {
         if (observedDefinition == null) return;
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
             if (joined.add(player.getUuid())) reconcile(player);
+        }
+    }
+
+    static void prepareStartup(UnlockedStructures state, String definition, boolean relock) {
+        if (state.updateDefinitionHistory(definition)) {
+            state.queueReload(state.knownPlayers(), relock, true);
         }
     }
 
