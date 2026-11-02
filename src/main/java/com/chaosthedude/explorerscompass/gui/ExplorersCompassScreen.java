@@ -51,7 +51,6 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SORT_ROW_HEIGHT = 20;
 	private static final int SORT_LABEL_GAP = 11;
 	private static final int SORT_HIGHLIGHT_PADDING = 4;
-	private static final int SEARCH_FIELD_WIDTH = 210;
 	private static final int SEARCH_TELEPORT_GAP = 10;
 	private static final int PREFERRED_FILTER_ROW_HEIGHT = 20;
 	private static final int FILTER_HEADER_HEIGHT = 20;
@@ -567,7 +566,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int filterTop() {
-		return 40;
+		return filtersOpen ? 70 : 40;
 	}
 
 	private int filterHeaderTop() {
@@ -2169,9 +2168,9 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void setupTextFields() {
 		int searchX = selectionList.getRowLeft();
-		int rightButtonX = teleportButton.getY() == 10 ? teleportButton.getX() : cancelButton.getX();
-		int availableWidth = Math.max(0, rightButtonX - searchX - SEARCH_TELEPORT_GAP);
-		searchTextField = new TransparentTextField(textRenderer, searchX, 10, Math.min(SEARCH_FIELD_WIDTH, availableWidth), 20, Text.literal("Search"));
+		int rightButtonX = showTeleportButton() && teleportButton.getY() == 10 ? teleportButton.getX() : cancelButton.getX();
+		int availableWidth = Math.max(1, rightButtonX - searchX - SEARCH_TELEPORT_GAP);
+		searchTextField = new TransparentTextField(textRenderer, searchX, 10, availableWidth, 20, Text.literal("Search"));
 		searchTextField.setText(sessionSearchText);
 		searchTextField.setChangedListener(value -> {
 			selectionList.setSelected(null);
@@ -2191,7 +2190,7 @@ public class ExplorersCompassScreen extends Screen {
 		int hiddenSearchX = Math.min(10 + textRenderer.getWidth(Text.literal("Settings > Hidden Structures")) + 10,
 				Math.max(10, headerEnd - 80));
 		hiddenSearchTextField = new TransparentTextField(textRenderer, hiddenSearchX, 10,
-				Math.max(1, Math.min(SEARCH_FIELD_WIDTH, headerEnd - hiddenSearchX)),
+				Math.max(1, headerEnd - hiddenSearchX),
 				20, Text.literal("Search hidden structures"));
 		hiddenSearchTextField.setMaxLength(256);
 		hiddenSearchTextField.setText(hiddenSearchText);
@@ -2234,8 +2233,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int filterSearchWidth(int searchX) {
-		int rightEdge = ExplorersCompass.canExcludeVisited ? excludeVisitedButton.getX() : excludeLockedButton.getX();
-		return Math.max(1, Math.min(SEARCH_FIELD_WIDTH, rightEdge - searchX - SEARCH_TELEPORT_GAP));
+		return Math.max(1, backButton.getX() - searchX - SEARCH_TELEPORT_GAP);
 	}
 
 	private void positionFilterSearchField() {
@@ -2258,9 +2256,16 @@ public class ExplorersCompassScreen extends Screen {
 			teleportButton.setY(height - 55);
 		}
 		backButton.setX(cancelButton.getX() - backButton.getWidth() - 5);
-		clearFiltersTopButton.setX(backButton.getX() - clearFiltersTopButton.getWidth() - 5);
-		excludeLockedButton.setX(clearFiltersTopButton.getX() - excludeLockedButton.getWidth() - 5);
-		excludeVisitedButton.setX(excludeLockedButton.getX() - excludeVisitedButton.getWidth() - 5);
+		clearFiltersTopButton.setX(width - 10 - clearFiltersTopButton.getWidth());
+		clearFiltersTopButton.setY(40);
+		excludeVisitedButton.setX(filterLeft());
+		excludeVisitedButton.setY(40);
+		excludeLockedButton.setX(filterLeft() + (ExplorersCompass.canExcludeVisited ? excludeVisitedButton.getWidth() + 5 : 0));
+		excludeLockedButton.setY(40);
+		if (searchTextField != null) {
+			int rightEdge = showTeleportButton() && teleportButton.getY() == 10 ? teleportButton.getX() : cancelButton.getX();
+			searchTextField.setWidth(Math.max(1, rightEdge - searchTextField.getX() - SEARCH_TELEPORT_GAP));
+		}
 	}
 
 	private void updateViewButtons() {
