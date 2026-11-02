@@ -3,12 +3,15 @@ package com.chaosthedude.explorerscompass.unlocking;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.stream.Collectors;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
+import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
@@ -44,10 +47,15 @@ public final class UnlockingCommands {
                 }))
                 .then(literal("lock").then(structureTargets(false)))
                 .then(literal("unlock").then(structureTargets(true)))
-                .then(literal("clearVisited").then(playerArgument()
-                        .then(literal("all").executes(context -> clearVisited(context, null)))
-                        .then(literal("structure").then(structureArgument().executes(context ->
-                                clearVisited(context, IdentifierArgumentType.getIdentifier(context, "id"))))))));
+                .then(literal("visits")
+                    .then(literal("list").then(playerArgument()
+                        .then(literal("structure").then(visitArgument(false).executes(c -> listVisits(c, false))))
+                        .then(literal("structureSet").then(visitArgument(true).executes(c -> listVisits(c, true))))))
+                    .then(literal("clear").then(playerArgument()
+                        .then(literal("everything").executes(c -> reportCleared(c, VisitedStructures.get(c.getSource().getServer()).clear(player(c), null))))
+                        .then(literal("structure").then(visitRanges(false)))
+                        .then(literal("structureSet").then(visitRanges(true)))))));
+
     }
 
     private static RequiredArgumentBuilder<ServerCommandSource, String> playerArgument() {
@@ -57,7 +65,7 @@ public final class UnlockingCommands {
 
     private static RequiredArgumentBuilder<ServerCommandSource, Identifier> structureArgument() {
         return argument("id", IdentifierArgumentType.identifier()).suggests((context, builder) ->
-                CommandSource.suggestIdentifiers(context.getSource().getRegistryManager().get(RegistryKeys.STRUCTURE).getIds(), builder));
+                CommandSource.suggestIdentifiers(commandStructures(context.getSource().getRegistryManager().get(RegistryKeys.STRUCTURE).getIds()), builder));
     }
 
     private static RequiredArgumentBuilder<ServerCommandSource, String> structureTargets(boolean unlock) {
@@ -91,11 +99,13 @@ public final class UnlockingCommands {
             }
             default -> {
                 Identifier id = IdentifierArgumentType.getIdentifier(context, "id");
+                requireNotBlacklisted(id);
                 if (!server.getRegistryManager().get(RegistryKeys.STRUCTURE).containsId(id)
                         && (unlock || !state.contains(player, id))) throw error("Unknown structure: " + id);
                 targets = Set.of(id);
             }
         }
+        targets = commandStructures(targets);
         Set<Identifier> added = new HashSet<>();
         if (unlock) {
             added.addAll(targets);
@@ -114,11 +124,75 @@ public final class UnlockingCommands {
         return changed;
     }
 
-    private static int clearVisited(CommandContext<ServerCommandSource> context, Identifier structure) throws CommandSyntaxException {
-        UUID player = player(context);
-        int removed = VisitedStructures.get(context.getSource().getServer()).clear(player, structure);
-        context.getSource().sendFeedback(() -> Text.literal("Cleared " + removed + " visited structure instances for " + player + "."), true);
-        return removed;
+    private static RequiredArgumentBuilder<ServerCommandSource, Identifier> visitArgument(boolean set) {
+        return argument("id", IdentifierArgumentType.identifier()).suggests((c, b) -> {
+            if (!set) return CommandSource.suggestIdentifiers(commandStructures(c.getSource().getRegistryManager().get(RegistryKeys.STRUCTURE).getIds()), b);
+            return CommandSource.suggestIdentifiers(c.getSource().getRegistryManager().get(RegistryKeys.STRUCTURE_SET).getIds().stream()
+                .filter(id -> !StructureUtils.structureIdIsBlacklisted(id)
+                    && !commandStructures(UnlockingRules.setMembers(c.getSource().getServer(), id)).isEmpty()), b);
+        });
+    }
+
+    private static Set<Identifier> visitTargets(CommandContext<ServerCommandSource> c, boolean set) throws CommandSyntaxException {
+        Identifier id = IdentifierArgumentType.getIdentifier(c, "id");
+        requireNotBlacklisted(id);
+        var registry = c.getSource().getRegistryManager();
+        if (!set && registry.get(RegistryKeys.STRUCTURE).containsId(id)) return Set.of(id);
+        if (!set || !registry.get(RegistryKeys.STRUCTURE_SET).containsId(id)) throw error("Unknown structure: " + id);
+        Set<Identifier> members = commandStructures(UnlockingRules.setMembers(c.getSource().getServer(), id));
+        if (members.isEmpty()) throw error("Unknown structure set: " + id);
+        return members;
+    }
+
+    private static int listVisits(CommandContext<ServerCommandSource> c, boolean set) throws CommandSyntaxException {
+        var entries = VisitedStructures.get(c.getSource().getServer()).list(player(c), visitTargets(c, set));
+        Identifier id = IdentifierArgumentType.getIdentifier(c, "id");
+        c.getSource().sendFeedback(() -> Text.literal("Listing visited " + id + " structures:"), false);
+        for (int i = 0; i < entries.size(); i++) {
+            var v = entries.get(i);
+            int x = v.chunkX() * 16 + 8, z = v.chunkZ() * 16 + 8;
+            Text coords = Text.literal("[" + x + ", ~, " + z + "]").styled(style -> style.withColor(Formatting.GREEN)
+                .withClickEvent(new net.minecraft.text.ClickEvent(net.minecraft.text.ClickEvent.Action.SUGGEST_COMMAND, "/tp " + x + " ~ " + z))
+                .withHoverEvent(new net.minecraft.text.HoverEvent(net.minecraft.text.HoverEvent.Action.SHOW_TEXT, Text.translatable("chat.coordinates.tooltip"))));
+            Text line = Text.literal(i + ": " + v.structure() + " (" + v.dimension() + ") ").append(coords);
+            c.getSource().sendFeedback(() -> line, false);
+        }
+        if (entries.isEmpty()) c.getSource().sendFeedback(() -> Text.literal("No matching visits."), false);
+        return entries.size();
+    }
+
+    private static RequiredArgumentBuilder<ServerCommandSource, Identifier> visitRanges(boolean set) {
+        return visitArgument(set)
+            .then(literal("everything").executes(c -> clearRange(c, set, "everything")))
+            .then(literal("only").then(argument("x", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0)).executes(c -> clearRange(c, set, "only"))))
+            .then(literal("until").then(argument("x", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0)).executes(c -> clearRange(c, set, "until"))))
+            .then(literal("from").then(argument("x", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0)).executes(c -> clearRange(c, set, "from"))
+                .then(literal("until").then(argument("y", com.mojang.brigadier.arguments.IntegerArgumentType.integer(0)).executes(c -> clearRange(c, set, "range"))))));
+    }
+
+    private static int clearRange(CommandContext<ServerCommandSource> c, boolean set, String mode) throws CommandSyntaxException {
+        UUID player = player(c);
+        var state = VisitedStructures.get(c.getSource().getServer());
+        var entries = state.list(player, visitTargets(c, set));
+        if (mode.equals("everything")) return reportCleared(c, state.remove(player, entries));
+        int x = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(c, "x");
+        int first = mode.equals("until") ? 0 : x;
+        int last = mode.equals("from") ? entries.size() - 1 : mode.equals("range") ? com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(c, "y") : x;
+        if (first < 0 || first >= entries.size() || last < first || last >= entries.size()) throw error("Invalid visit ordinal or range; no visits cleared.");
+        return reportCleared(c, state.remove(player, entries.subList(first, last + 1)));
+    }
+
+    private static int reportCleared(CommandContext<ServerCommandSource> c, int count) {
+        c.getSource().sendFeedback(() -> Text.literal("Cleared " + count + " visited structure instances."), true);
+        return count;
+    }
+
+    static Set<Identifier> commandStructures(Collection<Identifier> structures) {
+        return structures.stream().filter(id -> !StructureUtils.structureIdIsBlacklisted(id)).collect(Collectors.toSet());
+    }
+
+    static void requireNotBlacklisted(Identifier id) throws CommandSyntaxException {
+        if (StructureUtils.structureIdIsBlacklisted(id)) throw error("Unknown structure: " + id);
     }
 
     private static UUID player(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {

@@ -1,7 +1,7 @@
 package com.chaosthedude.explorerscompass.util;
 
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -26,7 +26,7 @@ public final class VisitedStructures extends PersistentState {
 	private final Map<UUID, Set<Visit>> visits = new HashMap<>();
 	private final Map<UUID, CheckedPosition> lastChecked = new HashMap<>();
 
-	private record Visit(Identifier dimension, Identifier structure, int chunkX, int chunkZ) {
+	public record Visit(Identifier dimension, Identifier structure, int chunkX, int chunkZ) {
 	}
 
 	private record CheckedPosition(Identifier dimension, BlockPos pos) {
@@ -42,7 +42,7 @@ public final class VisitedStructures extends PersistentState {
 		for (int i = 0; i < players.size(); i++) {
 			NbtCompound player = players.getCompound(i);
 			if (!player.containsUuid("UUID")) continue;
-			Set<Visit> playerVisits = new HashSet<>();
+			Set<Visit> playerVisits = new LinkedHashSet<>();
 			NbtList entries = player.getList("Visits", NbtElement.COMPOUND_TYPE);
 			for (int j = 0; j < entries.size(); j++) {
 				NbtCompound entry = entries.getCompound(j);
@@ -93,7 +93,7 @@ public final class VisitedStructures extends PersistentState {
 			if (structureId == null) continue;
 			ChunkPos startChunk = start.getPos();
 			Visit visit = new Visit(dimension, structureId, startChunk.x, startChunk.z);
-			if (visits.computeIfAbsent(player.getUuid(), ignored -> new HashSet<>()).add(visit)) {
+			if (visits.computeIfAbsent(player.getUuid(), ignored -> new LinkedHashSet<>()).add(visit)) {
                 markDirty();
                 com.chaosthedude.explorerscompass.unlocking.UnlockingRules.get().onProgress(player, structureId, null);
             }
@@ -108,12 +108,33 @@ public final class VisitedStructures extends PersistentState {
         return visits.getOrDefault(player, Set.of()).stream().anyMatch(visit -> visit.structure.equals(structure));
     }
 
-    /** A null structure clears all instances of every type. */
-    public int clear(UUID player, Identifier structure) {
+    /** Matching visits in first-recorded order; indices are the command ordinals. */
+    public java.util.List<Visit> list(UUID player, Set<Identifier> structures) {
+        return visits.getOrDefault(player, Set.of()).stream().filter(v -> structures.contains(v.structure))
+            .toList();
+    }
+
+    public int remove(UUID player, java.util.Collection<Visit> selected) {
         Set<Visit> saved = visits.get(player);
         if (saved == null) return 0;
         int before = saved.size();
-        saved.removeIf(visit -> structure == null || visit.structure.equals(structure));
+        saved.removeAll(selected);
+        if (saved.isEmpty()) visits.remove(player);
+        forgetPosition(player);
+        if (before != saved.size()) markDirty();
+        return before - saved.size();
+    }
+
+    /** A null structure clears all instances of every type. */
+    public int clear(UUID player, Identifier structure) {
+        return clearMatching(player, id -> structure == null || structure.equals(id));
+    }
+
+    public int clearMatching(UUID player, java.util.function.Predicate<Identifier> matches) {
+        Set<Visit> saved = visits.get(player);
+        if (saved == null) return 0;
+        int before = saved.size();
+        saved.removeIf(visit -> matches.test(visit.structure));
         int removed = before - saved.size();
         if (saved.isEmpty()) visits.remove(player);
         forgetPosition(player);
