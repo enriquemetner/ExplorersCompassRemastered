@@ -31,7 +31,7 @@ public final class FilterSelections {
 	}
 
 	public static boolean isEmpty() {
-		return sources.isEmpty() && dimensions.isEmpty() && groups.isEmpty() && !excludeVisited && !excludeLocked;
+		return sources.isEmpty() && dimensions.isEmpty() && !currentSelected && groups.isEmpty() && !excludeVisited && !excludeLocked;
 	}
 
 	public static boolean excludeVisited() {
@@ -55,28 +55,16 @@ public final class FilterSelections {
 	}
 
 	public static void openedInDimension(Identifier dimension) {
-		if (currentSelected && currentDimension != null && !currentDimension.equals(dimension)) {
-			dimensions.remove(currentDimension);
-			dimensions.add(dimension);
-		}
 		currentDimension = dimension;
 	}
 
 	public static void toggleCurrent() {
 		currentSelected = !currentSelected;
-		if (currentSelected) {
-			dimensions.add(currentDimension);
-		} else {
-			dimensions.remove(currentDimension);
-		}
 	}
 
 	public static void toggleDimension(Identifier dimension) {
 		if (!dimensions.add(dimension)) {
 			dimensions.remove(dimension);
-			if (currentSelected && dimension.equals(currentDimension)) {
-				currentSelected = false;
-			}
 		}
 	}
 
@@ -88,12 +76,12 @@ public final class FilterSelections {
 		if (!groups.isEmpty() && !groups.contains(group)) {
 			return false;
 		}
-		if (dimensions.isEmpty()) {
+		if (dimensions.isEmpty() && !currentSelected) {
 			return true;
 		}
 		List<Identifier> structureDimensions = ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureId);
 		for (Identifier dimension : structureDimensions) {
-			if (dimensions.contains(dimension)) {
+			if (dimensions.contains(dimension) || (currentSelected && dimension.equals(currentDimension))) {
 				return true;
 			}
 		}
