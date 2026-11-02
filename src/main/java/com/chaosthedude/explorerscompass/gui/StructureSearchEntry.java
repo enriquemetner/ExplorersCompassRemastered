@@ -78,7 +78,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
                 ? "Undo" : "hide"), buttonX + buttonWidth / 2, buttonY + 4, 0xffffff);
 		if (locked) {
 			context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Locked"),
-                    left + width / 2, top + (height - client.textRenderer.fontHeight) / 2, 0xffffff);
+                    left + width / 2, top + (height - client.textRenderer.fontHeight) / 2, 0xff5555);
         }
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 	}

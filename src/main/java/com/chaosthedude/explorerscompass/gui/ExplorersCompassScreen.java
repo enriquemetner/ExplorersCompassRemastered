@@ -429,11 +429,8 @@ public class ExplorersCompassScreen extends Screen {
 		super.render(context, mouseX, mouseY, partialTicks);
 		renderExcludeButton(context, excludeVisitedButton, "Exclude Visited", FilterSelections.excludeVisited(), mouseX, mouseY);
 		renderExcludeButton(context, excludeLockedButton, "Exclude Locked", FilterSelections.excludeLocked(), mouseX, mouseY);
-		if (searchListedButton.visible) {
-			int iconX = searchListedButton.getX() + searchListedButton.getWidth() - 12;
-			int iconY = searchListedButton.getY() + searchListedButton.getHeight() / 2;
-			drawQuestionIcon(context, iconX, iconY);
-			if (insideQuestionIcon(mouseX, mouseY, iconX, iconY)) drawQuestionTooltip(context, "Searches for any structure from the current list after applied filters and search bar results.", mouseX, mouseY);
+		if (searchListedButton.visible && searchListedButton.isMouseOver(mouseX, mouseY)) {
+			drawQuestionTooltip(context, "Searches for any structure from the current list after applied filters and search bar results.", mouseX, mouseY);
 		}
 		renderCrossIcon(context, cancelButton);
 		if (clearFiltersButton.visible) {
