@@ -88,11 +88,11 @@ public class ExplorersCompassScreen extends Screen {
 		"View",
 		"Checked Filters on Top",
 		"Adjust Rows to Fit View",
-		"Show Technical Names",
 		"Behavior",
 		"Close UI when located",
 		"Clear Filters on Close",
 		"Clear Search Bar on Close",
+		"Allow ID Searches",
 		"Singleplayer & Creative",
 		"Pause Game When Open",
 		"Unlock All Structures in Creative",
@@ -108,11 +108,11 @@ public class ExplorersCompassScreen extends Screen {
 		null,
 		"Show checked options above unchecked options in each filter column. The selection itself does not change.",
 		"Adjusts row spacing, showing less content but only fully visible list entries. Smooth scrolling may still show partial entries.",
-		"Show structure IDs beside their names and include them in search results.",
 		null,
 		"Close the compass screen when a structure is located.",
 		"Clear selected structure filters when you close the compass screen.",
 		"Clears the search bar when you close the compass screen.",
+		"Enables searching for structure IDs such as minecraft:ancient_city as well.\n Works for filter searches too.",
 		null,
 		"Pauses singleplayer while the compass screen is open, except while locating a structure. Searches need the game to keep ticking to make progress.",
 		"Temporarily unlock all structures while in Creative mode. Changing the mode back relocks previously locked structures.",
@@ -134,7 +134,7 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget filtersButton;
 	private ButtonWidget settingsButton;
 	private ButtonWidget chatOverlayButton;
-	private ButtonWidget showTechnicalNamesButton;
+	private ButtonWidget allowIdSearchesButton;
 	private ButtonWidget overlaySideButton;
 	private ButtonWidget clearOnCloseButton;
 	private ButtonWidget clearSearchBarOnCloseButton;
@@ -634,7 +634,10 @@ public class ExplorersCompassScreen extends Screen {
 	private List<FilterOption> visibleFilterOptions(int column) {
 		String query = filterSearchTextField.getText().toLowerCase(Locale.ROOT);
 		List<FilterOption> visible = query.isEmpty() ? filterOptions.get(column) : filterOptions.get(column).stream()
-				.filter(option -> option.label.toLowerCase(Locale.ROOT).contains(query)).collect(Collectors.toList());
+				.filter(option -> option.label.toLowerCase(Locale.ROOT).contains(query)
+                        || (ExplorersCompassConfig.allowIdSearches
+                            && (option.source != null ? option.source : option.id == null ? "" : option.id.toString())
+                                .toLowerCase(Locale.ROOT).contains(query))).collect(Collectors.toList());
 		if (!ExplorersCompassConfig.checkedFiltersFirst) {
 			return visible;
 		}
@@ -1050,7 +1053,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void updateSettingsButtonLabels() {
 		chatOverlayButton.setMessage(onOff(ExplorersCompassConfig.displayWithChatOpen));
-		showTechnicalNamesButton.setMessage(onOff(ExplorersCompassConfig.showTechnicalNames));
+		allowIdSearchesButton.setMessage(onOff(ExplorersCompassConfig.allowIdSearches));
 		clearOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearFiltersOnClose));
 		clearSearchBarOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearSearchBarOnClose));
 		pauseGameWhenOpenButton.setMessage(onOff(ExplorersCompassConfig.pauseGameWhenOpen));
@@ -1981,11 +1984,13 @@ public class ExplorersCompassScreen extends Screen {
 				continue;
 			}
 			if (searchTerm.startsWith("@")) {
-				if (StructureUtils.getStructureSource(id).toLowerCase(Locale.ROOT).contains(searchTerm.substring(1))) {
+				if (StructureUtils.getStructureSource(id).toLowerCase(Locale.ROOT).contains(searchTerm.substring(1))
+						|| (ExplorersCompassConfig.allowIdSearches
+								&& id.getNamespace().toLowerCase(Locale.ROOT).contains(searchTerm.substring(1)))) {
 					structureIDsMatchingSearch.add(id);
 				}
 			} else if (StructureUtils.getStructureName(id).toLowerCase(Locale.ROOT).contains(searchTerm)
-					|| (ExplorersCompassConfig.showTechnicalNames && id.toString().toLowerCase(Locale.ROOT).contains(searchTerm))) {
+					|| (ExplorersCompassConfig.allowIdSearches && id.toString().toLowerCase(Locale.ROOT).contains(searchTerm))) {
 				structureIDsMatchingSearch.add(id);
 			}
 		}
@@ -2062,12 +2067,12 @@ public class ExplorersCompassScreen extends Screen {
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 		}));
-		clearSearchBarOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(11), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+		clearSearchBarOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(10), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
 			ExplorersCompassConfig.clearSearchBarOnClose = !ExplorersCompassConfig.clearSearchBarOnClose;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 		}));
-		clearOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(10), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
+		clearOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(9), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
 			ExplorersCompassConfig.clearFiltersOnClose = !ExplorersCompassConfig.clearFiltersOnClose;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
@@ -2078,8 +2083,9 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 		}));
-		showTechnicalNamesButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(7), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.showTechnicalNames = !ExplorersCompassConfig.showTechnicalNames;
+		allowIdSearchesButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(11), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+			ExplorersCompassConfig.allowIdSearches = !ExplorersCompassConfig.allowIdSearches;
+			filterScroll = 0;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 			processSearchTerm();
@@ -2093,7 +2099,7 @@ public class ExplorersCompassScreen extends Screen {
 			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 			updateSettingsButtonLabels();
 		}));
-		closeOnFoundButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(9), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+		closeOnFoundButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(8), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
 			ExplorersCompassConfig.closeOnFound = !ExplorersCompassConfig.closeOnFound;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
@@ -2268,7 +2274,7 @@ public class ExplorersCompassScreen extends Screen {
         hiddenStructuresButton.visible = settingsOpen;
 		closeOnFoundButton.visible = settingsOpen;
 		chatOverlayButton.visible = settingsOpen;
-		showTechnicalNamesButton.visible = settingsOpen;
+		allowIdSearchesButton.visible = settingsOpen;
 		offsetDecreaseButton.visible = settingsOpen;
 		offsetIncreaseButton.visible = settingsOpen;
 		overlaySideButton.visible = settingsOpen;
@@ -2291,10 +2297,10 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(chatOverlayButton, 3);
 		placeSetting(checkedFiltersFirstButton, 5);
 		placeSetting(adjustRowsToFitViewButton, 6);
-		placeSetting(showTechnicalNamesButton, 7);
-		placeSetting(closeOnFoundButton, 9);
-		placeSetting(clearOnCloseButton, 10);
-		placeSetting(clearSearchBarOnCloseButton, 11);
+		placeSetting(allowIdSearchesButton, 11);
+		placeSetting(closeOnFoundButton, 8);
+		placeSetting(clearOnCloseButton, 9);
+		placeSetting(clearSearchBarOnCloseButton, 10);
 		placeSetting(pauseGameWhenOpenButton, SETTINGS_PAUSE_ROW);
 		placeSetting(creativeUnlocksAllButton, SETTINGS_CREATIVE_UNLOCK_ROW);
 		placeSetting(showTeleportOnlyInCreativeButton, SETTINGS_TELEPORT_ROW);

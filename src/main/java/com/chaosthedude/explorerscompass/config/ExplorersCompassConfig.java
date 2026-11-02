@@ -49,7 +49,7 @@ public class ExplorersCompassConfig {
 	public static boolean closeOnFound = true;
 	public static boolean checkedFiltersFirst = true;
 	public static boolean adjustRowsToFitView = true;
-	public static boolean showTechnicalNames = false;
+	public static boolean allowIdSearches = false;
 	public static int overlayLineOffset = 0;
 	public static OverlaySide overlaySide = OverlaySide.LEFT;
 	public static List<String> sortOrder = defaultSortOrder();
@@ -78,7 +78,11 @@ public class ExplorersCompassConfig {
 			structureBlacklist = strings(readOrCreate(COMMON_BLACKLIST), "structureBlacklist", structureBlacklist);
 			if (client) {
 				CommentedConfig clientConfig = readOrCreate(CLIENT);
-				boolean migrateClient = clientConfig.get("behavior.pauseGameWhenOpen") != null
+				boolean migrateClient = clientConfig.get("behavior.searchTechnicalNames") != null
+						|| clientConfig.get("view.showTechnicalNames") != null
+						|| clientConfig.get("behavior.allowIdSearches") == null
+						|| !new ArrayList<>(clientConfig.valueMap().keySet()).get(clientConfig.valueMap().size() - 1).equals("sorting")
+						|| clientConfig.get("behavior.pauseGameWhenOpen") != null
 						|| clientConfig.get("singleplayerAndCreative.pauseGameWhenOpen") == null
 						|| clientConfig.get("singleplayerAndCreative.creativeUnlocksAll") == null
 						|| clientConfig.get("singleplayerAndCreative.showTeleportOnlyInCreative") == null;
@@ -186,7 +190,9 @@ public class ExplorersCompassConfig {
 		closeOnFound = bool(config, "behavior.closeOnFound", closeOnFound);
 		checkedFiltersFirst = bool(config, "view.checkedFiltersFirst", checkedFiltersFirst);
 		adjustRowsToFitView = bool(config, "view.adjustRowsToFitView", adjustRowsToFitView);
-		showTechnicalNames = bool(config, "view.showTechnicalNames", showTechnicalNames);
+		allowIdSearches = config.get("behavior.allowIdSearches") != null
+				? bool(config, "behavior.allowIdSearches", allowIdSearches)
+				: bool(config, "behavior.searchTechnicalNames", allowIdSearches);
 		overlayLineOffset = number(config, "overlay.overlayLineOffset", overlayLineOffset, Integer.MIN_VALUE);
 		Object side = config.get("overlay.overlaySide");
 		if (side != null) {
@@ -223,19 +229,24 @@ public class ExplorersCompassConfig {
 		put(config, "overlay.displayWithChatOpen", displayWithChatOpen, "Show compass information while chat is open.");
 		put(config, "view.checkedFiltersFirst", checkedFiltersFirst, "Show checked filters before unchecked filters.");
 		put(config, "view.adjustRowsToFitView", adjustRowsToFitView, "Adjust row spacing so list entries fit the view.");
-		put(config, "view.showTechnicalNames", showTechnicalNames, "Show and search technical structure IDs.");
+		config.remove("view.showTechnicalNames");
 		put(config, "behavior.closeOnFound", closeOnFound, "Close the compass screen after finding a structure.");
 		put(config, "behavior.clearFiltersOnClose", clearFiltersOnClose, "Clear filters when the compass screen closes.");
 		put(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose, "Clear the search bar when the compass screen closes.");
 		config.remove("behavior.pauseGameWhenOpen");
+		config.remove("behavior.searchTechnicalNames");
+		put(config, "behavior.allowIdSearches", allowIdSearches, "Enables searching for structure IDs such as minecraft:ancient_city as well.\n Works for filter searches too.");
 		put(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen, "Pause singleplayer while the compass screen is open, except while locating a structure.");
 		put(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll, "Temporarily unlock all structures while in Creative mode without changing saved unlocks.");
 		put(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative, "Show the Teleport button only in Creative mode. Teleport permission is still required.");
+		// Keep sorting last, including when rewriting an existing configuration.
+		CommentedConfig sorting = config.remove("sorting");
+		if (sorting != null) config.set("sorting", sorting);
 		put(config, "sorting.sortOrder", sortOrder, "Order of the four structure sorting keys.");
 	}
 
 	private static void writeCommonBlacklist(CommentedConfig config) {
-		put(config, "structureBlacklist", structureBlacklist, "Structures excluded from the compass. Supports * and ? wildcards.");
+		put(config, "structureBlacklist", structureBlacklist, "Structures excluded from the compass. Supports the * wildcard.");
 	}
 
 	private static void writeHiddenStructures(CommentedConfig config) {

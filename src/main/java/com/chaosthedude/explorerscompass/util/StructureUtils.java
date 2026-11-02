@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.text.WordUtils;
 
@@ -202,21 +203,12 @@ public class StructureUtils {
 	}
 
 	private static String convertToRegex(String glob) {
-		String regex = "^";
-		for (char i = 0; i < glob.length(); i++) {
+		StringBuilder regex = new StringBuilder("^");
+		for (int i = 0; i < glob.length(); i++) {
 			char c = glob.charAt(i);
-			if (c == '*') {
-				regex += ".*";
-			} else if (c == '?') {
-				regex += ".";
-			} else if (c == '.') {
-				regex += "\\.";
-			} else {
-				regex += c;
-			}
+			if (c == '*') regex.append(".*");
+			else regex.append(Pattern.quote(String.valueOf(c)));
 		}
-		regex += "$";
-		return regex;
+		return regex.append('$').toString();
 	}
-
 }
