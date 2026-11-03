@@ -3,6 +3,7 @@ package com.chaosthedude.explorerscompass;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
 import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
+import com.chaosthedude.explorerscompass.network.SearchProgressPacket;
 import com.chaosthedude.explorerscompass.network.UnlockToastPacket;
 import com.chaosthedude.explorerscompass.network.RepairDurabilityPacket;
 import com.chaosthedude.explorerscompass.network.RulesChangedPacket;
@@ -23,6 +24,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestClientIntegration.register();
 		ClientPlayNetworking.registerGlobalReceiver(SyncPacket.ID, ClientPacketHandlers::applySync);
 		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, ClientPacketHandlers::applySearchResult);
+		ClientPlayNetworking.registerGlobalReceiver(SearchProgressPacket.ID, ClientPacketHandlers::applySearchProgress);
 		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, ClientPacketHandlers::applyUnlockToast);
 		ClientPlayNetworking.registerGlobalReceiver(RepairDurabilityPacket.ID, ClientPacketHandlers::applyRepairDurability);
 		ClientPlayNetworking.registerGlobalReceiver(RulesChangedPacket.ID, ClientPacketHandlers::applyRulesChanged);

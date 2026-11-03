@@ -79,7 +79,7 @@ public class GenericSearchWorker extends StructureSearchWorker<StructurePlacemen
 			int radius = getRadius();
 			if (radius > 250 && radius / 250 > lastRadiusThreshold) {
 				if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-					((ExplorersCompassItem) stack.getItem()).setSearchRadius(stack, roundRadius(radius, 250));
+					((ExplorersCompassItem) stack.getItem()).reportSearchProgress(player, stack, roundRadius(radius, 250));
 				}
 				lastRadiusThreshold = radius / 250;
 			}

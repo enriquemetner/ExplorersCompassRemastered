@@ -1,63 +1,38 @@
 package com.chaosthedude.explorerscompass.workers;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.IdentityHashMap;
+import java.util.Map;
 
-public class WorldWorkerManager {
+import com.chaosthedude.explorerscompass.ExplorersCompass;
 
-	private static List<IWorker> workers = new ArrayList<IWorker>();
-	private static long startTime = -1;
-	private static int index = 0;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.ServerTask;
 
-	public static void tick(boolean start) {
-		if (start) {
-			startTime = System.currentTimeMillis();
-			return;
-		}
+/** All access, including worker execution, stays on the owning server thread. */
+public final class WorldWorkerManager {
 
-		index = 0;
-		IWorker task = getNext();
-		if (task == null)
-			return;
+    private static final Map<MinecraftServer, SearchTaskQueue> queues = new IdentityHashMap<>();
 
-		long time = 50 - (System.currentTimeMillis() - startTime);
-		if (time < 10)
-			time = 10;
-		time += System.currentTimeMillis();
+    private WorldWorkerManager() {}
 
-		while (System.currentTimeMillis() < time && task != null) {
-			boolean again = task.doWork();
+    public static void addWorker(MinecraftServer server, IWorker worker) {
+        if (!server.isRunning() || server.isStopped()) return;
+        queues.computeIfAbsent(server, owner -> new SearchTaskQueue(
+                // execute() can run inline on the server thread. send() always queues the slice,
+                // including while the integrated server has paused normal world ticks.
+                task -> owner.send(new ServerTask(owner.getTicks(), task)),
+                () -> ExplorersCompass.EXPLORERS_COMPASS_ITEM.tickSearchOwnership(owner),
+                System::nanoTime)).add(worker);
+    }
 
-			if (!task.hasWork()) {
-				remove(task);
-				task = getNext();
-			} else if (!again) {
-				task = getNext();
-			}
-		}
-	}
+    public static void clear(MinecraftServer server) {
+        SearchTaskQueue queue = queues.remove(server);
+        if (queue != null) queue.close();
+    }
 
-	public static synchronized void addWorker(IWorker worker) {
-		workers.add(worker);
-	}
+    public interface IWorker {
+        boolean hasWork();
 
-	private static synchronized IWorker getNext() {
-		return workers.size() > index ? workers.get(index++) : null;
-	}
-
-	private static synchronized void remove(IWorker worker) {
-		workers.remove(worker);
-		index--;
-	}
-
-	public static synchronized void clear() {
-		workers.clear();
-	}
-
-	public static interface IWorker {
-		boolean hasWork();
-
-		boolean doWork();
-	}
-
+        boolean doWork();
+    }
 }

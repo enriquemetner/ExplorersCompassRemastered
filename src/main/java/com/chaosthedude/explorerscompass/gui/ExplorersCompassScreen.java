@@ -202,6 +202,7 @@ public class ExplorersCompassScreen extends Screen {
     private double notFoundCompassAngle;
     private double notFoundCompassSpeed;
     private int activeRequestId;
+    private int searchRadius;
     private int failedRadius;
     private boolean failedCanContinue;
     private Identifier searchedId;
@@ -268,7 +269,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean shouldPause() {
-		return ExplorersCompassConfig.pauseGameWhenOpen && dialog != Dialog.SEARCHING;
+		return ExplorersCompassConfig.pauseGameWhenOpen;
 	}
 
 	@Override
@@ -1522,6 +1523,7 @@ public class ExplorersCompassScreen extends Screen {
         searchedListed = false;
         listedSearchIds = List.of();
         activeRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
+        searchRadius = 0;
         dialog = Dialog.SEARCHING;
         dialogStarted = System.currentTimeMillis();
         return true;
@@ -1562,9 +1564,15 @@ public class ExplorersCompassScreen extends Screen {
         listedSelectedCount = selected.size();
         listedSkippedCount = selected.size() - eligible.size();
         activeRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
+        searchRadius = 0;
         dialog = Dialog.SEARCHING;
         dialogStarted = System.currentTimeMillis();
         ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(eligible, FilterSelections.excludeVisited(), ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
+    }
+
+    public void onSearchProgress(int requestId, int radius) {
+        if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
+        searchRadius = Math.max(searchRadius, radius);
     }
 
     public void onSearchResult(int requestId, int result, int radius, boolean canContinue, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance) {
@@ -1629,6 +1637,7 @@ public class ExplorersCompassScreen extends Screen {
     private void keepSearching() {
         if (!failedCanContinue || dialog != Dialog.NOT_FOUND || client.getNetworkHandler() == null) return;
         failedCanContinue = false;
+        searchRadius = failedRadius;
         dialog = Dialog.SEARCHING;
         dialogStarted = System.currentTimeMillis();
         ClientPlayNetworking.send(ContinueSearchPacket.ID, new ContinueSearchPacket(activeRequestId));
@@ -1824,10 +1833,7 @@ public class ExplorersCompassScreen extends Screen {
                 context.drawCenteredTextWithShadow(textRenderer, Text.literal(listedSelectedCount + " structures selected"), x + w / 2, y + 47, 0xffffff);
                 if (listedSkippedCount > 0) context.drawCenteredTextWithShadow(textRenderer, wrongDimensionCountText(), x + w / 2, y + 59, 0xffffff);
             }
-            ItemStack heldCompass = client.player == null ? ItemStack.EMPTY : ItemUtils.getHeldItem(client.player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
-            int distance = heldCompass.getItem() instanceof ExplorersCompassItem
-                ? ((ExplorersCompassItem) heldCompass.getItem()).getSearchRadius(heldCompass) : 0;
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Distance").getString() + ": " + distance, x + w / 2, y + (searchedListed ? (listedSkippedCount > 0 ? 74 : 59) : 47), 0xffffff);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Distance").getString() + ": " + searchRadius, x + w / 2, y + (searchedListed ? (listedSkippedCount > 0 ? 74 : 59) : 47), 0xffffff);
             drawDialogButton(context, Text.literal("Back").getString(), x + (w - 70) / 2, y + searchingBackY(), 70, mouseX, mouseY);
         } else if (dialog == Dialog.FOUND) {
             double yaw = client.player == null ? 0.0D : client.player.getYaw() % 360.0D;

@@ -17,6 +17,7 @@ import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.gui.GuiWrapper;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
+import com.chaosthedude.explorerscompass.network.SearchProgressPacket;
 import com.chaosthedude.explorerscompass.util.CompassState;
 import com.chaosthedude.explorerscompass.util.ItemUtils;
 import com.chaosthedude.explorerscompass.util.PlayerUtils;
@@ -514,6 +515,18 @@ public class ExplorersCompassItem extends Item {
 			stack.getNbt().putString("StructureID", structureID.toString());
 		}
 	}
+
+    public void reportSearchProgress(PlayerEntity player, ItemStack stack, int radius) {
+        SearchSession session = searches.get(player.getUuid());
+        if (session == null || session.stack != stack || session.awaitingContinuation) return;
+        int previousRadius = getSearchRadius(stack);
+        setSearchRadius(stack, radius);
+        int updatedRadius = getSearchRadius(stack);
+        // Multiple placement workers can report smaller distances; only send a new high-water mark.
+        if (updatedRadius > previousRadius && player instanceof ServerPlayerEntity serverPlayer) {
+            SearchProgressPacket.send(serverPlayer, session.requestId, updatedRadius);
+        }
+    }
 
 	public void setSearchRadius(ItemStack stack, int searchRadius) {
 		if (ItemUtils.verifyNBT(stack)) {

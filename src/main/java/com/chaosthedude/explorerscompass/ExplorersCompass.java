@@ -11,6 +11,7 @@ import org.apache.logging.log4j.Logger;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
+import com.chaosthedude.explorerscompass.workers.WorldWorkerManager;
 import com.chaosthedude.explorerscompass.network.SearchPacket;
 import com.chaosthedude.explorerscompass.network.SearchListedPacket;
 import com.chaosthedude.explorerscompass.network.CancelSearchPacket;
@@ -67,6 +68,11 @@ public class ExplorersCompass implements ModInitializer {
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server ->
                 com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server));
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            // Invalidate queued continuations before shutdown can drain the server task queue.
+            WorldWorkerManager.clear(server);
+            EXPLORERS_COMPASS_ITEM.stopAllSearches();
+        });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             EXPLORERS_COMPASS_ITEM.stopAllSearches();
             com.chaosthedude.explorerscompass.unlocking.UnlockingRules.clear();
@@ -93,6 +99,9 @@ public class ExplorersCompass implements ModInitializer {
 				com.chaosthedude.explorerscompass.unlocking.UnlockReloads.left(handler.player.getUuid()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
 				RepairDurabilityPacket.send(handler.player, ExplorersCompassConfig.compassDurability));
+        // Also validate idle sessions awaiting "Keep searching" during normal gameplay.
+        // Active searches validate ownership in every queued slice, including while paused.
+        ServerTickEvents.START_SERVER_TICK.register(EXPLORERS_COMPASS_ITEM::tickSearchOwnership);
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			com.chaosthedude.explorerscompass.unlocking.UnlockReloads.tick(server);
             com.chaosthedude.explorerscompass.unlocking.PartySharing.tick(server);

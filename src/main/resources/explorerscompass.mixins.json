@@ -3,7 +3,6 @@
   "package": "com.chaosthedude.explorerscompass.mixins",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "MinecraftServerMixin",
     "FtbQuestEditMessageMixin",
     "FtbQuestFileMixin",
     "PlayerAdvancementTrackerMixin"

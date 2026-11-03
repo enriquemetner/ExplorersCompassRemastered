@@ -54,6 +54,15 @@ public final class ClientPacketHandlers {
         });
     }
 
+    public static void applySearchProgress(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
+        int requestId = buf.readInt(), radius = buf.readInt();
+        client.execute(() -> {
+            if (client.currentScreen instanceof ExplorersCompassScreen screen) {
+                screen.onSearchProgress(requestId, radius);
+            }
+        });
+    }
+
     public static void applySearchResult(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         int requestId = buf.readInt(), result = buf.readInt(), radius = buf.readInt();
         boolean canContinue = buf.readBoolean();

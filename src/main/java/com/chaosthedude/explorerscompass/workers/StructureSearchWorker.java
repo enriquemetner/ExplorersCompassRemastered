@@ -61,7 +61,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	public void start() {
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
 			ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " starting with " + (shouldLogRadius() ? radiusLimit + " radius limit, " : "") + ExplorersCompassConfig.maxSamples + " max samples");
-			WorldWorkerManager.addWorker(this);
+			WorldWorkerManager.addWorker(level.getServer(), this);
 		}
 	}
 
@@ -87,7 +87,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 		int radius = getRadius();
 		if (radius > 250 && radius / 250 > lastRadiusThreshold) {
 			if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-				((ExplorersCompassItem) stack.getItem()).setSearchRadius(stack, roundRadius(radius, 250));
+				((ExplorersCompassItem) stack.getItem()).reportSearchProgress(player, stack, roundRadius(radius, 250));
 			}
 			lastRadiusThreshold = radius / 250;
 		}
