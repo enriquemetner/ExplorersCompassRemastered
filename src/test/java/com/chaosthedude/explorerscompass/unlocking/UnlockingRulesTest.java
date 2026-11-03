@@ -115,10 +115,33 @@ class UnlockingRulesTest {
 
     @Test void ftbRewardSelectorsExpandSetsAndWildcards() {
         assertEquals(STRUCTURES, UnlockingRules.resolveRewardTargets(catalog,
-                List.of("minecraft:test_set", "minecraft:strong*")));
-        assertEquals(Set.of(B), UnlockingRules.resolveRewardTargets(catalog, List.of("fortress")));
+                List.of("minecraft:strong*"), List.of("minecraft:test_set")));
+        assertEquals(Set.of(B), UnlockingRules.resolveRewardTargets(catalog, List.of("fortress"), List.of()));
         assertThrows(IllegalArgumentException.class,
-                () -> UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortres?")));
+                () -> UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortres?"), List.of()));
+    }
+
+    @Test void ftbFieldsOnlyResolveTheirOwnRegistryAndDeduplicateWithoutReorderingPreview() {
+        assertTrue(UnlockingRules.resolveRewardTargets(catalog, List.of("test_set"), List.of()).isEmpty());
+        assertTrue(UnlockingRules.resolveRewardTargets(catalog, List.of(), List.of("fortress")).isEmpty());
+        assertEquals(STRUCTURES, UnlockingRules.resolveRewardTargets(catalog, List.of(), List.of("*_set")));
+        var setsOnly = UnlockingRules.resolveRewardTargets(catalog, List.of(), List.of("test_set", "other_set"));
+        var overlapping = UnlockingRules.resolveRewardTargets(catalog, List.of("ancient_city", "fortress"), List.of("test_set", "other_set", "test_set"));
+        assertEquals(3, overlapping.size());
+        assertEquals(com.chaosthedude.explorerscompass.compat.ftb.FtbRewardPreview.of(setsOnly),
+                com.chaosthedude.explorerscompass.compat.ftb.FtbRewardPreview.of(overlapping));
+        UnlockingRules.Catalog collision = new UnlockingRules.Catalog() {
+            public Set<Identifier> structures() { return STRUCTURES; }
+            public Set<Identifier> structureSets() { return Set.of(A); }
+            public Set<Identifier> structureSet(Identifier id) { return Set.of(B); }
+            public boolean advancementExists(Identifier id) { return false; }
+            public Text advancementTitle(Identifier id) { return Text.empty(); }
+            public Text advancementDescription(Identifier id) { return Text.empty(); }
+            public Formatting advancementColor(Identifier id) { return Formatting.WHITE; }
+        };
+        assertEquals(Set.of(A), UnlockingRules.resolveRewardTargets(collision, List.of(A.toString()), List.of()));
+        assertEquals(Set.of(B), UnlockingRules.resolveRewardTargets(collision, List.of(), List.of(A.toString())));
+        assertEquals(Set.of(A, B), UnlockingRules.resolveRewardTargets(collision, List.of(A.toString()), List.of(A.toString())));
     }
 
     @Test void ftbSelectorsExcludeCommonBlacklistedStructures() {
@@ -126,8 +149,8 @@ class UnlockingRulesTest {
         try {
             ExplorersCompassConfig.structureBlacklist = List.of("minecraft:ancient_*", "minecraft:fortress");
             assertEquals(Set.of(C), UnlockingRules.resolveRewardTargets(catalog,
-                    List.of("minecraft:test_set", "minecraft:strong*", "minecraft:ancient_city")));
-            assertTrue(UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortress")).isEmpty());
+                    List.of("minecraft:strong*", "minecraft:ancient_city"), List.of("minecraft:test_set")));
+            assertTrue(UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortress"), List.of()).isEmpty());
         } finally {
             ExplorersCompassConfig.structureBlacklist = previous;
         }

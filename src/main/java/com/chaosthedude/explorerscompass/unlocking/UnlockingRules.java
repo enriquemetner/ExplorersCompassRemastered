@@ -273,17 +273,23 @@ public final class UnlockingRules {
                 false, children);
     }
 
-    /** Resolve reward selectors with the same structure-first and wildcard semantics as JSON unlock targets. */
-    public static Set<Identifier> resolveRewardTargets(MinecraftServer server, List<String> selectors) {
-        return resolveRewardTargets(catalog(server), selectors);
+    /** Resolve the two FTB selector fields strictly against their respective registries. */
+    public static Set<Identifier> resolveRewardTargets(MinecraftServer server, List<String> structures, List<String> sets) {
+        return resolveRewardTargets(catalog(server), structures, sets);
     }
 
-    static Set<Identifier> resolveRewardTargets(Catalog catalog, List<String> selectors) {
-        if (selectors.isEmpty()) return Set.of();
-        Set<Identifier> known = catalog.structures();
-        return resolveStructures(catalog, selectors, false, (id, index) -> {}).stream()
-                .filter(known::contains).filter(id -> !StructureUtils.structureIdIsBlacklisted(id))
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+    static Set<Identifier> resolveRewardTargets(Catalog catalog, List<String> structures, List<String> sets) {
+        Set<Identifier> result = new LinkedHashSet<>();
+        for (String selector : structures) {
+            if (!selector.isBlank()) result.addAll(resolvePattern(selector.trim(), catalog.structures(), false));
+        }
+        for (String selector : sets) {
+            if (selector.isBlank()) continue;
+            for (Identifier id : resolvePattern(selector.trim(), catalog.structureSets(), false))
+                result.addAll(catalog.structureSet(id));
+        }
+        result.removeIf(id -> !catalog.structures().contains(id) || StructureUtils.structureIdIsBlacklisted(id));
+        return result;
     }
 
     private static Set<Identifier> targets(Catalog catalog, JsonElement json, List<Integer> lines,

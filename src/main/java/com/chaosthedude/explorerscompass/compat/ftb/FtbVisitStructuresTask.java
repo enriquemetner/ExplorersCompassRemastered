@@ -45,6 +45,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
     private static TaskType type;
 
     private List<String> structures = List.of();
+    private List<String> structureSets = List.of();
     private Match match = Match.ANY;
     private FtbRewardPreview preview = FtbRewardPreview.EMPTY;
     private MinecraftServer cachedServer;
@@ -58,7 +59,10 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
 
     public FtbVisitStructuresTask(long id, Quest quest) { super(id, quest); }
     @Override public TaskType getType() { return type; }
-    @Override public Text getAltTitle() { return Text.translatable("ftb_task.explorerscompass.visit_structures"); }
+    @Override public Text getAltTitle() {
+        return Text.translatable(preview.totalCount() == 1
+                ? "ftb_task.explorerscompass.visit_structure" : "ftb_task.explorerscompass.visit_structures");
+    }
     @Override public int autoSubmitOnPlayerTick() { return 5; }
 
     @Override public boolean canSubmit(TeamData team, ServerPlayerEntity player) {
@@ -73,6 +77,9 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         NbtList values = new NbtList();
         structures.forEach(value -> values.add(NbtString.of(value)));
         nbt.put("structures", values);
+        NbtList sets = new NbtList();
+        structureSets.forEach(value -> sets.add(NbtString.of(value)));
+        nbt.put("structure_sets", sets);
         nbt.putString("match", match.name().toLowerCase(Locale.ROOT));
     }
 
@@ -82,6 +89,10 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         List<String> result = new ArrayList<>(values.size());
         for (int i = 0; i < values.size(); i++) result.add(values.getString(i));
         structures = List.copyOf(result);
+        NbtList sets = nbt.getList("structure_sets", NbtElement.STRING_TYPE);
+        List<String> setResult = new ArrayList<>(sets.size());
+        for (int i = 0; i < sets.size(); i++) setResult.add(sets.getString(i));
+        structureSets = List.copyOf(setResult);
         match = "all".equalsIgnoreCase(nbt.getString("match")) ? Match.ALL : Match.ANY;
         invalidateTargets();
         if (getQuestFile() instanceof ServerQuestFile) syncPreview();
@@ -92,6 +103,8 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         super.writeNetData(buf);
         buf.writeVarInt(structures.size());
         structures.forEach(value -> buf.writeString(value));
+        buf.writeVarInt(structureSets.size());
+        structureSets.forEach(value -> buf.writeString(value));
         buf.writeEnumConstant(match);
         currentPreview().write(buf);
     }
@@ -103,6 +116,11 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         List<String> result = new ArrayList<>(count);
         for (int i = 0; i < count; i++) result.add(buf.readString(32767));
         structures = List.copyOf(result);
+        int setCount = buf.readVarInt();
+        if (setCount < 0 || setCount > 1024) throw new IllegalArgumentException("Invalid FTB structure set list size: " + setCount);
+        List<String> setResult = new ArrayList<>(setCount);
+        for (int i = 0; i < setCount; i++) setResult.add(buf.readString(32767));
+        structureSets = List.copyOf(setResult);
         match = buf.readEnumConstant(Match.class);
         setPreview(FtbRewardPreview.read(buf));
         invalidateTargets();
@@ -115,6 +133,11 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
                     invalidateTargets();
                 }, "")
                 .setNameKey("ftb_task.explorerscompass.structures");
+        group.addList("structure_sets", structureSets, new StringConfig(), values -> {
+                    structureSets = List.copyOf(values);
+                    invalidateTargets();
+                }, "")
+                .setNameKey("ftb_task.explorerscompass.structure_sets");
         group.addEnum("match", match, value -> match = value, MATCH_NAMES)
                 .setNameKey("ftb_task.explorerscompass.match");
     }
@@ -125,9 +148,6 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
     }
 
     @Override public void addMouseOverText(TooltipList tooltip, TeamData team) {
-        tooltip.add(Text.translatable(match == Match.ALL
-                ? "ftb_task.explorerscompass.visit_all" : "ftb_task.explorerscompass.visit_any")
-                .formatted(Formatting.GRAY));
         if (!Widget.isKeyDown(GLFW.GLFW_KEY_LEFT_ALT)) {
             tooltip.add(Text.translatable("ftb_reward.explorerscompass.hold_alt").formatted(Formatting.DARK_GRAY));
             return;
@@ -135,6 +155,13 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         if (preview.totalCount() == 0) {
             tooltip.add(Text.translatable("ftb_reward.explorerscompass.no_matches").formatted(Formatting.GRAY));
             return;
+        }
+        if (preview.totalCount() > 1) {
+            tooltip.add(Text.translatable(match == Match.ALL
+                    ? "ftb_task.explorerscompass.visit_all" : "ftb_task.explorerscompass.visit_any",
+                    Text.translatable(match == Match.ALL
+                            ? "ftb_task.explorerscompass.all" : "ftb_task.explorerscompass.any")
+                            .formatted(Formatting.UNDERLINE)).formatted(Formatting.GRAY));
         }
         FtbStructureTooltip.addNames(tooltip, preview.structures());
     }
@@ -165,7 +192,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         cachedServer = server;
         try {
             cachedTargets = UnlockingRules.resolveRewardTargets(server,
-                    structures.stream().map(String::trim).filter(value -> !value.isEmpty()).toList());
+                    structures, structureSets);
         } catch (IllegalArgumentException e) {
             ExplorersCompass.LOGGER.warn("Invalid structure selectors in FTB visit task {}: {}", getCodeString(), e.getMessage());
             cachedTargets = Set.of();

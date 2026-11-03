@@ -113,6 +113,7 @@ public final class FtbQuestIntegration {
 
     public static final class UnlockStructuresReward extends Reward {
         private List<String> structures = List.of();
+        private List<String> structureSets = List.of();
         private FtbRewardPreview preview = FtbRewardPreview.EMPTY;
 
         public UnlockStructuresReward(long id, Quest quest) { super(id, quest); }
@@ -131,6 +132,9 @@ public final class FtbQuestIntegration {
             NbtList values = new NbtList();
             structures.forEach(value -> values.add(NbtString.of(value)));
             nbt.put("structures", values);
+            NbtList sets = new NbtList();
+            structureSets.forEach(value -> sets.add(NbtString.of(value)));
+            nbt.put("structure_sets", sets);
         }
 
         @Override public void readData(NbtCompound nbt) {
@@ -139,6 +143,10 @@ public final class FtbQuestIntegration {
             List<String> result = new ArrayList<>(values.size());
             for (int i = 0; i < values.size(); i++) result.add(values.getString(i));
             structures = List.copyOf(result);
+            NbtList sets = nbt.getList("structure_sets", NbtElement.STRING_TYPE);
+            List<String> setResult = new ArrayList<>(sets.size());
+            for (int i = 0; i < sets.size(); i++) setResult.add(sets.getString(i));
+            structureSets = List.copyOf(setResult);
             clearCachedData();
         }
 
@@ -146,6 +154,8 @@ public final class FtbQuestIntegration {
             super.writeNetData(buf);
             buf.writeVarInt(structures.size());
             structures.forEach(value -> buf.writeString(value));
+            buf.writeVarInt(structureSets.size());
+            structureSets.forEach(value -> buf.writeString(value));
             currentPreview().write(buf);
         }
 
@@ -156,6 +166,11 @@ public final class FtbQuestIntegration {
             List<String> result = new ArrayList<>(count);
             for (int i = 0; i < count; i++) result.add(buf.readString(32767));
             structures = List.copyOf(result);
+            int setCount = buf.readVarInt();
+            if (setCount < 0 || setCount > 1024) throw new IllegalArgumentException("Invalid FTB structure set list size: " + setCount);
+            List<String> setResult = new ArrayList<>(setCount);
+            for (int i = 0; i < setCount; i++) setResult.add(buf.readString(32767));
+            structureSets = List.copyOf(setResult);
             setPreview(FtbRewardPreview.read(buf));
         }
 
@@ -200,6 +215,11 @@ public final class FtbQuestIntegration {
                         clearCachedData();
                     }, "")
                     .setNameKey("ftb_reward.explorerscompass.structures");
+            group.addList("structure_sets", structureSets, new StringConfig(), values -> {
+                        structureSets = List.copyOf(values);
+                        clearCachedData();
+                    }, "")
+                    .setNameKey("ftb_reward.explorerscompass.structure_sets");
         }
 
         @Override public Text getAltTitle() {
@@ -223,8 +243,7 @@ public final class FtbQuestIntegration {
 
         private Set<Identifier> resolve(net.minecraft.server.MinecraftServer server) {
             try {
-                return UnlockingRules.resolveRewardTargets(server, structures.stream()
-                        .map(String::trim).filter(value -> !value.isEmpty()).toList());
+                return UnlockingRules.resolveRewardTargets(server, structures, structureSets);
             } catch (IllegalArgumentException e) {
                 ExplorersCompass.LOGGER.warn("Invalid structure selectors in FTB reward {}: {}", getCodeString(), e.getMessage());
                 return Set.of();
