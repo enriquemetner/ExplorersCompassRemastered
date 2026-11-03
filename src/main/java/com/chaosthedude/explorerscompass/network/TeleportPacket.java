@@ -32,9 +32,13 @@ public class TeleportPacket extends PacketByteBuf {
 		server.execute(() -> {
 			final ItemStack stack = ItemUtils.getHeldItem(player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
 			if (!stack.isEmpty()) {
+                ExplorersCompass.EXPLORERS_COMPASS_ITEM.validateTarget(player, stack);
 				final ExplorersCompassItem explorersCompass = (ExplorersCompassItem) stack.getItem();
 				if (PlayerUtils.canTeleport(player)) {
-					if (explorersCompass.getState(stack) == CompassState.FOUND) {
+					if (explorersCompass.getState(stack) == CompassState.FOUND
+                            && explorersCompass.isInFoundDimension(stack, player.getWorld())
+                            && (com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(server, player.getUuid(), explorersCompass.getStructureID(stack))
+                                || (player.getAbilities().creativeMode && stack.getOrCreateNbt().getBoolean("CreativeBypass")))) {
 						final int x = explorersCompass.getFoundStructureX(stack);
 						final int z = explorersCompass.getFoundStructureZ(stack);
 						final int y = findValidTeleportHeight(player.getEntityWorld(), x, z);

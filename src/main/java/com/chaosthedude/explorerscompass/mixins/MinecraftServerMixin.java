@@ -16,6 +16,7 @@ public class MinecraftServerMixin {
 
 	@Inject(method = "tick(Ljava/util/function/BooleanSupplier;)V", at = @At(value = "HEAD"))
 	private void startTick(BooleanSupplier shouldKeepTicking, CallbackInfo ci) {
+		com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.tickSearchOwnership((net.minecraft.server.MinecraftServer) (Object) this);
 		WorldWorkerManager.tick(true);
 	}
 	

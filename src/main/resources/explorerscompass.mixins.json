@@ -10,7 +10,9 @@
   ],
   "client": [
     "HeldItemRendererMixin",
-    "InGameHudMixin"
+    "InGameHudMixin",
+    "DroppedCompassRenderMixin",
+    "CompassGuiRenderMixin"
   ],
   "injectors": {
     "defaultRequire": 1

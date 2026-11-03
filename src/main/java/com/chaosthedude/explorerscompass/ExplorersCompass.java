@@ -66,6 +66,7 @@ public class ExplorersCompass implements ModInitializer {
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server ->
                 com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server));
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            EXPLORERS_COMPASS_ITEM.stopAllSearches();
             com.chaosthedude.explorerscompass.unlocking.UnlockingRules.clear();
             com.chaosthedude.explorerscompass.unlocking.UnlockReloads.clear();
         });

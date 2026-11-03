@@ -1,6 +1,5 @@
 package com.chaosthedude.explorerscompass;
 
-import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
 import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
@@ -8,25 +7,15 @@ import com.chaosthedude.explorerscompass.network.UnlockToastPacket;
 import com.chaosthedude.explorerscompass.network.RepairDurabilityPacket;
 import com.chaosthedude.explorerscompass.network.RulesChangedPacket;
 import com.chaosthedude.explorerscompass.recipe.CompassRepairRecipe;
-import com.chaosthedude.explorerscompass.util.CompassState;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import net.minecraft.client.item.ClampedModelPredicateProvider;
 import net.minecraft.client.item.ModelPredicateProviderRegistry;
-import net.minecraft.client.world.ClientWorld;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.client.MinecraftClient;
-import java.util.concurrent.ThreadLocalRandom;
 
 public class ExplorersCompassClient implements ClientModInitializer {
+    private final com.chaosthedude.explorerscompass.client.CompassNeedle needle = new com.chaosthedude.explorerscompass.client.CompassNeedle();
 	
 	@Override
 	public void onInitializeClient() {
@@ -39,89 +28,12 @@ public class ExplorersCompassClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(RulesChangedPacket.ID, ClientPacketHandlers::applyRulesChanged);
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             CompassRepairRecipe.clearServerDurability();
+            needle.clear();
             ClientPacketHandlers.shownNoticeRevision = 0;
             ClientPacketHandlers.pendingNoticeRevision = 0;
         });
 		
-		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM, new Identifier("angle"), new ClampedModelPredicateProvider() {
-			private double rotation;
-			private double rota;
-			private long lastUpdateTick;
-			private double randomRotation;
-			private double randomRota;
-			private long randomLastUpdateTick = Long.MIN_VALUE;
-			private long randomWobbleLastTick = Long.MIN_VALUE;
-			private double randomTarget;
-
-			@Override
-			public float unclampedCall(ItemStack stack, ClientWorld world, LivingEntity entityLiving, int seed) {
-				if (entityLiving == null && !stack.isInFrame()) entityLiving = MinecraftClient.getInstance().player;
-				if (entityLiving == null && !stack.isInFrame()) {
-					return 0.0F;
-				} else {
-					final boolean entityExists = entityLiving != null;
-					final Entity entity = (Entity) (entityExists ? entityLiving : stack.getFrame());
-					if (world == null && entity.getWorld() instanceof ClientWorld) {
-						world = (ClientWorld) entity.getWorld();
-					}
-
-					double rotation = entityExists ? (double) entity.getYaw() : getFrameRotation((ItemFrameEntity) entity);
-					rotation = rotation % 360.0D;
-					if (world == null) return 0.0F;
-					ExplorersCompassItem compass = (ExplorersCompassItem) stack.getItem();
-					boolean random = compass.getState(stack) != CompassState.FOUND || !compass.isInFoundDimension(stack, world);
-					if (random && world.getTime() != randomLastUpdateTick) {
-						randomLastUpdateTick = world.getTime();
-						randomTarget = ThreadLocalRandom.current().nextDouble() * Math.PI * 2.0D;
-					}
-					double adjusted = Math.PI - ((rotation - 90.0D) * 0.01745329238474369D - (random ? randomTarget : getAngle(world, entity, stack)));
-
-					if (entityExists) {
-						adjusted = wobble(world, adjusted, random);
-					}
-
-					final float f = (float) (adjusted / (Math.PI * 2D));
-					return MathHelper.floorMod(f, 1.0F);
-				}
-			}
-
-			private double wobble(ClientWorld world, double amount, boolean random) {
-				if (random) {
-					if (world.getTime() != randomWobbleLastTick) {
-						randomWobbleLastTick = world.getTime();
-						double delta = MathHelper.floorMod(amount - randomRotation + Math.PI, Math.PI * 2D) - Math.PI;
-						randomRota = (randomRota + MathHelper.clamp(delta, -1.0D, 1.0D) * 0.1D) * 0.8D;
-						randomRotation += randomRota;
-					}
-					return randomRotation;
-				}
-				if (world.getTime() != lastUpdateTick) {
-					lastUpdateTick = world.getTime();
-					double d0 = amount - rotation;
-					d0 = MathHelper.floorMod(d0 + Math.PI, Math.PI * 2D) - Math.PI;
-					d0 = MathHelper.clamp(d0, -1.0D, 1.0D);
-					rota += d0 * 0.1D;
-					rota *= 0.8D;
-					rotation += rota;
-				}
-
-				return rotation;
-			}
-
-			private double getFrameRotation(ItemFrameEntity itemFrame) {
-				return (double) MathHelper.wrapDegrees(180 + itemFrame.getHorizontalFacing().getHorizontal() * 90);
-			}
-
-			private double getAngle(ClientWorld world, Entity entity, ItemStack stack) {
-				if (stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-					ExplorersCompassItem compassItem = (ExplorersCompassItem) stack.getItem();
-					BlockPos pos;
-					pos = new BlockPos(compassItem.getFoundStructureX(stack), 0, compassItem.getFoundStructureZ(stack));
-					return Math.atan2((double) pos.getZ() - entity.getPos().z, (double) pos.getX() - entity.getPos().x);
-				}
-				return 0.0D;
-			}
-		});
+		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM, new Identifier("angle"), needle);
 	}
 
 }

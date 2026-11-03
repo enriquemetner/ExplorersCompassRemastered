@@ -31,6 +31,7 @@ public class ExplorersCompassConfig {
 
 	public static boolean allowExcludeVisited = true;
 	public static boolean relockOnReload = false;
+	public static boolean compassSharing = false;
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
 	public static int maxSamples = 100000;
@@ -71,8 +72,9 @@ public class ExplorersCompassConfig {
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			CommentedConfig common = readOrCreate(COMMON);
 			loadCommon(common);
-			if (common.get("permissions.allowTeleport") != null) {
+			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null) {
 				common.remove("permissions.allowTeleport");
+				writeCommon(common);
 				write(directory().resolve(COMMON), common);
 			}
 			structureBlacklist = strings(readOrCreate(COMMON_BLACKLIST), "structureBlacklist", structureBlacklist);
@@ -168,6 +170,7 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void loadCommon(CommentedConfig config) {
+		compassSharing = bool(config, "unlocking.compassSharing", compassSharing);
 		allowExcludeVisited = bool(config, "search.allowExcludeVisited", allowExcludeVisited);
 		relockOnReload = bool(config, "unlocking.relockOnReload", relockOnReload);
 		displayCoordinates = bool(config, "compass.displayCoordinates", displayCoordinates);
@@ -213,6 +216,7 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeCommon(CommentedConfig config) {
+		put(config, "unlocking.compassSharing", compassSharing, "Preserve located targets and unlock structures that the previous compass holder had unlocked when a different player gets hold of the compass.");
 		put(config, "search.allowExcludeVisited", allowExcludeVisited, "Allow players to exclude visited structure instances from searches. Visits are always recorded.");
 		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
