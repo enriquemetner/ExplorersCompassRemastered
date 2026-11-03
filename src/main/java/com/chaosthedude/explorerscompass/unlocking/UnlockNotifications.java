@@ -8,6 +8,7 @@ public final class UnlockNotifications {
     private UnlockNotifications() {}
 
     public static void newlyAdded(ServerPlayerEntity player, int count) {
+        if (count > 0) com.chaosthedude.explorerscompass.network.PartyRefreshPacket.send(player);
         if (count > 0 && UnlockedStructures.get(player.getServer()).notificationsEnabled(player.getUuid())) {
             UnlockToastPacket.send(player, count);
         }

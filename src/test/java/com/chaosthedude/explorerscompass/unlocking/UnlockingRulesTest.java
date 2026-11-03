@@ -28,6 +28,16 @@ class UnlockingRulesTest {
     private static final Identifier DRAGON_EGG = new Identifier("minecraft:end/dragon_egg");
     private static final Identifier SET = new Identifier("minecraft:test_set");
 
+    @Test void newlyUnlockedFilterDependsOnConfiguredRequirementsRatherThanCurrentLocks() {
+        assertFalse(rules("{}").hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
+        assertTrue(rules("{\"default\":\"lockedUntilVisited\"}")
+                .hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
+        assertTrue(condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}")
+                .hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
+        assertTrue(rules("{}").hasUnlockingRequirements(new FtbStructureRewards.Snapshot(
+                java.util.Map.of(), java.util.Map.of(1L, Set.of()), Set.of())));
+    }
+
     @Test void updateNoticesCollapsePersistAndIgnoreStaleAcknowledgments() {
         UUID player = UUID.randomUUID();
         UnlockedStructures state = new UnlockedStructures();

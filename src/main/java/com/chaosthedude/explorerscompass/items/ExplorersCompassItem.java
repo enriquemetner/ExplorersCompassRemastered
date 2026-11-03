@@ -270,7 +270,9 @@ public class ExplorersCompassItem extends Item {
 				UnlockingRules.get().lockedRequirements(player, allowedStructures),
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRevision(player.getUuid()),
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRelocked(player.getUuid()),
-                getTrackedStructure(player)));
+                getTrackedStructure(player),
+                UnlockedStructures.get(player.getServer()).latestUnlocked(player.getUuid()),
+                UnlockingRules.get().hasUnlockingRequirements(player)));
 	}
 
 	@Override

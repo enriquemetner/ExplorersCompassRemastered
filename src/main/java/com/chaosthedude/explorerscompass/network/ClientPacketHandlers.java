@@ -26,6 +26,8 @@ public final class ClientPacketHandlers {
     public static long pendingNoticeRevision;
     public static long shownNoticeRevision;
     public static Identifier trackedStructureId;
+    public static boolean showNewlyUnlockedFilter;
+    public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
     public static boolean pendingNoticeRelocked;
 
     public static void applyUnlockToast(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
@@ -108,6 +110,11 @@ public final class ClientPacketHandlers {
             }
         }
 
+        boolean showLatestFilter = buf.readBoolean();
+        int latestCount = buf.readVarInt();
+        if (latestCount < 0 || latestCount > 100000) throw new IllegalArgumentException("Invalid latest unlocked count");
+        java.util.Set<Identifier> latest = new java.util.HashSet<>();
+        for (int i = 0; i < latestCount; i++) latest.add(buf.readIdentifier());
         Identifier tracked = buf.readBoolean() ? buf.readIdentifier() : null;
         long noticeRevision = buf.readLong();
         boolean noticeRelocked = buf.readBoolean();
@@ -122,6 +129,9 @@ public final class ClientPacketHandlers {
             ExplorersCompass.lockedRequirements = Map.copyOf(lockedRequirements);
             ExplorersCompass.synced = true;
             trackedStructureId = tracked;
+            latestUnlockedStructures = java.util.Set.copyOf(latest);
+            showNewlyUnlockedFilter = showLatestFilter;
+            if (!showLatestFilter) com.chaosthedude.explorerscompass.gui.FilterSelections.clearNewlyUnlocked();
             pendingNoticeRevision = noticeRevision;
             pendingNoticeRelocked = noticeRelocked;
             ExplorersCompass.canTeleport = canTeleport;

@@ -16,6 +16,10 @@ public final class FilterSelections {
 	private static boolean currentSelected;
 	private static boolean excludeVisited;
 	private static boolean excludeLocked;
+    private static boolean newlyUnlocked;
+    public static void clearNewlyUnlocked() { newlyUnlocked = false; }
+    public static boolean newlyUnlocked() { return newlyUnlocked; }
+    public static void toggleNewlyUnlocked() { newlyUnlocked = !newlyUnlocked; }
 	private static Identifier currentDimension;
 
 	private FilterSelections() {
@@ -28,10 +32,11 @@ public final class FilterSelections {
 		currentSelected = false;
 		excludeVisited = false;
 		excludeLocked = false;
+        newlyUnlocked = false;
 	}
 
 	public static boolean isEmpty() {
-		return sources.isEmpty() && dimensions.isEmpty() && !currentSelected && groups.isEmpty() && !excludeVisited && !excludeLocked;
+		return sources.isEmpty() && dimensions.isEmpty() && !currentSelected && groups.isEmpty() && !excludeVisited && !excludeLocked && !newlyUnlocked;
 	}
 
 	public static boolean excludeVisited() {
@@ -69,6 +74,7 @@ public final class FilterSelections {
 	}
 
 	public static boolean matches(Identifier structureId) {
+        if (newlyUnlocked && !com.chaosthedude.explorerscompass.network.ClientPacketHandlers.latestUnlockedStructures.contains(structureId)) return false;
 		if (!sources.isEmpty() && !sources.contains(structureId.getNamespace())) {
 			return false;
 		}

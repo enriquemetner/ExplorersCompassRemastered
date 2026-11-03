@@ -114,8 +114,11 @@ public final class UnlockReloads {
         com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(player, -1);
         Set<net.minecraft.util.Identifier> before = state.beforeRelock(id);
         boolean relocked = state.takePendingRelock(id);
-        if (relocked && !state.hasPartyRelock(id)) state.clearStructures(id);
-        UnlockingRules.get().evaluateSilently(player);
+        state.beginUnlockEvent(id, before);
+        try {
+            if (relocked && !state.hasPartyRelock(id)) state.clearStructures(id);
+            UnlockingRules.get().evaluateSilently(player);
+        } finally { state.finishUnlockEvent(id); }
         Set<net.minecraft.util.Identifier> added = new HashSet<>(state.getStructures(id));
         added.removeAll(before);
         added.removeAll(state.pendingPartyIds(id));

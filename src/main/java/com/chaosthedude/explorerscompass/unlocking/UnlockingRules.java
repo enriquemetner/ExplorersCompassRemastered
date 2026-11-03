@@ -178,6 +178,14 @@ public final class UnlockingRules {
         return result;
     }
 
+    public boolean hasUnlockingRequirements(ServerPlayerEntity player) {
+        return hasUnlockingRequirements(FtbStructureRewards.snapshot(player));
+    }
+
+    boolean hasUnlockingRequirements(FtbStructureRewards.Snapshot rewards) {
+        return !defaultUnlocked || !rules.isEmpty() || !rewards.rewardTargets().isEmpty();
+    }
+
     public Set<String> ruleNames() { return Set.copyOf(rules.keySet()); }
     public Set<Identifier> ruleTargets(String id) {
         Rule rule = rules.get(id);

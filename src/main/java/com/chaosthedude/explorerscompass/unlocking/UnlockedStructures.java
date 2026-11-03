@@ -22,6 +22,17 @@ public final class UnlockedStructures extends PersistentState {
     private final Set<UUID> pendingReloadNotice = new HashSet<>();
     private final Set<UUID> pendingRelock = new HashSet<>();
     private String definitionHistory;
+    private final Map<UUID, Set<Identifier>> latestUnlockedStructures = new HashMap<>();
+    private final Map<UUID, Set<Identifier>> unlockEventBaselines = new HashMap<>();
+
+    public Set<Identifier> latestUnlocked(UUID player) {
+        Set<Identifier> latest = new HashSet<>(latestUnlockedStructures.getOrDefault(player, Set.of()));
+        latest.retainAll(getStructures(player));
+        return Set.copyOf(latest);
+    }
+    public void beginUnlockEvent(UUID player, Set<Identifier> before) { unlockEventBaselines.put(player, before); }
+    public void finishUnlockEvent(UUID player) { unlockEventBaselines.remove(player); }
+
     private final Map<UUID, Set<Identifier>> pendingPartyNotifications = new HashMap<>();
     private final Map<UUID, Set<Identifier>> partyRelockBaselines = new HashMap<>();
 
@@ -167,6 +178,11 @@ public final class UnlockedStructures extends PersistentState {
         if (structures.isEmpty()) return 0;
         Set<Identifier> saved = unlockedStructures.computeIfAbsent(player, ignored -> new HashSet<>());
         int before = saved.size();
+        Set<Identifier> newlyUnlocked = new HashSet<>(structures);
+        newlyUnlocked.removeAll(saved);
+        newlyUnlocked.removeAll(relockBaseline(player));
+        newlyUnlocked.removeAll(unlockEventBaselines.getOrDefault(player, Set.of()));
+        if (!newlyUnlocked.isEmpty()) latestUnlockedStructures.put(player, Set.copyOf(newlyUnlocked));
         saved.addAll(structures);
         if (saved.size() != before) markDirty();
         return saved.size() - before;
@@ -212,6 +228,13 @@ public final class UnlockedStructures extends PersistentState {
                 Identifier id = Identifier.tryParse(ids.getString(j));
                 if (id != null) structures.add(id);
             }
+            Set<Identifier> latest = new HashSet<>();
+            NbtList latestIds = player.getList("LatestUnlockedStructures", NbtElement.STRING_TYPE);
+            for (int j = 0; j < latestIds.size(); j++) {
+                Identifier id = Identifier.tryParse(latestIds.getString(j));
+                if (id != null) latest.add(id);
+            }
+            if (!latest.isEmpty()) state.latestUnlockedStructures.put(player.getUuid("UUID"), latest);
             state.unlockedStructures.put(player.getUuid("UUID"), structures);
             UUID uuid = player.getUuid("UUID");
             if (player.getBoolean("NotificationsEnabled")) state.notificationsEnabled.add(uuid);
@@ -257,12 +280,16 @@ public final class UnlockedStructures extends PersistentState {
         uuids.addAll(pendingRelock);
         uuids.addAll(pendingPartyNotifications.keySet());
         uuids.addAll(partyRelockBaselines.keySet());
+        uuids.addAll(latestUnlockedStructures.keySet());
         uuids.forEach(uuid -> {
             NbtCompound player = new NbtCompound();
             player.putUuid("UUID", uuid);
             NbtList ids = new NbtList();
             unlockedStructures.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> ids.add(NbtString.of(id.toString())));
             player.put("UnlockedStructures", ids);
+            NbtList latest = new NbtList();
+            latestUnlockedStructures.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> latest.add(NbtString.of(id.toString())));
+            player.put("LatestUnlockedStructures", latest);
             player.putBoolean("NotificationsEnabled", notificationsEnabled.contains(uuid));
             player.putBoolean("PendingReloadNotice", pendingReloadNotice.contains(uuid));
             player.putLong("NoticeRevision", noticeRevisions.getOrDefault(uuid, 0L));

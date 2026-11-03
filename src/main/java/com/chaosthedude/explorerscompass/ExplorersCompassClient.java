@@ -32,6 +32,9 @@ public class ExplorersCompassClient implements ClientModInitializer {
             needle.clear();
             ClientPacketHandlers.shownNoticeRevision = 0;
             ClientPacketHandlers.pendingNoticeRevision = 0;
+            ClientPacketHandlers.latestUnlockedStructures = java.util.Set.of();
+            ClientPacketHandlers.showNewlyUnlockedFilter = false;
+            com.chaosthedude.explorerscompass.gui.FilterSelections.clearNewlyUnlocked();
         });
 		
 		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM, new Identifier("angle"), needle);

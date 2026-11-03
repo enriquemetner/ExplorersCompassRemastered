@@ -149,6 +149,7 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget clearFiltersTopButton;
 	private ButtonWidget excludeVisitedButton;
 	private ButtonWidget excludeLockedButton;
+    private ButtonWidget newlyUnlockedButton;
 	private ButtonWidget backButton;
 	private ButtonWidget teleportButton;
 	private ButtonWidget cancelButton;
@@ -435,6 +436,9 @@ public class ExplorersCompassScreen extends Screen {
 		super.render(context, mouseX, mouseY, partialTicks);
 		renderExcludeButton(context, excludeVisitedButton, "Exclude Visited", FilterSelections.excludeVisited(), mouseX, mouseY);
 		renderExcludeButton(context, excludeLockedButton, "Exclude Locked", FilterSelections.excludeLocked(), mouseX, mouseY);
+        renderExcludeButton(context, newlyUnlockedButton, "Newly Unlocked", FilterSelections.newlyUnlocked(), mouseX, mouseY);
+        if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY) && dialog == Dialog.NONE)
+            drawQuestionTooltip(context, "Shows only structures unlocked in your most recent unlocking event.", mouseX, mouseY);
 		if (entryDetails == null && searchListedButton.visible && searchListedButton.isMouseOver(mouseX, mouseY)) {
 			drawQuestionTooltip(context, "Searches for any structure from the current list after applied filters and search bar results.", mouseX, mouseY);
 		}
@@ -2158,6 +2162,13 @@ public class ExplorersCompassScreen extends Screen {
 		}));
 		lockedButton.setRightInset(FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
 		excludeLockedButton = lockedButton;
+        TransparentButton newlyButton = addDrawableChild(new TransparentButton(10, 40,
+                excludeButtonWidth("Newly Unlocked"), 20, Text.literal("Newly Unlocked"), button -> {
+            FilterSelections.toggleNewlyUnlocked();
+            processSearchTerm();
+        }));
+        newlyButton.setRightInset(FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
+        newlyUnlockedButton = newlyButton;
 		backButton = addDrawableChild(new TransparentButton(10, 10, buttonWidthForLabel("Back"), 20, Text.literal("Back"), (onPress) -> {
             if (hiddenStructuresOpen) {
                 leaveHiddenStructures();
@@ -2267,6 +2278,8 @@ public class ExplorersCompassScreen extends Screen {
 		excludeVisitedButton.setY(40);
 		excludeLockedButton.setX(filterLeft() + (ExplorersCompass.canExcludeVisited ? excludeVisitedButton.getWidth() + 5 : 0));
 		excludeLockedButton.setY(40);
+        newlyUnlockedButton.setX(excludeLockedButton.getX() + excludeLockedButton.getWidth() + 5);
+        newlyUnlockedButton.setY(40);
 		if (searchTextField != null) {
 			int rightEdge = showTeleportButton() && teleportButton.getY() == 10 ? teleportButton.getX() : cancelButton.getX();
 			searchTextField.setWidth(Math.max(1, rightEdge - searchTextField.getX() - SEARCH_TELEPORT_GAP));
@@ -2299,6 +2312,7 @@ public class ExplorersCompassScreen extends Screen {
 		clearFiltersTopButton.visible = filtersOpen;
 		excludeVisitedButton.visible = filtersOpen && ExplorersCompass.canExcludeVisited;
 		excludeLockedButton.visible = filtersOpen;
+        newlyUnlockedButton.visible = filtersOpen && com.chaosthedude.explorerscompass.network.ClientPacketHandlers.showNewlyUnlockedFilter;
 		backButton.visible = filtersOpen || settingsOpen || hiddenStructuresOpen;
 		if (hiddenSearchTextField != null) hiddenSearchTextField.setVisible(hiddenStructuresOpen);
 		placeSetting(overlaySideButton, 1);
