@@ -38,7 +38,7 @@ public final class ClientPacketHandlers {
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
                 screen.preparePartyRefresh();
-                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(RefreshCompassPacket.ID, new RefreshCompassPacket());
+                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(RefreshCompassPacket.ID, new RefreshCompassPacket(false));
             }
         });
     }

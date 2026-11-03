@@ -247,11 +247,18 @@ public class ExplorersCompassItem extends Item {
 
 	/** Re-evaluate and synchronize the compass when opened or returned to from the Quest Book. */
 	public void syncScreen(ServerPlayerEntity player) {
+        syncScreen(player, true);
+    }
+
+    /** Push saved state without reevaluation when only refreshing a command or shared addition. */
+    public void syncScreen(ServerPlayerEntity player, boolean reevaluate) {
         ItemStack held = ItemUtils.getHeldItem(player, this);
         if (!held.isEmpty()) validateTarget(player, held);
 		ServerWorld world = player.getServerWorld();
-		UnlockingRules.get().evaluateOnOpen(player);
-        com.chaosthedude.explorerscompass.unlocking.PartySharing.synchronize(player.getServer());
+        if (reevaluate) {
+            UnlockingRules.get().evaluateOnOpen(player);
+            com.chaosthedude.explorerscompass.unlocking.PartySharing.synchronize(player.getServer());
+        }
 		boolean canTeleport = PlayerUtils.canTeleport(player);
 		boolean hasInfiniteXp = player.getAbilities().creativeMode;
 		List<Identifier> allowedStructures = StructureUtils.getAllowedStructureIDs(world);

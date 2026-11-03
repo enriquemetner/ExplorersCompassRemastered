@@ -13,10 +13,16 @@ import net.minecraft.util.Identifier;
 public final class RefreshCompassPacket extends PacketByteBuf {
     public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "refresh_compass");
 
-    public RefreshCompassPacket() { super(Unpooled.buffer()); }
+    public RefreshCompassPacket() { this(true); }
+
+    public RefreshCompassPacket(boolean reevaluate) {
+        super(Unpooled.buffer());
+        writeBoolean(reevaluate);
+    }
 
     public static void apply(MinecraftServer server, ServerPlayerEntity player, ServerPlayNetworkHandler handler,
                              PacketByteBuf buf, PacketSender sender) {
-        server.execute(() -> ExplorersCompass.EXPLORERS_COMPASS_ITEM.syncScreen(player));
+        boolean reevaluate = buf.readBoolean();
+        server.execute(() -> ExplorersCompass.EXPLORERS_COMPASS_ITEM.syncScreen(player, reevaluate));
     }
 }

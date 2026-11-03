@@ -48,6 +48,10 @@ public final class PartySharing {
     }
 
     public static void synchronize(MinecraftServer server) {
+        synchronize(server, true);
+    }
+
+    public static void synchronize(MinecraftServer server, boolean refresh) {
         if (!enabled() || merging) return;
         merging = true;
         try {
@@ -67,7 +71,7 @@ public final class PartySharing {
                         if (online == null) state.queuePartyNotification(member, notify);
                         else UnlockToastPacket.send(online, notify.size(), true);
                     }
-                    if (online != null) PartyRefreshPacket.send(online);
+                    if (refresh && online != null) PartyRefreshPacket.send(online);
                 });
             }
             // Offline baselines survive until login so restored IDs cannot generate duplicate toasts.

@@ -126,7 +126,6 @@ public final class UnlockingCommands {
                     ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(partyPlayer, -1);
                     for (int slot = 0; slot < partyPlayer.getInventory().size(); slot++)
                         ExplorersCompass.EXPLORERS_COMPASS_ITEM.validateTarget(partyPlayer, partyPlayer.getInventory().getStack(slot));
-                    com.chaosthedude.explorerscompass.network.PartyRefreshPacket.send(partyPlayer);
                 }
             }
         }
@@ -137,6 +136,12 @@ public final class UnlockingCommands {
         }
         if (!unlock && changed > 0) {
             if (online != null) ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(online, -1);
+        }
+        if (unlock) PartySharing.synchronize(server, false);
+        for (UUID member : PartySharing.members(server, player)) {
+            ServerPlayerEntity recipient = server.getPlayerManager().getPlayer(member);
+            if (recipient != null && recipient.networkHandler.isConnectionOpen())
+                com.chaosthedude.explorerscompass.network.PartyRefreshPacket.send(recipient);
         }
         int totalChanged = changed;
         context.getSource().sendFeedback(() -> Text.literal((unlock ? "Unlocked " : "Locked ") + totalChanged
