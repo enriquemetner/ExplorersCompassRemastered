@@ -10,13 +10,16 @@ import net.minecraft.util.Identifier;
 public final class UnlockToastPacket extends PacketByteBuf {
     public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "unlock_toast");
 
-    private UnlockToastPacket(int count) {
+    private UnlockToastPacket(int count, boolean party) {
         super(Unpooled.buffer());
         writeVarInt(count);
+        writeBoolean(party);
     }
 
     public static void send(ServerPlayerEntity player, int count) {
-        if (count > 0) ServerPlayNetworking.send(player, ID, new UnlockToastPacket(count));
+        send(player, count, false);
     }
-
+    public static void send(ServerPlayerEntity player, int count, boolean party) {
+        if (count > 0) ServerPlayNetworking.send(player, ID, new UnlockToastPacket(count, party));
+    }
 }

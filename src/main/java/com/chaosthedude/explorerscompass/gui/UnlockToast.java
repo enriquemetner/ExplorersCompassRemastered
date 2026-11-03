@@ -10,9 +10,12 @@ import net.minecraft.text.Text;
 /** Advancement-style toast without an advancement or a sound. */
 public final class UnlockToast implements Toast {
     private final Text title;
-    private final Text subtitle = Text.translatable("toast.explorerscompass.check_compass");
+    private final Text subtitle;
 
-    public UnlockToast(int count) {
+    public UnlockToast(int count) { this(count, false); }
+
+    public UnlockToast(int count, boolean party) {
+        subtitle = Text.translatable(party ? "toast.explorerscompass.party_member" : "toast.explorerscompass.check_compass");
         title = count == 1
                 ? Text.translatable("toast.explorerscompass.structure_unlocked")
                 : Text.translatable("toast.explorerscompass.structures_unlocked", count);

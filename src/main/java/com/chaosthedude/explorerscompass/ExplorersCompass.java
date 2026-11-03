@@ -60,6 +60,8 @@ public class ExplorersCompass implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		ExplorersCompassConfig.load();
+        if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("openpartiesandclaims"))
+            com.chaosthedude.explorerscompass.compat.opac.OpacIntegration.register();
         com.chaosthedude.explorerscompass.network.AcknowledgeNoticePacket.register();
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
@@ -69,6 +71,7 @@ public class ExplorersCompass implements ModInitializer {
             EXPLORERS_COMPASS_ITEM.stopAllSearches();
             com.chaosthedude.explorerscompass.unlocking.UnlockingRules.clear();
             com.chaosthedude.explorerscompass.unlocking.UnlockReloads.clear();
+            com.chaosthedude.explorerscompass.unlocking.PartySharing.clear();
         });
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 com.chaosthedude.explorerscompass.unlocking.UnlockingCommands.register(dispatcher));
@@ -92,6 +95,7 @@ public class ExplorersCompass implements ModInitializer {
 				RepairDurabilityPacket.send(handler.player, ExplorersCompassConfig.compassDurability));
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			com.chaosthedude.explorerscompass.unlocking.UnlockReloads.tick(server);
+            com.chaosthedude.explorerscompass.unlocking.PartySharing.tick(server);
 			if (server.getTicks() % 20 != 0 || server.getPlayerManager().getPlayerList().isEmpty()) return;
 			VisitedStructures history = VisitedStructures.get(server);
 			for (net.minecraft.server.network.ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {

@@ -36,6 +36,7 @@
   },
   "suggests": {
     "naturescompass": "*",
-    "ftbquests": "*"
+    "ftbquests": "*",
+    "openpartiesandclaims": "*"
   }
 }

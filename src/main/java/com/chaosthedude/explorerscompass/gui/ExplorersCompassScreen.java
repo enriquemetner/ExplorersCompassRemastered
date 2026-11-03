@@ -166,6 +166,11 @@ public class ExplorersCompassScreen extends Screen {
     private ButtonWidget hiddenStructuresButton;
     private long infoRevision;
     private boolean infoRelocked;
+    public void preparePartyRefresh() {
+        questReturnSelection = selectionList.getSelectedOrNull() == null ? null : selectionList.getSelectedOrNull().getStructureID();
+        questReturnScroll = selectionList.getScrollAmount();
+        restoreQuestListAfterSync = true;
+    }
     public void prepareRuleRefresh() {
         questReturnSelection = selectionList.getSelectedOrNull() == null ? null : selectionList.getSelectedOrNull().getStructureID();
         questReturnScroll = selectionList.getScrollAmount();

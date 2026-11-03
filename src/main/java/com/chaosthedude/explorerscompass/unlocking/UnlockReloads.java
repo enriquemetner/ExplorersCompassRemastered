@@ -112,14 +112,16 @@ public final class UnlockReloads {
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
         UUID id = player.getUuid();
         com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(player, -1);
-        Set<net.minecraft.util.Identifier> before = state.getStructures(id);
+        Set<net.minecraft.util.Identifier> before = state.beforeRelock(id);
         boolean relocked = state.takePendingRelock(id);
-        if (relocked) state.clearStructures(id);
+        if (relocked && !state.hasPartyRelock(id)) state.clearStructures(id);
         UnlockingRules.get().evaluateSilently(player);
         Set<net.minecraft.util.Identifier> added = new HashSet<>(state.getStructures(id));
         added.removeAll(before);
+        added.removeAll(state.pendingPartyIds(id));
         UnlockNotifications.newlyAdded(player, added.size());
         if (!state.notificationsEnabled(id)) state.takePendingReloadNotice(id);
+        if (!PartySharing.enabled()) state.finishPartyRelock(id);
         for (int slot = 0; slot < player.getInventory().size(); slot++)
             com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.validateTarget(player, player.getInventory().getStack(slot));
     }

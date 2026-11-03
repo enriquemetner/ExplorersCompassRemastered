@@ -22,6 +22,7 @@ public final class UnlockNotifications {
             return;
         }
         UnlockingRules.get().evaluateOnOpen(player);
+        PartySharing.synchronize(player.getServer());
         if (state.enableNotifications(player.getUuid())) {
             UnlockToastPacket.send(player, state.getStructures(player.getUuid()).size());
         }
@@ -29,7 +30,8 @@ public final class UnlockNotifications {
 
     public static void deliverPending(ServerPlayerEntity player) {
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
-        if (!state.notificationsEnabled(player.getUuid())) return;
+        if (!player.networkHandler.isConnectionOpen() || !state.notificationsEnabled(player.getUuid())) return;
         UnlockToastPacket.send(player, state.takePendingNotificationCount(player.getUuid()));
+        UnlockToastPacket.send(player, state.takePartyNotificationCount(player.getUuid()), true);
     }
 }

@@ -251,6 +251,7 @@ public class ExplorersCompassItem extends Item {
         if (!held.isEmpty()) validateTarget(player, held);
 		ServerWorld world = player.getServerWorld();
 		UnlockingRules.get().evaluateOnOpen(player);
+        com.chaosthedude.explorerscompass.unlocking.PartySharing.synchronize(player.getServer());
 		boolean canTeleport = PlayerUtils.canTeleport(player);
 		boolean hasInfiniteXp = player.getAbilities().creativeMode;
 		List<Identifier> allowedStructures = StructureUtils.getAllowedStructureIDs(world);

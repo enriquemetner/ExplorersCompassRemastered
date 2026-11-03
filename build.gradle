@@ -11,6 +11,7 @@ base {
 }
 
 repositories {
+	maven { url = 'https://api.modrinth.com/maven' }
 	maven { url = 'https://maven.architectury.dev/' }
 	maven { url = 'https://maven.ftb.dev/releases/' }
 }
@@ -25,6 +26,7 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	// Needed by the FTB mods in the development run directory, but not by this mod.
 	modLocalRuntime 'dev.architectury:architectury-fabric:9.2.14'
+	modCompileOnly 'maven.modrinth:open-parties-and-claims:vhlyXP4C'
 	modCompileOnly 'dev.ftb.mods:ftb-quests-fabric:2001.4.22'
 	modCompileOnly 'dev.ftb.mods:ftb-library-fabric:2001.2.13'
 	implementation 'com.electronwill.night-config:toml:3.9.0'

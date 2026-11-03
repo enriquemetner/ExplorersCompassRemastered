@@ -30,7 +30,17 @@ public final class ClientPacketHandlers {
 
     public static void applyUnlockToast(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         int count = buf.readVarInt();
-        if (count > 0) client.execute(() -> client.getToastManager().add(new UnlockToast(count)));
+        boolean party = buf.readBoolean();
+        if (count > 0) client.execute(() -> client.getToastManager().add(new UnlockToast(count, party)));
+    }
+
+    public static void applyPartyRefresh(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
+        client.execute(() -> {
+            if (client.currentScreen instanceof ExplorersCompassScreen screen) {
+                screen.preparePartyRefresh();
+                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(RefreshCompassPacket.ID, new RefreshCompassPacket());
+            }
+        });
     }
 
     public static void applyRulesChanged(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {

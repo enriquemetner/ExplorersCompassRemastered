@@ -1,5 +1,6 @@
 {
-  "toast.explorerscompass.structure_unlocked": "new structure unlocked!",
+  "toast.explorerscompass.party_member": "Unlocked by a party member",
+  "toast.explorerscompass.structure_unlocked": "New structure unlocked!",
   "toast.explorerscompass.structures_unlocked": "%s new structures unlocked!",
   "toast.explorerscompass.check_compass": "Check your Explorer's Compass",
   "ftb_reward.explorerscompass.unlock_structures": "Unlock Structures",

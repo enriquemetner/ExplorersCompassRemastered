@@ -111,7 +111,25 @@ public final class UnlockingCommands {
             added.addAll(targets);
             added.removeAll(state.getStructures(player));
         }
-        int changed = unlock ? state.add(player, targets) : state.remove(player, targets);
+        Set<UUID> affected = unlock ? Set.of(player) : PartySharing.members(server, player);
+        if (!unlock && selector.equals("all")) {
+            Set<Identifier> all = new HashSet<>(targets);
+            affected.forEach(member -> all.addAll(state.getStructures(member)));
+            targets = commandStructures(all);
+        }
+        int changed = 0;
+        for (UUID member : affected) {
+            changed += unlock ? state.add(member, targets) : state.remove(member, targets);
+            if (!unlock) {
+                ServerPlayerEntity partyPlayer = server.getPlayerManager().getPlayer(member);
+                if (partyPlayer != null) {
+                    ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(partyPlayer, -1);
+                    for (int slot = 0; slot < partyPlayer.getInventory().size(); slot++)
+                        ExplorersCompass.EXPLORERS_COMPASS_ITEM.validateTarget(partyPlayer, partyPlayer.getInventory().getStack(slot));
+                    com.chaosthedude.explorerscompass.network.PartyRefreshPacket.send(partyPlayer);
+                }
+            }
+        }
         ServerPlayerEntity online = server.getPlayerManager().getPlayer(player);
         if (unlock && changed > 0) {
             if (online != null) UnlockNotifications.newlyAdded(online, changed);
@@ -120,7 +138,10 @@ public final class UnlockingCommands {
         if (!unlock && changed > 0) {
             if (online != null) ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(online, -1);
         }
-        context.getSource().sendFeedback(() -> Text.literal((unlock ? "Unlocked " : "Locked ") + changed + " structure types for " + player + ". Reopen the compass to refresh."), true);
+        int totalChanged = changed;
+        context.getSource().sendFeedback(() -> Text.literal((unlock ? "Unlocked " : "Locked ") + totalChanged
+                + " saved structure entries for " + (affected.size() > 1 ? "the OPAC party (" + affected.size() + " members)" : player)
+                + "."), true);
         return changed;
     }
 
