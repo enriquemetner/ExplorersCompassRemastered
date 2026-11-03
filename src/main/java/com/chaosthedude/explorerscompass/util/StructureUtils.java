@@ -106,7 +106,8 @@ public class StructureUtils {
 		if (id == null) return false;
 		final List<String> structureBlacklist = ExplorersCompassConfig.structureBlacklist;
 		for (String structureKey : structureBlacklist) {
-			if (id.toString().matches(convertToRegex(structureKey))) {
+			String pattern = structureKey.contains(":") ? structureKey : "minecraft:" + structureKey;
+			if (id.toString().matches(convertToRegex(pattern))) {
 				return true;
 			}
 		}

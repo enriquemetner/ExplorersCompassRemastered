@@ -246,7 +246,7 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeCommonBlacklist(CommentedConfig config) {
-		put(config, "structureBlacklist", structureBlacklist, "Structures excluded from the compass. Supports the * wildcard.");
+		put(config, "structureBlacklist", structureBlacklist, "Structures excluded from the compass. Supports the * wildcard. Omitted namespaces default to minecraft:.");
 	}
 
 	private static void writeHiddenStructures(CommentedConfig config) {
