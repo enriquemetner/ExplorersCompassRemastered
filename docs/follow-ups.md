@@ -7,5 +7,5 @@
   radius stops. This change has not been applied yet.
 
 Ongoing development uses `codex/nearest-first`. The comparison branch is
-`codex/search-baseline`. Both retain benchmark tools. Main and fabric-1.20.1 are
-existing release branches and were not modified during working-branch cleanup.
+`codex/search-baseline`. Benchmark tools are preserved separately on `codex/benchmark-tools` for later use.
+The existing release branches are main and fabric-1.20.1.

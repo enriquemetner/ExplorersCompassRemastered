@@ -44,7 +44,6 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
     }
 
     private NearestFirstQueue.Candidate<Target> candidate(StructurePlacement rule, List<Structure> structures, ChunkPos chunk) {
-        SearchBenchmark.candidate(managerId);
         BlockPos pos = rule.getLocatePos(chunk);
         return new NearestFirstQueue.Candidate<>(pos.getX(), pos.getZ(), new Target(rule, structures, chunk));
     }
@@ -52,7 +51,7 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
     @Override public void setRadiusLimit(int radius) { super.setRadiusLimit(radius); stageComplete = false; }
     @Override public boolean hasWork() { return !finished && !stageComplete; }
     @Override public boolean canWorkAt(int radius) {
-        return !finished && samples < BenchmarkAutomation.sampleLimit(managerId, ExplorersCompassConfig.maxSamples)
+        return !finished && samples < ExplorersCompassConfig.maxSamples
                 && queue.nextDistanceSquared() < (long) radius * radius;
     }
     @Override public boolean doWork() {

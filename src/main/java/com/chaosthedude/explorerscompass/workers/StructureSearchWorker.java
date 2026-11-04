@@ -74,7 +74,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	public boolean canWorkAt(int radiusLimit) {
-		return !finished && samples < BenchmarkAutomation.sampleLimit(managerId, ExplorersCompassConfig.maxSamples) && getRadius() < radiusLimit;
+		return !finished && samples < ExplorersCompassConfig.maxSamples && getRadius() < radiusLimit;
 	}
 
 	@Override
@@ -95,19 +95,12 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected Pair<BlockPos, Structure> getStructureGeneratingAt(ChunkPos chunkPos) {
-        long started = SearchBenchmark.check(managerId, getName());
-        try { return checkStructureGeneratingAt(chunkPos); }
-        finally { SearchBenchmark.checked(managerId, started); }
-    }
-
-    private Pair<BlockPos, Structure> checkStructureGeneratingAt(ChunkPos chunkPos) {
 		for (Structure structure : structureSet) {
             Identifier id = StructureUtils.getIDForStructure(level, structure);
             if (id == null || (!(creativeBypass && player.getAbilities().creativeMode)
 					&& !com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(level.getServer(), player.getUuid(), id))) continue;
 			StructurePresence result = SearchPlacementFilter.lookup(chunkPos.toLong(), structure,
-                    () -> SearchBenchmark.placementResult(managerId, placement.shouldGenerate(
-                            level.getChunkManager().getStructurePlacementCalculator(), chunkPos.x, chunkPos.z)),
+                    () -> placement.shouldGenerate(level.getChunkManager().getStructurePlacementCalculator(), chunkPos.x, chunkPos.z),
                     () -> level.getStructureAccessor().getStructurePresence(chunkPos, structure, false));
 			if (result != StructurePresence.START_NOT_PRESENT) {
 				if (result == StructurePresence.START_PRESENT) {
@@ -115,7 +108,6 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 					return Pair.of(placement.getLocatePos(chunkPos), structure);
 				}
 
-				SearchBenchmark.chunkRequest(managerId);
 				Chunk chunk = level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.STRUCTURE_STARTS);
 				StructureStart structureStart = level.getStructureAccessor().getStructureStart(ChunkSectionPos.from(chunk), structure, chunk);
 				if (structureStart != null && structureStart.hasChildren() && !wasVisited(structure, structureStart.getPos())) {
@@ -128,8 +120,6 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	private boolean wasVisited(Structure structure, ChunkPos startChunk) {
-        Boolean benchmarkVisit = BenchmarkAutomation.visited(managerId, StructureUtils.getIDForStructure(level, structure), startChunk);
-        if (benchmarkVisit != null) return benchmarkVisit;
 		if (!excludeVisited) return false;
 		Identifier structureId = StructureUtils.getIDForStructure(level, structure);
 		return structureId != null && VisitedStructures.get(level.getServer()).hasVisited(player.getUuid(),
@@ -137,8 +127,6 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void succeed(BlockPos pos, Structure structure) {
-        if (BenchmarkAutomation.success(managerId, pos)) { finished = true; return; }
-        SearchBenchmark.finish(managerId, "found", pos);
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " succeeded with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
 			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, structure), pos.getX(), pos.getZ(), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
@@ -149,7 +137,6 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void fail() {
-        if (BenchmarkAutomation.failure(managerId)) return;
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " failed with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
 			((ExplorersCompassItem) stack.getItem()).fail(player, stack, structureOrGroupId, getRadius(), samples);
