@@ -99,7 +99,9 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
             Identifier id = StructureUtils.getIDForStructure(level, structure);
             if (id == null || (!(creativeBypass && player.getAbilities().creativeMode)
 					&& !com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(level.getServer(), player.getUuid(), id))) continue;
-			StructurePresence result = level.getStructureAccessor().getStructurePresence(chunkPos, structure, false);
+			StructurePresence result = SearchPlacementFilter.lookup(chunkPos.toLong(), structure,
+                    () -> placement.shouldGenerate(level.getChunkManager().getStructurePlacementCalculator(), chunkPos.x, chunkPos.z),
+                    () -> level.getStructureAccessor().getStructurePresence(chunkPos, structure, false));
 			if (result != StructurePresence.START_NOT_PRESENT) {
 				if (result == StructurePresence.START_PRESENT) {
 					if (wasVisited(structure, chunkPos)) continue;
