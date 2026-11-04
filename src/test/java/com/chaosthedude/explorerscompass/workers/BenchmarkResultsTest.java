@@ -10,7 +10,7 @@ class BenchmarkResultsTest {
     @TempDir Path directory;
     private Object[] row(String variant) {
         return new Object[]{"2026-11-04T12:00:00Z",variant,"id","test:structure","worker","found",
-                -100,200,300,400,447.2,45.6,10,8,2,30.1};
+                -100,200,300,400,447.2,45.6,10,8,2,30.1,6};
     }
     @Test void appendsAcrossWritesWithOneHeaderAndSeparateVariantFiles() throws Exception {
         Path baseline=directory.resolve("logs/baseline.csv");

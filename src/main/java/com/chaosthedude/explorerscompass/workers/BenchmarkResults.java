@@ -10,10 +10,10 @@ import java.util.stream.Collectors;
 
 /** Append completed stages without keeping an open file between searches or game launches. */
 final class BenchmarkResults {
-    private static final String HEADER = "timestamp,variant,id,search,worker,outcome,origin_x,origin_z,result_x,result_z,distance,elapsed_ms,candidates,checks,chunk_requests,check_ms";
+    private static final String HEADER = "timestamp,variant,id,search,worker,outcome,origin_x,origin_z,result_x,result_z,distance,elapsed_ms,candidates,checks,chunk_requests,check_ms,placement_rejections";
 
     static synchronized void append(Path file, Object... fields) throws IOException {
-        if (fields.length != 16) throw new IllegalArgumentException("Expected 16 benchmark fields");
+        if (fields.length != 17) throw new IllegalArgumentException("Expected 17 benchmark fields");
         Files.createDirectories(file.getParent());
         boolean needsHeader = !Files.exists(file) || Files.size(file) == 0;
         String row = Arrays.stream(fields).map(BenchmarkResults::escape).collect(Collectors.joining(","));

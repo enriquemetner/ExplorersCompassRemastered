@@ -15,7 +15,7 @@ import net.minecraft.util.math.BlockPos;
 final class SearchBenchmark {
     private static final String VARIANT = readVariant();
     private static final Path RESULTS = FabricLoader.getInstance().getGameDir()
-            .resolve("logs/explorerscompass").resolve(VARIANT + ".csv");
+            .resolve("logs/explorerscompass").resolve(VARIANT + "-placement-filter.csv");
     private static String readVariant() {
         try (var stream = SearchBenchmark.class.getResourceAsStream("/search-benchmark-variant.txt")) {
             if (stream == null) throw new IllegalStateException("Missing benchmark variant");
@@ -29,7 +29,7 @@ final class SearchBenchmark {
     private final long started = System.nanoTime();
     private final BlockPos origin;
     private final Identifier search;
-    private long candidates, checks, chunkRequests, checkNanos;
+    private long candidates, checks, chunkRequests, checkNanos, placementRejections;
     private String worker = "none";
     private SearchBenchmark(BlockPos origin, Identifier search) { this.origin = origin; this.search = search; }
     static void begin(String id, BlockPos origin, Identifier search) {
@@ -49,6 +49,11 @@ final class SearchBenchmark {
     static void checked(String id, long start) {
         SearchBenchmark b = ACTIVE.get(id); if (b != null) b.checkNanos += System.nanoTime() - start;
     }
+    static boolean placementResult(String id, boolean permitted) {
+        SearchBenchmark b = ACTIVE.get(id);
+        if (b != null && !permitted) b.placementRejections++;
+        return permitted;
+    }
     static void chunkRequest(String id) {
         SearchBenchmark b = ACTIVE.get(id); if (b != null) b.chunkRequests++;
     }
@@ -63,14 +68,14 @@ final class SearchBenchmark {
             BenchmarkResults.append(RESULTS, Instant.now(), VARIANT, id, b.search, b.worker, outcome,
                     b.origin.getX(), b.origin.getZ(), result == null ? null : result.getX(),
                     result == null ? null : result.getZ(), distance, elapsedMs, b.candidates,
-                    b.checks, b.chunkRequests, checkMs);
+                    b.checks, b.chunkRequests, checkMs, b.placementRejections);
         } catch (IOException e) {
             ExplorersCompass.LOGGER.error("Could not write compass benchmark results to " + RESULTS, e);
         }
-        ExplorersCompass.LOGGER.info("COMPASS_BENCH id={} search={} worker={} outcome={} origin={},{} result={} distance={} elapsed_ms={} candidates={} checks={} chunk_requests={} check_ms={}",
+        ExplorersCompass.LOGGER.info("COMPASS_BENCH id={} search={} worker={} outcome={} origin={},{} result={} distance={} elapsed_ms={} candidates={} checks={} chunk_requests={} check_ms={} placement_rejections={}",
                 id, b.search, b.worker, outcome, b.origin.getX(), b.origin.getZ(),
                 result == null ? "none" : result.getX()+","+result.getZ(), distance,
                 elapsedMs, b.candidates, b.checks,
-                b.chunkRequests, checkMs);
+                b.chunkRequests, checkMs, b.placementRejections);
     }
 }

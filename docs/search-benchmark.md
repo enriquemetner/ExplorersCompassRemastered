@@ -10,8 +10,8 @@ Build either benchmark branch with `./gradlew build --offline`. Install only one
 Explorer's Compass JAR at a time. Clearly labelled builds are in `build/comparison/`
 (untracked local artifacts). Do not merge benchmark branches into the release branch.
 
-Each completed search stage appends a CSV row to `logs/explorerscompass/baseline.csv`
-or `logs/explorerscompass/nearest-first.csv` inside the game's folder. With
+Each completed search stage appends a CSV row to `logs/explorerscompass/baseline-placement-filter.csv`
+or `logs/explorerscompass/nearest-first-placement-filter.csv` inside the game's folder. With
 `./gradlew runClient`, these are under this project's `run/logs/explorerscompass/`.
 The files retain previous launches, include UTC timestamps, and are created after
 the first completed/cancelled stage. They can be opened in a spreadsheet or text
@@ -26,6 +26,7 @@ Each completed search stage also writes a `COMPASS_BENCH` line to Minecraft's
   between Keep searching stages; initial placement preparation is included;
 - candidates: candidate positions calculated in this stage, including candidates
   retained for later stages (thus a later stage may check more than it calculates);
+- placement_rejections: placement predicates that rejected a candidate before generation checks; saved answers bypass this filter;
 - checks: calls to candidate validation, including immediate presence-cache answers;
 - chunk_requests: synchronous STRUCTURE_STARTS chunk requests, not necessarily new generation;
 - check_ms: total wall time inside candidate validation, not CPU time.
@@ -50,3 +51,9 @@ Include random spread, strongholds, Search Listed, multiple grids, no nearby
 result, Keep searching and visited exclusions. Record game version and hardware
 alongside results. No live-world performance conclusions have been established
 by the automated tests.
+
+The placement-filter revision keeps earlier `.csv` files intact. Candidate and check
+counts still include positions rejected by placement rules; `placement_rejections`
+shows how often the new filter avoided further generation validation. A passing
+predicate does not guarantee a structure. Existing saved-record lookup still runs
+first, so cached results may produce zero placement rejections.
