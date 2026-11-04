@@ -126,9 +126,7 @@ public class ExplorersCompassItem extends Item {
 
 
 	public static final String NAME = "explorerscompass";
-	public static final int INITIAL_SEARCH_RADIUS = 10000;
-	public static final int SEARCH_RADIUS_STEP = 20000;
-	public static final int MAX_SEARCH_RADIUS = 50000;
+	public static final int MAX_SEARCH_RADIUS = 30000;
 
 	private final Map<UUID, SearchSession> searches = new HashMap<>();
 
@@ -141,8 +139,7 @@ public class ExplorersCompassItem extends Item {
         final ServerWorld world;
         final Identifier searchId;
 		final boolean creativeBypass;
-        int radiusLimit = INITIAL_SEARCH_RADIUS;
-        boolean awaitingContinuation;
+        final int radiusLimit = MAX_SEARCH_RADIUS;
         SearchSession(ServerWorld world, ItemStack stack, int requestId, Identifier searchId, boolean creativeBypass) {
             this.world = world;
             this.stack = stack;
@@ -372,31 +369,12 @@ public class ExplorersCompassItem extends Item {
         if (!session.workers.start()) fail(player, stack, firstId, 0, 0);
     }
 
-	public void continueSearch(ServerWorld world, PlayerEntity player, ItemStack stack, int requestId) {
-        ensureHolder((ServerPlayerEntity) player, stack);
-		SearchSession session = searches.get(player.getUuid());
-		if (session == null || !session.awaitingContinuation || session.requestId != requestId
-				|| session.stack != stack || isBroken(stack) || session.radiusLimit >= MAX_SEARCH_RADIUS) {
-			SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.REJECTED, 0);
-			return;
-		}
-		if (session.world != world) {
-			rejectWrongDimension(player, requestId);
-			return;
-		}
-		if (rejectIfInsufficientXp(player, requestId)) {
-			cancelSearch(player, requestId);
-			return;
-		}
-        CompassSearchData.begin(stack.getOrCreateNbt(), session.token, session.previousNbt);
-		session.awaitingContinuation = false;
-		int previousRadiusLimit = session.radiusLimit;
-		session.radiusLimit = Math.min(MAX_SEARCH_RADIUS, session.radiusLimit + SEARCH_RADIUS_STEP);
-		session.workers.setRadiusLimit(session.radiusLimit);
-		setSearching(stack, session.searchId);
-		setSearchRadius(stack, previousRadiusLimit);
-		if (!session.workers.start()) fail(player, stack, session.searchId, 0, 0);
-	}
+    // Retain the packet entry point for older clients, but searches no longer have continuation stages.
+    public void continueSearch(ServerWorld world, PlayerEntity player, ItemStack stack, int requestId) {
+        if (player instanceof ServerPlayerEntity serverPlayer) {
+            SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
+        }
+    }
 
 	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, int x, int z, int samples, boolean displayCoordinates, boolean displayDistance) {
 		SearchSession session = searches.get(player.getUuid());
@@ -433,19 +411,13 @@ public class ExplorersCompassItem extends Item {
 
 	public void fail(PlayerEntity player, ItemStack stack, Identifier structureId, int radius, int samples) {
         SearchSession session = searches.get(player.getUuid());
-        if (session == null || session.awaitingContinuation) return;
+        if (session == null) return;
         if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }
         session.workers.pop();
         boolean started = session.workers.start();
 		if (!started) {
 			CompassSearchData.restore(stack.getOrCreateNbt(), session.previousNbt);
-			boolean canContinue = session.radiusLimit < MAX_SEARCH_RADIUS;
-			if (canContinue) {
-				session.awaitingContinuation = true;
-				SearchResultPacket.send((ServerPlayerEntity) player, session.requestId, SearchResultPacket.NOT_FOUND, session.radiusLimit, true);
-			} else {
-				finishSearch(player, SearchResultPacket.NOT_FOUND, session.radiusLimit);
-			}
+            finishSearch(player, SearchResultPacket.NOT_FOUND, session.radiusLimit);
 		}
 	}
 
@@ -518,7 +490,7 @@ public class ExplorersCompassItem extends Item {
 
     public void reportSearchProgress(PlayerEntity player, ItemStack stack, int radius) {
         SearchSession session = searches.get(player.getUuid());
-        if (session == null || session.stack != stack || session.awaitingContinuation) return;
+        if (session == null || session.stack != stack) return;
         int previousRadius = getSearchRadius(stack);
         setSearchRadius(stack, radius);
         int updatedRadius = getSearchRadius(stack);

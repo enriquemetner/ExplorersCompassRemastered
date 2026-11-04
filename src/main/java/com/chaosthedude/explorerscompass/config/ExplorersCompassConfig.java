@@ -35,7 +35,6 @@ public class ExplorersCompassConfig {
     public static boolean opacPartySharing = true;
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
-	public static int maxSamples = 100000;
 	public static int compassDurability = 0;
 	public static int defaultXpCost = 0;
 	public static boolean allowSearchWithoutEnoughXp = false;
@@ -177,7 +176,6 @@ public class ExplorersCompassConfig {
 		relockOnReload = bool(config, "unlocking.relockOnReload", relockOnReload);
 		displayCoordinates = bool(config, "compass.displayCoordinates", displayCoordinates);
 		displayDistance = bool(config, "compass.displayDistance", displayDistance);
-		maxSamples = number(config, "search.maxSamples", maxSamples, 1);
 		compassDurability = number(config, "compass.compassDurability", compassDurability, 0);
 		defaultXpCost = number(config, "search.defaultXpCost", defaultXpCost, 0);
 		allowSearchWithoutEnoughXp = bool(config, "search.allowSearchWithoutEnoughXp", allowSearchWithoutEnoughXp);
@@ -224,7 +222,7 @@ public class ExplorersCompassConfig {
 		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
 		put(config, "compass.displayDistance", displayDistance, "Show distance to located structures.");
-		put(config, "search.maxSamples", maxSamples, "Maximum search samples; must be at least 1.");
+        config.remove("search.maxSamples"); // Retired: searches are bounded by radius.
 		put(config, "compass.compassDurability", compassDurability, "Successful searches before the compass breaks; 0 disables durability.");
 		put(config, "search.defaultXpCost", defaultXpCost, "XP levels consumed after a successful search.");
 		put(config, "search.allowSearchWithoutEnoughXp", allowSearchWithoutEnoughXp, "Permit searching with insufficient XP; a successful search drains remaining XP.");

@@ -106,4 +106,34 @@ class NearestFirstQueueTest {
         assertTrue(queue.nextDistanceSquared() > Integer.MAX_VALUE);
         assertEquals("far",queue.advance().value());
     }
+    @Test void denseSearchContinuesBeyondOldCandidateLimitUntilRadiusIsCovered() {
+        var queue = new NearestFirstQueue<Long>(0,0);
+        queue.addGrid(16,0,0,0,(x,z) -> new NearestFirstQueue.Candidate<>(x*16L,z*16L,
+                ((long)x << 32) ^ (z & 0xffffffffL)));
+        long limit = 3000L*3000L;
+        int count = 0;
+        long previous = -1;
+        while(queue.nextDistanceSquared() < limit) {
+            var candidate = queue.advance();
+            if(candidate == null) continue;
+            long distance = candidate.x()*candidate.x()+candidate.z()*candidate.z();
+            assertTrue(distance >= previous);
+            assertTrue(distance < limit);
+            previous = distance;
+            count++;
+        }
+        int expected = 0;
+        for(int x=-188;x<=188;x++) for(int z=-188;z<=188;z++)
+            if((x*16L)*(x*16L)+(z*16L)*(z*16L)<limit)expected++;
+        assertTrue(count > 100000);
+        assertEquals(expected,count,"A dense search must cover its radius after passing 100,000 candidates");
+    }
+    @Test void thirtyThousandBlockBoundaryIsExclusive() {
+        var queue = new NearestFirstQueue<String>(0,0);
+        queue.addCandidate(new NearestFirstQueue.Candidate<>(30000,0,"boundary"));
+        queue.addCandidate(new NearestFirstQueue.Candidate<>(29999,0,"inside"));
+        assertTrue(queue.nextDistanceSquared() < 30000L*30000L);
+        assertEquals("inside",queue.advance().value());
+        assertEquals(30000L*30000L,queue.nextDistanceSquared());
+    }
 }

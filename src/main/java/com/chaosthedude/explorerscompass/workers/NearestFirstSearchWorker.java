@@ -2,7 +2,6 @@ package com.chaosthedude.explorerscompass.workers;
 
 import java.util.List;
 import java.util.Map;
-import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
@@ -16,7 +15,6 @@ import net.minecraft.world.gen.structure.Structure;
 final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlacement> {
     private record Target(StructurePlacement placement, List<Structure> structures, ChunkPos chunk) {}
     private final NearestFirstQueue<Target> queue;
-    private boolean stageComplete;
 
     NearestFirstSearchWorker(ServerWorld world, PlayerEntity player, ItemStack stack, BlockPos origin,
             Map<StructurePlacement, List<Structure>> placements, Identifier searchId,
@@ -48,16 +46,14 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
         return new NearestFirstQueue.Candidate<>(pos.getX(), pos.getZ(), new Target(rule, structures, chunk));
     }
 
-    @Override public void setRadiusLimit(int radius) { super.setRadiusLimit(radius); stageComplete = false; }
-    @Override public boolean hasWork() { return !finished && !stageComplete; }
+    @Override public boolean hasWork() { return !finished; }
     @Override public boolean canWorkAt(int radius) {
-        return !finished && samples < ExplorersCompassConfig.maxSamples
-                && queue.nextDistanceSquared() < (long) radius * radius;
+        return !finished && queue.nextDistanceSquared() < (long) radius * radius;
     }
     @Override public boolean doWork() {
         if (!hasWork()) return false;
         if (!canWorkAt(radiusLimit)) {
-            stageComplete = true;
+            finished = true;
             fail();
             return false;
         }

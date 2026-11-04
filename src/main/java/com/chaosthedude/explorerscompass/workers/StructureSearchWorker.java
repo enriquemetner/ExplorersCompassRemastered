@@ -39,7 +39,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	protected int samples;
 	protected boolean finished;
 	protected int lastRadiusThreshold;
-	protected int radiusLimit = ExplorersCompassItem.INITIAL_SEARCH_RADIUS;
+	protected int radiusLimit = ExplorersCompassItem.MAX_SEARCH_RADIUS;
 
 	public StructureSearchWorker(ServerWorld level, PlayerEntity player, ItemStack stack, BlockPos startPos, T placement, List<Structure> structureSet, Identifier structureOrGroupId, boolean excludeVisited, String managerId) {
 		this.level = level;
@@ -60,7 +60,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 
 	public void start() {
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-			ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " starting with " + (shouldLogRadius() ? radiusLimit + " radius limit, " : "") + ExplorersCompassConfig.maxSamples + " max samples");
+			ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " starting with " + (shouldLogRadius() ? radiusLimit + " radius limit, " : "") + "no candidate limit");
 			WorldWorkerManager.addWorker(level.getServer(), this);
 		}
 	}
@@ -74,7 +74,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	public boolean canWorkAt(int radiusLimit) {
-		return !finished && samples < ExplorersCompassConfig.maxSamples && getRadius() < radiusLimit;
+		return !finished && getRadius() < radiusLimit;
 	}
 
 	@Override

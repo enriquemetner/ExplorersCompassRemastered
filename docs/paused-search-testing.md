@@ -1,3 +1,7 @@
+> Current behaviour: interactive searches run continuously to 30,000 blocks with
+> no candidate cap. The older staged-radius/Keep searching cases below are historical
+> and no longer apply. Check cancellation, paused progress and final radius exhaustion instead.
+
 # Paused compass searches
 
 Search workers now run in short jobs on Minecraft's server task queue. The queue

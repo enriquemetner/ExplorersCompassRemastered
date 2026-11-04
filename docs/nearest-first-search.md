@@ -28,15 +28,15 @@ remain synchronous, on the existing server task queue. No parallel chunk checks
 are introduced. Cancellation, ownership validation, pause support, unlock/visited
 filters and search costs continue using existing code.
 
-Radius limits are exclusive, in blocks. Keep searching retains the entire frontier
-and pending candidates. Progress reports the lower bound of remaining work, not
-the farthest candidate prepared. The configured maximum sample count is now a
-single budget of candidate checks across the request; exhausting it can produce
-no result even when a structure exists. The nearest guarantee applies to a returned
-result among eligible targets, not to finding a result despite resource limits.
+Interactive searches run once to an exclusive 30,000-block horizontal radius.
+There is no candidate-count limit or intermediate continuation prompt. Progress
+reports the lower bound of remaining work, not the farthest candidate prepared.
+Candidate counts are retained for reporting only. Cancellation and scheduler slices
+remain in place; a single synchronous chunk operation can still overrun a slice.
+The retired `search.maxSamples` setting is removed from saved configuration.
 
 Verification: randomized exhaustive comparisons cover mixed 32/24-chunk grids,
 chunk fallback, separation gaps, negative origins, and locate offsets. Further tests
-cover ties, continuation, finite ring positions, and advancing after failed checks.
+cover ties, retained frontier positions, finite ring positions, and advancing after failed checks.
 In-game checks still needed: paused progress, Search Listed, strongholds, visited
-filtering, cancellation/disconnection, and Keep searching (see paused-search-testing.md).
+filtering, cancellation/disconnection, and radius exhaustion (see paused-search-testing.md).
