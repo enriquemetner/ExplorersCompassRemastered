@@ -10,7 +10,15 @@ Build either benchmark branch with `./gradlew build --offline`. Install only one
 Explorer's Compass JAR at a time. Clearly labelled builds are in `build/comparison/`
 (untracked local artifacts). Do not merge benchmark branches into the release branch.
 
-Each completed search stage writes a `COMPASS_BENCH` line to Minecraft's
+Each completed search stage appends a CSV row to `logs/explorerscompass/baseline.csv`
+or `logs/explorerscompass/nearest-first.csv` inside the game's folder. With
+`./gradlew runClient`, these are under this project's `run/logs/explorerscompass/`.
+The files retain previous launches, include UTC timestamps, and are created after
+the first completed/cancelled stage. They can be opened in a spreadsheet or text
+editor. File writing happens after the elapsed-time measurement stops. Each stage
+also announces its output path in the normal log.
+
+Each completed search stage also writes a `COMPASS_BENCH` line to Minecraft's
 `logs/latest.log` (server log for multiplayer). It includes:
 - request id, requested structure/group, last checking worker, outcome and origin;
 - result coordinates and exact horizontal distance, or -1 for no result;
