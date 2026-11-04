@@ -25,6 +25,8 @@ public class SearchWorkerManager {
 	private List<StructureSearchWorker<?>> workers;
 	// Keep workers and their cursors across radius stages; index advances within the current stage.
 	private int index;
+    private BlockPos benchmarkOrigin;
+    private Identifier benchmarkSearch;
 
 	public SearchWorkerManager() {
 		workers = new ArrayList<StructureSearchWorker<?>>();
@@ -33,6 +35,9 @@ public class SearchWorkerManager {
 	public void createWorkers(ServerWorld world, PlayerEntity player, ItemStack stack, List<Structure> structures, Identifier structureOrGroupId, boolean excludeVisited, boolean creativeBypass, BlockPos startPos) {
 		workers.clear();
 		index = 0;
+        benchmarkOrigin = startPos;
+        benchmarkSearch = structureOrGroupId;
+        SearchBenchmark.begin(id, benchmarkOrigin, benchmarkSearch);
 
 		Map<StructurePlacement, List<Structure>> placementToStructuresMap = new Object2ObjectArrayMap<>();
 
@@ -59,6 +64,7 @@ public class SearchWorkerManager {
 
 	// Returns true if a worker starts, false otherwise
 	public boolean start() {
+        SearchBenchmark.begin(id, benchmarkOrigin, benchmarkSearch);
 		while (index < workers.size()) {
 			StructureSearchWorker<?> worker = workers.get(index);
 			if (worker.hasWork()) {
@@ -67,6 +73,7 @@ public class SearchWorkerManager {
 			}
 			index++;
 		}
+        SearchBenchmark.finish(id, "stage_exhausted", null);
 		return false;
 	}
 
@@ -75,6 +82,7 @@ public class SearchWorkerManager {
 	}
 
 	public void stop() {
+        SearchBenchmark.finish(id, "stopped", null);
 		for (StructureSearchWorker<?> worker : workers) {
 			worker.stop();
 		}

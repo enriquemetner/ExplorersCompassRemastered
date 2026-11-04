@@ -95,6 +95,12 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected Pair<BlockPos, Structure> getStructureGeneratingAt(ChunkPos chunkPos) {
+        long started = SearchBenchmark.check(managerId, getName());
+        try { return checkStructureGeneratingAt(chunkPos); }
+        finally { SearchBenchmark.checked(managerId, started); }
+    }
+
+    private Pair<BlockPos, Structure> checkStructureGeneratingAt(ChunkPos chunkPos) {
 		for (Structure structure : structureSet) {
             Identifier id = StructureUtils.getIDForStructure(level, structure);
             if (id == null || (!(creativeBypass && player.getAbilities().creativeMode)
@@ -106,6 +112,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 					return Pair.of(placement.getLocatePos(chunkPos), structure);
 				}
 
+				SearchBenchmark.chunkRequest(managerId);
 				Chunk chunk = level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.STRUCTURE_STARTS);
 				StructureStart structureStart = level.getStructureAccessor().getStructureStart(ChunkSectionPos.from(chunk), structure, chunk);
 				if (structureStart != null && structureStart.hasChildren() && !wasVisited(structure, structureStart.getPos())) {
@@ -125,6 +132,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void succeed(BlockPos pos, Structure structure) {
+        SearchBenchmark.finish(managerId, "found", pos);
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " succeeded with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
 			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, structure), pos.getX(), pos.getZ(), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
