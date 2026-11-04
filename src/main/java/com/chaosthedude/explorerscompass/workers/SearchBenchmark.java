@@ -11,7 +11,7 @@ import com.chaosthedude.explorerscompass.ExplorersCompass;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
-/** Temporary benchmark-only instrumentation. All access is on the server thread. */
+/** Search benchmark instrumentation. All access is on the server thread. */
 final class SearchBenchmark {
     private static final String VARIANT = readVariant();
     private static final Path RESULTS = FabricLoader.getInstance().getGameDir()

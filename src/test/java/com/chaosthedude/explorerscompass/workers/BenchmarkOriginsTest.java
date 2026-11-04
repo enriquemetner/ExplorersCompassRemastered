@@ -14,12 +14,4 @@ class BenchmarkOriginsTest {
             }
         }
     }
-    @Test void exclusionsUseStartChunkEvenWithUnusualLocateOffsetsAndNegativePositions() {
-        BlockPos offset=new BlockPos(25,0,-17);
-        BlockPos target=new BlockPos(-7*16+25,0,11*16-17);
-        var chunk=BenchmarkOrigins.startChunk(target,offset);
-        assertEquals(-7,chunk.x);assertEquals(11,chunk.z);
-        assertEquals(121,BenchmarkOrigins.startChunk(new BlockPos(1945,0,-199),new BlockPos(9,0,9)).x);
-        assertEquals(-13,BenchmarkOrigins.startChunk(new BlockPos(1945,0,-199),new BlockPos(9,0,9)).z);
-    }
 }

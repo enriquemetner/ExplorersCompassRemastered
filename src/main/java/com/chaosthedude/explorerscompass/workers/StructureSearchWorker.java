@@ -137,7 +137,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void succeed(BlockPos pos, Structure structure) {
-        if (BenchmarkAutomation.success(managerId, pos, structure)) { finished = true; return; }
+        if (BenchmarkAutomation.success(managerId, pos)) { finished = true; return; }
         SearchBenchmark.finish(managerId, "found", pos);
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " succeeded with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {

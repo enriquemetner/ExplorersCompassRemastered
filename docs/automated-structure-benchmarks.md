@@ -1,4 +1,4 @@
-# Automated structure searches (benchmark branch only)
+# Automated structure searches
 
 Prepare once: `python3 scripts/prepare-structure-benchmarks.py`.
 Run: `JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ./gradlew runStructureBenchmarks`.
@@ -12,7 +12,7 @@ Alex's Caves are Forge mods and are not part of this Fabric suite.
 Create a new creative default-generation world with cheats and a fixed seed. Do not
 use a previous benchmark world for a cold repeat. Keep the game unpaused and run:
 
-`/compassbench origins 20 30000`
+`/compassbench 20 30000`
 
 Runs 20 searches per available suite target at deterministic positions 80,000 blocks
 apart (first at 0,0), in the target's dimension. This samples independent origins
@@ -21,12 +21,8 @@ seed, dimension, exact origin, distance, elapsed time, candidate counts, placeme
 rejections, timeout and radius limits. A fresh timestamped CSV is written under
 `run-structure-benchmarks/logs/explorerscompass/automated/`.
 
-Alternatively `/compassbench distinct 20 20000` finds up to 20 distinct instances
-per type from 0,0. A temporary per-type start-chunk exclusion set replaces the need
-to physically visit structures. It is cleared between structure types and on exit;
-ordinary visit history, quests, player position and inventory are not modified.
-This measures the 1st through 20th unvisited result, not 20 independent nearest
-results. Distinct mode moves to the next type after a missing result or timeout.
+Each search ignores saved visits, so repeated tests do not require visiting targets
+and do not modify visit history, quests, inventory or player position.
 
 `/compassbench status` and `/compassbench stop` report or cancel a run.
 Player disconnect and server shutdown cancel the suite. Only one suite per server

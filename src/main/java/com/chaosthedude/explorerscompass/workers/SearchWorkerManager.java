@@ -78,7 +78,6 @@ public class SearchWorkerManager {
 	}
 
     String benchmarkId() { return id; }
-    StructurePlacement benchmarkPlacement() { return workers.get(index).placement; }
 
 	public void pop() {
 		index++;

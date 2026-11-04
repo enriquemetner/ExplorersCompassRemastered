@@ -1,14 +1,12 @@
 # Comparing the search algorithms
 
-Branches:
-- `codex/search-baseline`: unchanged algorithm at 178f8d9.
-- `codex/nearest-first`: clean nearest-first implementation.
-- `codex/search-baseline-benchmark`: baseline plus temporary measurements.
-- `codex/nearest-first-benchmark`: nearest-first plus the same measurement collector.
+Working branches:
+- `codex/search-baseline`: original algorithm with benchmark support.
+- `codex/nearest-first`: improved algorithm with benchmark support; ongoing development happens here.
 
-Build either benchmark branch with `./gradlew build --offline`. Install only one
+Build either branch with `./gradlew build --offline`. Install only one
 Explorer's Compass JAR at a time. Clearly labelled builds are in `build/comparison/`
-(untracked local artifacts). Do not merge benchmark branches into the release branch.
+(untracked local artifacts). Benchmark support is retained as part of the implementation.
 
 Each completed search stage appends a CSV row to `logs/explorerscompass/baseline-placement-filter.csv`
 or `logs/explorerscompass/nearest-first-placement-filter.csv` inside the game's folder. With
