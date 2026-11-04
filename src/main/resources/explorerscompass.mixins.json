@@ -5,7 +5,8 @@
   "mixins": [
     "FtbQuestEditMessageMixin",
     "FtbQuestFileMixin",
-    "PlayerAdvancementTrackerMixin"
+    "PlayerAdvancementTrackerMixin",
+    "StructureLocatorMixin"
   ],
   "client": [
     "HeldItemRendererMixin",
