@@ -15,8 +15,6 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.gen.chunk.placement.ConcentricRingsStructurePlacement;
-import net.minecraft.world.gen.chunk.placement.RandomSpreadStructurePlacement;
 import net.minecraft.world.gen.chunk.placement.StructurePlacement;
 import net.minecraft.world.gen.structure.Structure;
 
@@ -46,19 +44,12 @@ public class SearchWorkerManager {
 			}
 		}
 
-		for (Map.Entry<StructurePlacement, List<Structure>> entry : placementToStructuresMap.entrySet()) {
-			StructurePlacement placement = entry.getKey();
-			List<Structure> placementStructures = entry.getValue();
-
-			if (placement instanceof ConcentricRingsStructurePlacement) {
-				workers.add(new ConcentricRingsSearchWorker(world, player, stack, startPos, (ConcentricRingsStructurePlacement) placement, placementStructures, structureOrGroupId, excludeVisited, id));
-			} else if (placement instanceof RandomSpreadStructurePlacement) {
-				workers.add(new RandomSpreadSearchWorker(world, player, stack, startPos, (RandomSpreadStructurePlacement) placement, placementStructures, structureOrGroupId, excludeVisited, id));
-			} else {
-				workers.add(new GenericSearchWorker(world, player, stack, startPos, placement, placementStructures, structureOrGroupId, excludeVisited, id));
-			}
-			workers.get(workers.size() - 1).setCreativeBypass(creativeBypass);
-		}
+        if (!placementToStructuresMap.isEmpty()) {
+            StructureSearchWorker<?> worker = new NearestFirstSearchWorker(world, player, stack, startPos,
+                    placementToStructuresMap, structureOrGroupId, excludeVisited, id);
+            worker.setCreativeBypass(creativeBypass);
+            workers.add(worker);
+        }
 	}
 
 	public void setRadiusLimit(int radiusLimit) {
