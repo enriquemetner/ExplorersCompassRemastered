@@ -80,7 +80,11 @@ public class ExplorersCompass implements ModInitializer {
             com.chaosthedude.explorerscompass.unlocking.PartySharing.clear();
         });
         net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                com.chaosthedude.explorerscompass.unlocking.UnlockingCommands.register(dispatcher));
+                {
+                    com.chaosthedude.explorerscompass.unlocking.UnlockingCommands.register(dispatcher);
+                    com.chaosthedude.explorerscompass.workers.BenchmarkAutomation.register(dispatcher);
+                });
+        com.chaosthedude.explorerscompass.workers.BenchmarkAutomation.initialize();
 
 		Registry.register(Registries.ITEM, new Identifier(MODID, "explorerscompass"), EXPLORERS_COMPASS_ITEM);
 		Registry.register(Registries.RECIPE_SERIALIZER, new Identifier(MODID, "compass_repair"), COMPASS_REPAIR_SERIALIZER);

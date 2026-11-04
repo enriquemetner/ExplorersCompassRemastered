@@ -74,7 +74,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	public boolean canWorkAt(int radiusLimit) {
-		return !finished && samples < ExplorersCompassConfig.maxSamples && getRadius() < radiusLimit;
+		return !finished && samples < BenchmarkAutomation.sampleLimit(managerId, ExplorersCompassConfig.maxSamples) && getRadius() < radiusLimit;
 	}
 
 	@Override
@@ -128,6 +128,8 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	private boolean wasVisited(Structure structure, ChunkPos startChunk) {
+        Boolean benchmarkVisit = BenchmarkAutomation.visited(managerId, StructureUtils.getIDForStructure(level, structure), startChunk);
+        if (benchmarkVisit != null) return benchmarkVisit;
 		if (!excludeVisited) return false;
 		Identifier structureId = StructureUtils.getIDForStructure(level, structure);
 		return structureId != null && VisitedStructures.get(level.getServer()).hasVisited(player.getUuid(),
@@ -135,6 +137,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void succeed(BlockPos pos, Structure structure) {
+        if (BenchmarkAutomation.success(managerId, pos, structure)) { finished = true; return; }
         SearchBenchmark.finish(managerId, "found", pos);
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " succeeded with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
@@ -146,6 +149,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void fail() {
+        if (BenchmarkAutomation.failure(managerId)) return;
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " failed with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
 			((ExplorersCompassItem) stack.getItem()).fail(player, stack, structureOrGroupId, getRadius(), samples);

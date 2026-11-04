@@ -52,7 +52,7 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
     @Override public void setRadiusLimit(int radius) { super.setRadiusLimit(radius); stageComplete = false; }
     @Override public boolean hasWork() { return !finished && !stageComplete; }
     @Override public boolean canWorkAt(int radius) {
-        return !finished && samples < ExplorersCompassConfig.maxSamples
+        return !finished && samples < BenchmarkAutomation.sampleLimit(managerId, ExplorersCompassConfig.maxSamples)
                 && queue.nextDistanceSquared() < (long) radius * radius;
     }
     @Override public boolean doWork() {

@@ -65,10 +65,18 @@ final class SearchBenchmark {
         double elapsedMs = (System.nanoTime()-b.started)/1_000_000.0;
         double checkMs = b.checkNanos/1_000_000.0;
         try {
-            BenchmarkResults.append(RESULTS, Instant.now(), VARIANT, id, b.search, b.worker, outcome,
+            Object[] fields = new Object[]{ Instant.now(), VARIANT, id, b.search, b.worker, outcome,
                     b.origin.getX(), b.origin.getZ(), result == null ? null : result.getX(),
                     result == null ? null : result.getZ(), distance, elapsedMs, b.candidates,
-                    b.checks, b.chunkRequests, checkMs, b.placementRejections);
+                    b.checks, b.chunkRequests, checkMs, b.placementRejections};
+            Object[] metadata = BenchmarkAutomation.metadata(id);
+            if (metadata == null) BenchmarkResults.append(RESULTS, fields);
+            else {
+                Object[] all = java.util.Arrays.copyOf(fields, fields.length + metadata.length);
+                System.arraycopy(metadata, 0, all, fields.length, metadata.length);
+                BenchmarkResults.appendWithHeader(BenchmarkAutomation.output(id, RESULTS),
+                        BenchmarkResults.HEADER + ",mode,iteration,dimension,seed,radius_limit,timeout_seconds", all);
+            }
         } catch (IOException e) {
             ExplorersCompass.LOGGER.error("Could not write compass benchmark results to " + RESULTS, e);
         }
