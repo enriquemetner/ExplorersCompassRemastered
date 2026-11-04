@@ -44,6 +44,7 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
     }
 
     private NearestFirstQueue.Candidate<Target> candidate(StructurePlacement rule, List<Structure> structures, ChunkPos chunk) {
+        SearchBenchmark.candidate(managerId);
         BlockPos pos = rule.getLocatePos(chunk);
         return new NearestFirstQueue.Candidate<>(pos.getX(), pos.getZ(), new Target(rule, structures, chunk));
     }
