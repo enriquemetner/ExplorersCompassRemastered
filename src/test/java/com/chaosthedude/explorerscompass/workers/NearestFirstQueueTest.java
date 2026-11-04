@@ -83,4 +83,27 @@ class NearestFirstQueueTest {
         assertEquals("b",queue.advance().value());
         assertTrue(queue.isEmpty());
     }
+    @Test void checksCloserDiscoveryWithoutPreparingOriginalCandidatesWholeCircle() {
+        var queue = new NearestFirstQueue<String>(0,0);
+        int[] calculated = {0};
+        queue.addGrid(512,511,0,0,(x,z) -> {
+            calculated[0]++;
+            long px = x == -1 ? -1 : x*512L+400;
+            long pz = z == 0 ? 0 : z*512L+400;
+            if(x == 0 && z == 0) pz = 400;
+            return new NearestFirstQueue.Candidate<>(px,pz,x+","+z);
+        });
+        NearestFirstQueue.Candidate<String> first;
+        do { first = queue.advance(); } while(first == null);
+        assertEquals("-1,0",first.value());
+        assertTrue(calculated[0] <= 3, "Check the closer discovery before filling the original large circle");
+    }
+    @Test void handlesWorldEdgeCoordinatesWithoutDistanceOverflow() {
+        var queue = new NearestFirstQueue<String>(-29999999,29999999);
+        queue.addCandidate(new NearestFirstQueue.Candidate<>(29999999,-29999999,"far"));
+        queue.addCandidate(new NearestFirstQueue.Candidate<>(-29999998,29999999,"near"));
+        assertEquals("near",queue.advance().value());
+        assertTrue(queue.nextDistanceSquared() > Integer.MAX_VALUE);
+        assertEquals("far",queue.advance().value());
+    }
 }
