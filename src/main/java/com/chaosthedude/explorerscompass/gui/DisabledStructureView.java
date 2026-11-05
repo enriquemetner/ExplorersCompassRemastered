@@ -27,7 +27,7 @@ final class DisabledStructureView {
     static Text message(Availability availability) {
         if(availability.reason()==Availability.Reason.GENERIC)
             return Text.literal("A mod or datapack is preventing this structure from generating.");
-        return Text.literal("The mod ").append(Text.literal(availability.modName()).styled(s -> s.withItalic(true)))
+        return Text.literal("The mod ").append(Text.literal(availability.modName()).styled(s -> s.withItalic(true).withUnderline(false)))
                 .append(" disabled this structure's generation.");
     }
     private List<Line> lines(int width) {
@@ -39,7 +39,7 @@ final class DisabledStructureView {
                 append(result,Text.empty(),width,null);
                 append(result,Text.literal("Instead search:"),width,null);
                 for(Identifier replacement:entry.availability().replacements()) {
-                    append(result,Text.literal(StructureUtils.getStructureName(replacement)).styled(s -> s.withUnderline(true)),width,replacement);
+                    append(result,Text.literal(StructureUtils.getStructureName(replacement)),width,replacement);
                     append(result,Text.literal(replacement.toString()).styled(s -> s.withColor(0xaaaaaa)),width,replacement);
                     append(result,Text.empty(),width,null);
                 }
@@ -57,6 +57,9 @@ final class DisabledStructureView {
     private int height(int screenWidth,int screenHeight){return Math.min(Math.max(1,screenHeight-20),Math.max(120,lines(width(screenWidth)-28).size()*(renderer.fontHeight+3)+76));}
     private double maxScroll(List<Line> lines,int height){return Math.max(0,lines.size()*(renderer.fontHeight+3)-(height-76));}
     void scroll(double amount){scroll=Math.max(0,scroll-amount*(renderer.fontHeight+3)*3);}
+    private int buttonWidth(int width) { return Math.max(1,Math.min(70,(width-30)/2)); }
+    private int firstButtonX(int x,int width) { return x+(width-(single?2*buttonWidth(width)+8:buttonWidth(width)))/2; }
+    private int backButtonX(int x,int width) { return firstButtonX(x,width)+(single?buttonWidth(width)+8:0); }
     void render(DrawContext context,int sw,int sh,int mx,int my) {
         int w=width(sw),h=height(sw,sh),x=(sw-w)/2,y=(sh-h)/2;
         var lines=lines(w-28);scroll=MathHelper.clamp(scroll,0,maxScroll(lines,h));
@@ -78,8 +81,8 @@ final class DisabledStructureView {
             context.fill(x+w-7,y+32,x+w-5,y+h-44,0xff444444);
             context.fill(x+w-7,top,x+w-5,top+thumb,0xffaaaaaa);
         }
-        if(single)button(context,"Hide",x+10,y+h-30,Math.min(70,(w-30)/2),mx,my);
-        button(context,"Back",x+w-10-Math.min(70,(w-30)/2),y+h-30,Math.min(70,(w-30)/2),mx,my);
+        if(single)button(context,"Hide",firstButtonX(x,w),y+h-30,buttonWidth(w),mx,my);
+        button(context,"Back",backButtonX(x,w),y+h-30,buttonWidth(w),mx,my);
         context.getMatrices().pop();
     }
     private void button(DrawContext c,String text,int x,int y,int w,int mx,int my) {
@@ -88,10 +91,10 @@ final class DisabledStructureView {
     }
     void click(double mx,double my,int button,int sw,int sh) {
         if(button!=0)return;
-        int w=width(sw),h=height(sw,sh),x=(sw-w)/2,y=(sh-h)/2,bw=Math.min(70,(w-30)/2);
+        int w=width(sw),h=height(sw,sh),x=(sw-w)/2,y=(sh-h)/2,bw=buttonWidth(w);
         if(my>=y+h-30&&my<y+h-10) {
-            if(single&&mx>=x+10&&mx<x+10+bw){hide.run();return;}
-            if(mx>=x+w-10-bw&&mx<x+w-10){back.run();return;}
+            if(single&&mx>=firstButtonX(x,w)&&mx<firstButtonX(x,w)+bw){hide.run();return;}
+            if(mx>=backButtonX(x,w)&&mx<backButtonX(x,w)+bw){back.run();return;}
         }
         if(mx<x+10||mx>=x+w-10||my<y+30||my>=y+h-42)return;
         var lines=lines(w-28);scroll=MathHelper.clamp(scroll,0,maxScroll(lines,h));
