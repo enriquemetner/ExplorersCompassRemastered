@@ -51,7 +51,7 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SORT_ROW_HEIGHT = 20;
 	private static final int SORT_LABEL_GAP = 11;
 	private static final int SORT_HIGHLIGHT_PADDING = 4;
-	private static final int SEARCH_TELEPORT_GAP = 10;
+	private static final int HEADER_GAP = 10;
 	private static final int PREFERRED_FILTER_ROW_HEIGHT = 20;
 	private static final int FILTER_HEADER_HEIGHT = 20;
 	private static final int FILTER_HEADER_GAP = 1;
@@ -208,6 +208,7 @@ public class ExplorersCompassScreen extends Screen {
     private int searchRadius;
     private int failedRadius;
     private boolean failedCanContinue;
+    private final Set<Identifier> hiddenByFailedSearch = new HashSet<>();
     private Identifier searchedId;
     private boolean searchedGroup;
     private boolean searchedListed;
@@ -430,6 +431,20 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float partialTicks) {
+        // Covered layers still draw, but only the top layer gets the pointer.
+        final int offscreen = -10000;
+        boolean dialogExposed = entryDetails == null;
+        boolean filtersExposed = dialogExposed && dialog == Dialog.NONE;
+        boolean sortExposed = filtersExposed && entryFiltersId == null;
+        boolean pageExposed = sortExposed && !sortMenuOpen;
+        renderPage(context, pageExposed ? mouseX : offscreen, pageExposed ? mouseY : offscreen, partialTicks);
+        if (sortMenuOpen) renderSortMenu(context, sortExposed ? mouseX : offscreen, sortExposed ? mouseY : offscreen);
+        if (entryFiltersId != null) renderEntryFilters(context, filtersExposed ? mouseX : offscreen, filtersExposed ? mouseY : offscreen);
+        if (dialog != Dialog.NONE) renderSearchDialog(context, dialogExposed ? mouseX : offscreen, dialogExposed ? mouseY : offscreen);
+        if (entryDetails != null) entryDetails.render(context, width, height, mouseX, mouseY);
+    }
+
+    private void renderPage(DrawContext context, int mouseX, int mouseY, float partialTicks) {
         renderBackground(context);
 		if (filtersOpen) {
 			renderFilterPanel(context, mouseX, mouseY);
@@ -442,9 +457,9 @@ public class ExplorersCompassScreen extends Screen {
 		renderExcludeButton(context, excludeVisitedButton, "Exclude Visited", FilterSelections.excludeVisited(), mouseX, mouseY);
 		renderExcludeButton(context, excludeLockedButton, "Exclude Locked", FilterSelections.excludeLocked(), mouseX, mouseY);
         renderExcludeButton(context, newlyUnlockedButton, "Newly Unlocked", FilterSelections.newlyUnlocked(), mouseX, mouseY);
-        if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY) && dialog == Dialog.NONE)
+        if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY))
             drawQuestionTooltip(context, "Shows only structures unlocked in your most recent unlocking event.", mouseX, mouseY);
-		if (entryDetails == null && searchListedButton.visible && searchListedButton.isMouseOver(mouseX, mouseY)) {
+		if (searchListedButton.visible && searchListedButton.isMouseOver(mouseX, mouseY)) {
 			drawQuestionTooltip(context, "Searches for any structure from the current list after applied filters and search bar results.", mouseX, mouseY);
 		}
 		renderCrossIcon(context, cancelButton);
@@ -469,10 +484,7 @@ public class ExplorersCompassScreen extends Screen {
 			renderSettingsTooltip(context, mouseX, mouseY);
 		}
 
-		if (sortMenuOpen) renderSortMenu(context, mouseX, mouseY);
-		if (entryFiltersId != null) renderEntryFilters(context, mouseX, mouseY);
-        if (dialog != Dialog.NONE) renderSearchDialog(context, mouseX, mouseY);
-		if (entryDetails != null) entryDetails.render(context, width, height, mouseX, mouseY);
+
 	}
 
 	private int sortMenuWidth() {
@@ -1626,7 +1638,9 @@ public class ExplorersCompassScreen extends Screen {
     }
 
 	private void dismissDialog() {
-        if (dialog == Dialog.DISABLED) {
+        if (dialog == Dialog.DISABLED || dialog == Dialog.NOT_FOUND) {
+            if (hiddenByFailedSearch.contains(navigationTarget)) navigationTarget = null;
+            hiddenByFailedSearch.clear();
             pendingHiddenStructures.clear();
             processSearchTerm();
             disabledView = null;
@@ -1642,6 +1656,8 @@ public class ExplorersCompassScreen extends Screen {
 
     private void keepSearching() {
         if (!failedCanContinue || dialog != Dialog.NOT_FOUND || client.getNetworkHandler() == null) return;
+        hiddenByFailedSearch.clear();
+        finalizePendingHides();
         failedCanContinue = false;
         searchRadius = failedRadius;
         dialog = Dialog.SEARCHING;
@@ -1650,23 +1666,25 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private void hideFailedSearch() {
-        if (searchedListed) {
-            for (Identifier id : listedSearchIds) {
-                if (!ExplorersCompassConfig.hiddenStructures.contains(id.toString())) ExplorersCompassConfig.hiddenStructures.add(id.toString());
+        if (hiddenByFailedSearch.isEmpty()) {
+            List<Identifier> targets;
+            if (searchedListed) targets = listedSearchIds;
+            else if (searchedId == null) return;
+            else if (searchedGroup) targets = allowedStructureIDs.stream()
+                    .filter(id -> searchedId.equals(ExplorersCompass.structureIDsToGroupIDs.get(id))).toList();
+            else targets = List.of(searchedId);
+            for (Identifier id : targets) {
+                if (isStructureHidden(id)) continue;
+                ExplorersCompassConfig.hiddenStructures.add(id.toString());
+                hiddenByFailedSearch.add(id);
+                pendingHiddenStructures.add(id);
             }
-        } else if (searchedId == null) return;
-        else if (searchedGroup) {
-            for (Identifier id : allowedStructureIDs) {
-                if (searchedId.equals(ExplorersCompass.structureIDsToGroupIDs.get(id)) && !ExplorersCompassConfig.hiddenStructures.contains(id.toString())) {
-                    ExplorersCompassConfig.hiddenStructures.add(id.toString());
-                }
-            }
-        } else if (!ExplorersCompassConfig.hiddenStructures.contains(searchedId.toString())) {
-            ExplorersCompassConfig.hiddenStructures.add(searchedId.toString());
+        } else {
+            for (Identifier id : hiddenByFailedSearch) ExplorersCompassConfig.hiddenStructures.remove(id.toString());
+            pendingHiddenStructures.removeAll(hiddenByFailedSearch);
+            hiddenByFailedSearch.clear();
         }
         ExplorersCompassConfig.saveHiddenStructures();
-        dismissDialog();
-        processSearchTerm();
     }
 
     private int dialogWidth() {
@@ -1696,12 +1714,12 @@ public class ExplorersCompassScreen extends Screen {
     private int notFoundKeepX() { return dialogX() + (dialogWidth() - KEEP_SEARCHING_BUTTON_WIDTH - NOT_FOUND_BUTTON_GAP - HIDE_BUTTON_WIDTH) / 2; }
     private int notFoundHideX() { return notFoundKeepX() + KEEP_SEARCHING_BUTTON_WIDTH + NOT_FOUND_BUTTON_GAP; }
     private int notFoundBackY() { return notFoundHideY() + 23; }
-	private int foundBackX() {
+	private int foundTeleportX() {
 		int count = showTeleportButton() ? 3 : 2;
 		return dialogX() + (dialogWidth() - FOUND_ACTION_BUTTON_WIDTH * count - FOUND_ACTION_BUTTON_GAP * (count - 1)) / 2;
 	}
-	private int foundTeleportX() { return foundBackX() + FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP; }
-	private int foundCloseX() { return foundBackX() + (showTeleportButton() ? 2 : 1) * (FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP); }
+	private int foundBackX() { return foundTeleportX() + (showTeleportButton() ? FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP : 0); }
+	private int foundCloseX() { return foundBackX() + FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP; }
 	private int foundActionsY() { return dialogY() + 94; }
     private Text wrongDimensionCountText() {
         return Text.literal("Wrong dimension: " + listedSkippedCount + "   Disabled: " + listedDisabledCount);
@@ -1745,30 +1763,6 @@ public class ExplorersCompassScreen extends Screen {
         context.fill(x, y, x + w, y + 20, enabled ? 0xff909090 : 0xff505050);
         context.fill(x + 1, y + 1, x + w - 1, y + 19, enabled && mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + 20 ? 0xff424242 : 0xff242424);
         context.drawCenteredTextWithShadow(textRenderer, label, x + w / 2, y + 6, enabled ? 0xffffff : 0xff808080);
-    }
-
-    private boolean insideQuestionIcon(int mouseX, int mouseY, int iconX, int iconY) {
-        return (mouseX - iconX) * (mouseX - iconX) + (mouseY - iconY) * (mouseY - iconY) <= 49;
-    }
-
-    private void drawQuestionIcon(DrawContext context, int iconX, int iconY) {
-        int color = 0xff909090;
-        context.fill(iconX - 2, iconY - 6, iconX + 3, iconY - 5, color);
-        context.fill(iconX - 2, iconY + 6, iconX + 3, iconY + 7, color);
-        for (int dy = -5; dy <= 5; dy += 10) {
-            context.fill(iconX - 4, iconY + dy, iconX - 2, iconY + dy + 1, color);
-            context.fill(iconX + 3, iconY + dy, iconX + 5, iconY + dy + 1, color);
-        }
-        for (int dy = -4; dy <= 4; dy++) {
-            if (Math.abs(dy) < 3) continue;
-            context.fill(iconX - 5, iconY + dy, iconX - 4, iconY + dy + 1, color);
-            context.fill(iconX + 5, iconY + dy, iconX + 6, iconY + dy + 1, color);
-        }
-        for (int dy = -2; dy <= 2; dy++) {
-            context.fill(iconX - 6, iconY + dy, iconX - 5, iconY + dy + 1, color);
-            context.fill(iconX + 6, iconY + dy, iconX + 7, iconY + dy + 1, color);
-        }
-        context.drawText(textRenderer, "?", iconX - textRenderer.getWidth("?") / 2 + 1, iconY - textRenderer.fontHeight / 2 + 1, color, false);
     }
 
     private void drawQuestionTooltip(DrawContext context, String message, int mouseX, int mouseY) {
@@ -1915,12 +1909,14 @@ public class ExplorersCompassScreen extends Screen {
                     if ((listedSkippedCount > 0 || listedDisabledCount > 0)) context.drawCenteredTextWithShadow(textRenderer, wrongDimensionCountText(), x + w / 2, y + 59, 0xffffff);
                 }
                 int hideX = notFoundHideX();
-                int iconX = hideX + HIDE_BUTTON_WIDTH - 12;
-                int iconY = y + notFoundHideY() + 10;
-                drawDialogButton(context, Text.literal("Keep Searching").getString(), notFoundKeepX(), y + notFoundHideY(), KEEP_SEARCHING_BUTTON_WIDTH, mouseX, mouseY, failedCanContinue);
-                drawDialogButton(context, Text.literal(searchedListed ? "Hide All" : "Hide").getString(), hideX, y + notFoundHideY(), HIDE_BUTTON_WIDTH, mouseX, mouseY);
-                drawQuestionIcon(context, iconX, iconY);
-                if (insideQuestionIcon(mouseX, mouseY, iconX, iconY)) drawQuestionTooltip(context, searchedListed ? "Removes all searched structures from the list on this client, across all worlds and servers. You can undo this in Settings." : "Removes the structure from the list on this client, across all worlds and servers. You can undo this in Settings.", mouseX, mouseY);
+                int hideY = y + notFoundHideY();
+                boolean canUndo = !hiddenByFailedSearch.isEmpty();
+                drawDialogButton(context, "Keep Searching", notFoundKeepX(), hideY, KEEP_SEARCHING_BUTTON_WIDTH, mouseX, mouseY, failedCanContinue);
+                drawDialogButton(context, canUndo ? "Undo" : searchedListed ? "Hide All" : "Hide", hideX, hideY, HIDE_BUTTON_WIDTH, mouseX, mouseY);
+                if (!canUndo && mouseX >= hideX && mouseX < hideX + HIDE_BUTTON_WIDTH && mouseY >= hideY && mouseY < hideY + 20) {
+                    String tooltip = searchedListed ? "Removes all searched structures from the list on this client, across all worlds and servers. You can undo this in Settings." : EntryDetailsPopup.HIDE_TOOLTIP;
+                    context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(tooltip), Math.max(1, Math.min(220, width - 30))), mouseX, mouseY);
+                }
             }
             if (dialog == Dialog.NOT_FOUND || dialog == Dialog.REJECTED) {
                 drawDialogButton(context, Text.literal("Back").getString(), x + (w - 70) / 2, y + (dialog == Dialog.NOT_FOUND ? notFoundBackY() : 57), 70, mouseX, mouseY);
@@ -2158,7 +2154,7 @@ public class ExplorersCompassScreen extends Screen {
 			client.setScreen(null);
 		}));
 
-		teleportButton = addDrawableChild(new TransparentButton(10, 10, searchButton.getWidth(), 20, Text.literal("Teleport"), (onPress) -> {
+		teleportButton = addDrawableChild(new TransparentButton(10, height - 55, searchButton.getWidth(), 20, Text.literal("Teleport"), (onPress) -> {
 			teleport();
 		}));
 		teleportButton.active = false;
@@ -2202,8 +2198,8 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void setupTextFields() {
 		int searchX = selectionList.getRowLeft();
-		int rightButtonX = showTeleportButton() && teleportButton.getY() == 10 ? teleportButton.getX() : cancelButton.getX();
-		int availableWidth = Math.max(1, rightButtonX - searchX - SEARCH_TELEPORT_GAP);
+
+		int availableWidth = Math.max(1, cancelButton.getX() - searchX - HEADER_GAP);
 		searchTextField = new TransparentTextField(textRenderer, searchX, 10, availableWidth, 20, Text.literal("Search"));
 		searchTextField.setText(sessionSearchText);
 		searchTextField.setChangedListener(value -> {
@@ -2221,7 +2217,7 @@ public class ExplorersCompassScreen extends Screen {
 		});
 		addDrawableChild(filterSearchTextField);
 		filterSearchTextField.setVisible(filtersOpen);
-		int headerEnd = backButton.getX() - SEARCH_TELEPORT_GAP;
+		int headerEnd = backButton.getX() - HEADER_GAP;
 		int hiddenSearchX = Math.min(10 + textRenderer.getWidth(Text.literal("Settings > Hidden Structures")) + 10,
 				Math.max(10, headerEnd - 80));
 		hiddenSearchTextField = new TransparentTextField(textRenderer, hiddenSearchX, 10,
@@ -2268,7 +2264,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int filterSearchWidth(int searchX) {
-		return Math.max(1, backButton.getX() - searchX - SEARCH_TELEPORT_GAP);
+		return Math.max(1, backButton.getX() - searchX - HEADER_GAP);
 	}
 
 	private void positionFilterSearchField() {
@@ -2283,13 +2279,7 @@ public class ExplorersCompassScreen extends Screen {
 		settingsButton.setY(height - 30);
         hiddenStructuresButton.setX(settingsControlX());
         hiddenStructuresButton.setY(settingsRowY(SETTINGS_HIDDEN_ROW));
-		if (width >= 480) {
-			teleportButton.setX(cancelButton.getX() - teleportButton.getWidth() - 5);
-			teleportButton.setY(10);
-		} else {
-			teleportButton.setX(10);
-			teleportButton.setY(height - 55);
-		}
+		teleportButton.setY(settingsButton.getY() - teleportButton.getHeight() - 5);
 		backButton.setX(cancelButton.getX() - backButton.getWidth() - 5);
 		clearFiltersTopButton.setX(width - 10 - clearFiltersTopButton.getWidth());
 		clearFiltersTopButton.setY(40);
@@ -2300,8 +2290,8 @@ public class ExplorersCompassScreen extends Screen {
         newlyUnlockedButton.setX(excludeLockedButton.getX() + excludeLockedButton.getWidth() + 5);
         newlyUnlockedButton.setY(40);
 		if (searchTextField != null) {
-			int rightEdge = showTeleportButton() && teleportButton.getY() == 10 ? teleportButton.getX() : cancelButton.getX();
-			searchTextField.setWidth(Math.max(1, rightEdge - searchTextField.getX() - SEARCH_TELEPORT_GAP));
+
+			searchTextField.setWidth(Math.max(1, cancelButton.getX() - searchTextField.getX() - HEADER_GAP));
 		}
 	}
 

@@ -1,7 +1,5 @@
 package com.chaosthedude.explorerscompass.gui;
 
-import java.util.Objects;
-
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.util.RenderUtils;
 import net.fabricmc.api.EnvType;
@@ -47,6 +45,13 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		return Math.min(bottom, top + Math.max(1, (bottom - top) / itemHeight) * itemHeight);
 	}
 
+	// Give the last visible row the spare pixels left by whole-number row heights.
+	private int displayedRowBottom(int index) {
+		int end = getRowBottom(index);
+		int fittedBottom = fullRowsBottom();
+		return fittedBottom < bottom && getRowTop(index) < fittedBottom && end >= fittedBottom ? Math.max(bottom, end) : end;
+	}
+
 	@Override
 	public int getMaxScroll() {
 		if (!ExplorersCompassConfig.adjustRowsToFitView) {
@@ -62,7 +67,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 
 	@Override
 	public boolean isMouseOver(double mouseX, double mouseY) {
-		return super.isMouseOver(mouseX, mouseY) && (mouseY < fullRowsBottom() || mouseX >= getScrollbarPositionX())
+		return super.isMouseOver(mouseX, mouseY)
 				|| getMaxScroll() > 0 && mouseX >= getScrollbarPositionX() && mouseX < getScrollbarPositionX() + SCROLLBAR_WIDTH
 						&& mouseY >= top && mouseY <= bottom;
 	}
@@ -86,7 +91,12 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (mouseX < getScrollbarPositionX() && mouseY >= fullRowsBottom() && mouseY < bottom) {
-			return false;
+			// Vanilla resolves clicks using uniform row heights. Route the extension to its row.
+			StructureSearchEntry row = getEntryAtPosition(mouseX, fullRowsBottom() - 1);
+			if (row == null || !row.mouseClicked(mouseX, mouseY, button)) return false;
+			setFocused(row);
+			setDragging(button == 0);
+			return true;
 		}
 		Scrollbar scrollbar = scrollbar();
 		if (button == 0 && scrollbar.contains(mouseX, mouseY)) {
@@ -131,36 +141,32 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float partialTicks) {
 		int rowsBottom = fullRowsBottom();
-		context.enableScissor(left, top, right, rowsBottom);
+		context.enableScissor(left, top, right, bottom);
         // Render backgrounds
         for (int i = 0; i < getEntryCount(); ++i) {
-            if (getRowBottom(i) >= top && getRowTop(i) <= rowsBottom) {
+            if (getRowBottom(i) >= top && getRowTop(i) < rowsBottom) {
                 StructureSearchEntry entry = getEntry(i);
 				int opacity = parentScreen.isStructureLocked(entry.getStructureID())
 						? RenderUtils.LOCKED_ENTRY_BACKGROUND_OPACITY_PERCENT
 						: RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT;
                 int fillColor = RenderUtils.blackWithOpacity(opacity);
-                context.fill(getRowLeft(), getRowTop(i), right, getRowBottom(i), fillColor);
+                context.fill(getRowLeft(), getRowTop(i), right, displayedRowBottom(i), fillColor);
             }
         }
         // Render entries
         for (int i = 0; i < getEntryCount(); ++i) {
             int entryTop = getRowTop(i);
-            int entryBottom = getRowBottom(i);
-            if (entryBottom >= top && entryTop <= rowsBottom) {
+            int entryBottom = displayedRowBottom(i);
+            if (entryBottom >= top && entryTop < rowsBottom) {
                 StructureSearchEntry entry = getEntry(i);
-                boolean isHovering = isMouseOver(mouseX, mouseY) && Objects.equals(getEntryAtPosition(mouseX, mouseY), entry);
-				entry.render(context, i, entryTop, getRowLeft(), getRowWidth(), itemHeight, mouseX, mouseY, isHovering, partialTicks);
+                boolean isHovering = isMouseOver(mouseX, mouseY) && mouseY >= entryTop && mouseY < entryBottom;
+				entry.render(context, i, entryTop, getRowLeft(), getRowWidth(), entryBottom - entryTop, mouseX, mouseY, isHovering, partialTicks);
 				if (entry == getSelectedOrNull()) {
 					context.fill(getRowLeft(), entryTop, getRowLeft() + 1, entryBottom, 0xffffffff);
 				}
             }
         }
         context.disableScissor();
-		if (rowsBottom < bottom) {
-			context.fill(getRowLeft(), rowsBottom, right, bottom,
-					RenderUtils.blackWithOpacity(RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT));
-		}
         // Render scrollbar
 		scrollbar().render(context);
 	}
@@ -243,10 +249,11 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		int index = children().indexOf(entry);
 		if (index < 0) return false;
 		int buttonX = getRowLeft() + getRowWidth() - parentScreen.rowActionButtonWidth() - 7;
-		int buttonY = getRowTop(index) + (itemHeight - (ACTION_BUTTON_HEIGHT * 2 + ACTION_BUTTON_GAP)) / 2
+		int rowHeight = displayedRowBottom(index) - getRowTop(index);
+		int buttonY = getRowTop(index) + (rowHeight - (ACTION_BUTTON_HEIGHT * 2 + ACTION_BUTTON_GAP)) / 2
 				+ (filter ? 0 : ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP);
 		return mouseX >= buttonX && mouseX < buttonX + parentScreen.rowActionButtonWidth()
-				&& mouseY >= Math.max(buttonY, top) && mouseY < Math.min(buttonY + ACTION_BUTTON_HEIGHT, fullRowsBottom());
+				&& mouseY >= Math.max(buttonY, top) && mouseY < Math.min(buttonY + ACTION_BUTTON_HEIGHT, bottom);
 	}
 
 	public boolean containsStructure(Identifier id) {
