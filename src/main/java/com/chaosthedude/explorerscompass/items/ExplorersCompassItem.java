@@ -190,16 +190,19 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
-    private List<Identifier> searchableInDimension(ServerWorld world, List<Identifier> ids) {
-        List<Identifier> allowed = StructureUtils.getAllowedStructureIDs(world);
-        List<Identifier> searchable = new ArrayList<>();
-        for (Identifier id : ids) {
-            Structure structure = StructureUtils.getStructureForID(world, id);
-            if (allowed.contains(id) && structure != null && StructureUtils.getGeneratingDimensionIDs(world, structure).contains(world.getRegistryKey().getValue())) {
-                searchable.add(id);
-            }
+    private List<Identifier> availableForSearch(ServerWorld world, PlayerEntity player, List<Identifier> ids, int requestId) {
+        var selection = com.chaosthedude.explorerscompass.availability.AvailabilitySelection.classify(ids,
+                id -> com.chaosthedude.explorerscompass.availability.StructureAvailability.check(world,id));
+        com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.send((ServerPlayerEntity)player,requestId,selection);
+        if (selection.eligible().isEmpty()) {
+            cancelSearch(player,-1);
+            // Disabled entries have their own persistent popup. Do not overwrite it with a terminal result.
+            if (selection.disabled().isEmpty()) rejectWrongDimension(player,requestId);
+            else if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend((ServerPlayerEntity)player,
+                    com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.ID))
+                SearchResultPacket.send((ServerPlayerEntity)player,requestId,SearchResultPacket.REJECTED,0);
         }
-        return searchable;
+        return selection.eligible();
     }
 
 	private boolean rejectIfInsufficientXp(PlayerEntity player, int requestId) {
@@ -312,11 +315,11 @@ public class ExplorersCompassItem extends Item {
             List<Identifier> structureIds = List.of(structureOrGroupId);
 
 			List<Structure> structures = new ArrayList<Structure>();
-            structureIds = searchableInDimension(world, structureIds);
-            if (structureIds.isEmpty()) {
-				rejectWrongDimension(player, requestId);
-                return;
+            if (!StructureUtils.getAllowedStructureIDs(world).contains(structureOrGroupId)) {
+                SearchResultPacket.send((ServerPlayerEntity)player,requestId,SearchResultPacket.REJECTED,0); return;
             }
+            structureIds = availableForSearch(world, player, structureIds, requestId);
+            if (structureIds.isEmpty()) return;
 			if (rejectIfInsufficientXp(player, requestId)) return;
             SearchSession session = beginSearch(world, player, stack, requestId, structureOrGroupId, creativeBypass);
             setSearching(stack, structureOrGroupId);
@@ -353,11 +356,8 @@ public class ExplorersCompassItem extends Item {
             SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.REJECTED, 0);
             return;
         }
-        List<Identifier> searchable = searchableInDimension(world, uniqueIds);
-        if (searchable.size() != uniqueIds.size()) {
-            rejectWrongDimension(player, requestId);
-            return;
-        }
+        List<Identifier> searchable = availableForSearch(world, player, uniqueIds, requestId);
+        if (searchable.isEmpty()) return;
 		if (rejectIfInsufficientXp(player, requestId)) return;
         List<Structure> structures = new ArrayList<>();
         for (Identifier id : searchable) structures.add(StructureUtils.getStructureForID(world, id));

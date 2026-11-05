@@ -25,6 +25,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(SyncPacket.ID, ClientPacketHandlers::applySync);
 		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, ClientPacketHandlers::applySearchResult);
 		ClientPlayNetworking.registerGlobalReceiver(SearchProgressPacket.ID, ClientPacketHandlers::applySearchProgress);
+        ClientPlayNetworking.registerGlobalReceiver(com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.ID, ClientPacketHandlers::applySearchAvailability);
 		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, ClientPacketHandlers::applyUnlockToast);
 		ClientPlayNetworking.registerGlobalReceiver(RepairDurabilityPacket.ID, ClientPacketHandlers::applyRepairDurability);
 		ClientPlayNetworking.registerGlobalReceiver(RulesChangedPacket.ID, ClientPacketHandlers::applyRulesChanged);

@@ -188,7 +188,10 @@ public class ExplorersCompassScreen extends Screen {
             ? "The unlocking requirements of Explorer's Compass have been changed.\n\nSome previously unlocked structures may be locked again."
             : "The unlocking requirements of Explorer's Compass have been changed.\n\nAll your unlocked structures remain unlocked.");
     }
-    private enum Dialog { INFO, NONE, LOCKED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, REJECTED }
+    private DisabledStructureView disabledView;
+    private int listedDisabledCount;
+    private Identifier navigationTarget;
+    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, REJECTED }
     private Dialog dialog = Dialog.NONE;
     private LockedRequirementsView lockedRequirementsView;
     private Identifier lockedRequirementsId;
@@ -288,6 +291,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseScrolled(double scroll1, double scroll2, double scroll3) {
+        if (dialog == Dialog.DISABLED) { disabledView.scroll(scroll3); return true; }
 		if (entryDetails != null) { entryDetails.scroll(scroll3, width, height); return true; }
 		if (entryFiltersId != null) {
 			List<EntryFilterRow> rows = entryFilterRows();
@@ -1187,6 +1191,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private boolean handleMouseClicked(double mouseX, double mouseY, int button) {
+        if (dialog == Dialog.DISABLED) { disabledView.click(mouseX,mouseY,button,width,height); return true; }
 		if (entryDetails != null) { entryDetails.click(mouseX, mouseY, button, width, height); return true; }
 		if (entryFiltersId != null) return clickEntryFilters(mouseX, mouseY, button);
 		if (sortMenuOpen) return clickSortMenu(mouseX, mouseY, button);
@@ -1371,6 +1376,8 @@ public class ExplorersCompassScreen extends Screen {
                 if (dialog != Dialog.LOCKED || !lockedRequirementsView.closeQuestPopup()) dismissDialog();
             }
             else if (dialog == Dialog.LOCKED) lockedRequirementsView.keyPressed(par1);
+            else if (dialog == Dialog.DISABLED && (par1 == 264 || par1 == 265 || par1 == 266 || par1 == 267))
+                disabledView.scroll(par1 == 264 || par1 == 267 ? -1 : 1);
             return true;
         }
 		if (isStructureView() && !sortMenuOpen) {
@@ -1494,33 +1501,18 @@ public class ExplorersCompassScreen extends Screen {
 		return !filtersOpen && !settingsOpen && !hiddenStructuresOpen;
 	}
 
-    private boolean validDimension(Identifier id, boolean group) {
-        Identifier current = world.getRegistryKey().getValue();
-        if (!group) return ExplorersCompass.allowedStructureIDsToDimensionIDs.get(id).contains(current);
-        for (Identifier member : allowedStructureIDs) {
-            if (id.equals(ExplorersCompass.structureIDsToGroupIDs.get(member))
-                    && ExplorersCompass.allowedStructureIDsToDimensionIDs.get(member).contains(current)) return true;
-        }
-        return false;
-    }
-
     private boolean beginSearch(Identifier id, boolean group) {
         if (dialog != Dialog.NONE || id == null) return false;
         if (isStructureLocked(id)) {
             showLockedRequirements(id, ExplorersCompass.lockedRequirements.get(id));
             return false;
         }
-        if (!validDimension(id, group)) {
-            showWrongDimension();
-            return false;
-        }
-        if (!canAffordSearch()) {
-            showInsufficientXp(ExplorersCompass.defaultXpCost);
-            return false;
-        }
+
         searchedId = id;
         searchedGroup = group;
         searchedListed = false;
+        listedDisabledCount = 0;
+        listedSkippedCount = 0;
         listedSearchIds = List.of();
         activeRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
         searchRadius = 0;
@@ -1547,27 +1539,42 @@ public class ExplorersCompassScreen extends Screen {
                     Text.literal("There are no unlocked structures in the current list."), false, java.util.List.of()));
             return;
         }
-        List<Identifier> eligible = new ArrayList<>();
-        for (Identifier id : selected) if (validDimension(id, false)) eligible.add(id);
-        if (eligible.isEmpty()) {
-            showWrongDimension();
-            return;
-        }
-        if (!canAffordSearch()) {
-            showInsufficientXp(ExplorersCompass.defaultXpCost);
-            return;
-        }
+        List<Identifier> eligible = selected;
         searchedListed = true;
         searchedGroup = false;
         searchedId = null;
         listedSearchIds = List.copyOf(eligible);
         listedSelectedCount = selected.size();
-        listedSkippedCount = selected.size() - eligible.size();
+        listedSkippedCount = 0;
+        listedDisabledCount = 0;
         activeRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
         searchRadius = 0;
         dialog = Dialog.SEARCHING;
         dialogStarted = System.currentTimeMillis();
         ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(eligible, FilterSelections.excludeVisited(), ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
+    }
+
+    public void onSearchAvailability(com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.Response response) {
+        if (!response.appliesTo(activeRequestId,dialog == Dialog.SEARCHING)) return;
+        listedSkippedCount = response.wrongDimension();
+        listedDisabledCount = response.disabled().size();
+        if (searchedListed) listedSearchIds = response.eligibleIds();
+        if (response.eligible() == 0 && !response.disabled().isEmpty()) {
+            dialog = Dialog.DISABLED;
+            disabledView = new DisabledStructureView(textRenderer,response.disabled(),!searchedListed,
+                    this::dismissDialog,() -> {
+                        Identifier id = response.disabled().get(0).structure();
+                        if (!isStructureHidden(id)) toggleStructureHidden(id);
+                        dismissDialog();processSearchTerm();
+                    },this::navigateToReplacement);
+        }
+    }
+    private void navigateToReplacement(Identifier id) {
+        dismissDialog();
+        navigationTarget = id;
+        searchTextField.setText(StructureUtils.getStructureName(id));
+        processSearchTerm();
+        selectionList.focusStructure(id);
     }
 
     public void onSearchProgress(int requestId, int radius) {
@@ -1606,11 +1613,6 @@ public class ExplorersCompassScreen extends Screen {
         } else {
             dialog = Dialog.REJECTED;
         }
-    }
-
-    private boolean canAffordSearch() {
-        return ExplorersCompass.infiniteXp || ExplorersCompass.allowSearchWithoutEnoughXp
-                || client.player == null || client.player.experienceLevel >= ExplorersCompass.defaultXpCost;
     }
 
     private void showInsufficientXp(int cost) {
@@ -1685,8 +1687,8 @@ public class ExplorersCompassScreen extends Screen {
         if (dialog == Dialog.NOT_FOUND) return Math.min(width - 20, Math.max(245, textRenderer.getWidth(Text.literal("Couldn't locate structure within " + failedRadius + " blocks")) + 16));
         return Math.min(width - 20, 245);
     }
-    private int searchingBackY() { return searchedListed ? (listedSkippedCount > 0 ? 89 : 77) : 65; }
-    private int notFoundHideY() { return searchedListed ? (listedSkippedCount > 0 ? 78 : 66) : 52; }
+    private int searchingBackY() { return searchedListed ? ((listedSkippedCount > 0 || listedDisabledCount > 0) ? 89 : 77) : 65; }
+    private int notFoundHideY() { return searchedListed ? ((listedSkippedCount > 0 || listedDisabledCount > 0) ? 78 : 66) : 52; }
     private int notFoundKeepX() { return dialogX() + (dialogWidth() - KEEP_SEARCHING_BUTTON_WIDTH - NOT_FOUND_BUTTON_GAP - HIDE_BUTTON_WIDTH) / 2; }
     private int notFoundHideX() { return notFoundKeepX() + KEEP_SEARCHING_BUTTON_WIDTH + NOT_FOUND_BUTTON_GAP; }
     private int notFoundBackY() { return notFoundHideY() + 23; }
@@ -1697,7 +1699,9 @@ public class ExplorersCompassScreen extends Screen {
 	private int foundTeleportX() { return foundBackX() + FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP; }
 	private int foundCloseX() { return foundBackX() + (showTeleportButton() ? 2 : 1) * (FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP); }
 	private int foundActionsY() { return dialogY() + 94; }
-    private Text wrongDimensionCountText() { return Text.literal("Wrong dimension for " + listedSkippedCount + (listedSkippedCount == 1 ? " structure" : " structures")); }
+    private Text wrongDimensionCountText() {
+        return Text.literal("Wrong dimension: " + listedSkippedCount + "   Disabled: " + listedDisabledCount);
+    }
     private int dialogHeight() { if (dialog == Dialog.INFO) return textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68; return dialog == Dialog.WRONG_DIMENSION ? textRenderer.fontHeight + 12 : dialog == Dialog.INSUFFICIENT_XP ? textRenderer.fontHeight * 2 + 16 : dialog == Dialog.SEARCHING ? searchingBackY() + 25 : dialog == Dialog.FOUND ? 119 : dialog == Dialog.NOT_FOUND ? notFoundBackY() + 25 : 80; }
     private int dialogX() { return (width - dialogWidth()) / 2; }
     private int dialogY() { return (height - dialogHeight()) / 2; }
@@ -1800,6 +1804,7 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private void renderSearchDialog(DrawContext context, int mouseX, int mouseY) {
+        if (dialog == Dialog.DISABLED) { disabledView.render(context,width,height,mouseX,mouseY); return; }
         if (dialog == Dialog.LOCKED) {
             lockedRequirementsView.render(context, width, height, mouseX, mouseY);
             return;
@@ -1831,9 +1836,9 @@ public class ExplorersCompassScreen extends Screen {
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Locating..."), x + w / 2, y + 32, 0xffffff);
             if (searchedListed) {
                 context.drawCenteredTextWithShadow(textRenderer, Text.literal(listedSelectedCount + " structures selected"), x + w / 2, y + 47, 0xffffff);
-                if (listedSkippedCount > 0) context.drawCenteredTextWithShadow(textRenderer, wrongDimensionCountText(), x + w / 2, y + 59, 0xffffff);
+                if ((listedSkippedCount > 0 || listedDisabledCount > 0)) context.drawCenteredTextWithShadow(textRenderer, wrongDimensionCountText(), x + w / 2, y + 59, 0xffffff);
             }
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Distance").getString() + ": " + searchRadius, x + w / 2, y + (searchedListed ? (listedSkippedCount > 0 ? 74 : 59) : 47), 0xffffff);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Distance").getString() + ": " + searchRadius, x + w / 2, y + (searchedListed ? ((listedSkippedCount > 0 || listedDisabledCount > 0) ? 74 : 59) : 47), 0xffffff);
             drawDialogButton(context, Text.literal("Back").getString(), x + (w - 70) / 2, y + searchingBackY(), 70, mouseX, mouseY);
         } else if (dialog == Dialog.FOUND) {
             double yaw = client.player == null ? 0.0D : client.player.getYaw() % 360.0D;
@@ -1903,7 +1908,7 @@ public class ExplorersCompassScreen extends Screen {
             if (dialog == Dialog.NOT_FOUND) {
                 if (searchedListed) {
                     context.drawCenteredTextWithShadow(textRenderer, Text.literal(listedSelectedCount + " structures selected"), x + w / 2, y + 47, 0xffffff);
-                    if (listedSkippedCount > 0) context.drawCenteredTextWithShadow(textRenderer, wrongDimensionCountText(), x + w / 2, y + 59, 0xffffff);
+                    if ((listedSkippedCount > 0 || listedDisabledCount > 0)) context.drawCenteredTextWithShadow(textRenderer, wrongDimensionCountText(), x + w / 2, y + 59, 0xffffff);
                 }
                 int hideX = notFoundHideX();
                 int iconX = hideX + HIDE_BUTTON_WIDTH - 12;
@@ -1993,6 +1998,9 @@ public class ExplorersCompassScreen extends Screen {
 		structureIDsMatchingSearch = new ArrayList<Identifier>();
 		String searchTerm = searchTextField.getText().toLowerCase(Locale.ROOT);
 		for (Identifier id : allowedStructureIDs) {
+            if (id.equals(navigationTarget) && searchTerm.equals(StructureUtils.getStructureName(id).toLowerCase(Locale.ROOT))) {
+                structureIDsMatchingSearch.add(id);continue;
+            }
 			if ((isStructureHidden(id) && !pendingHiddenStructures.contains(id)) || !FilterSelections.matches(id)
 					|| (FilterSelections.excludeLocked() && isStructureLocked(id))) {
 				continue;
@@ -2195,6 +2203,7 @@ public class ExplorersCompassScreen extends Screen {
 		searchTextField = new TransparentTextField(textRenderer, searchX, 10, availableWidth, 20, Text.literal("Search"));
 		searchTextField.setText(sessionSearchText);
 		searchTextField.setChangedListener(value -> {
+            if (navigationTarget != null && !value.equals(StructureUtils.getStructureName(navigationTarget))) navigationTarget = null;
 			selectionList.setSelected(null);
 			processSearchTerm();
 		});

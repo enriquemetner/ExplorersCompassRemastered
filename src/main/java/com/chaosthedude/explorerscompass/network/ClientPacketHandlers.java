@@ -30,6 +30,12 @@ public final class ClientPacketHandlers {
     public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
     public static boolean pendingNoticeRelocked;
 
+    public static void applySearchAvailability(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
+        var response = SearchAvailabilityPacket.read(buf);
+        client.execute(() -> {
+            if (client.currentScreen instanceof ExplorersCompassScreen screen) screen.onSearchAvailability(response);
+        });
+    }
     public static void applyUnlockToast(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         int count = buf.readVarInt();
         boolean party = buf.readBoolean();

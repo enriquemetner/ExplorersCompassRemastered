@@ -6,7 +6,8 @@
     "FtbQuestEditMessageMixin",
     "FtbQuestFileMixin",
     "PlayerAdvancementTrackerMixin",
-    "StructureLocatorMixin"
+    "StructureLocatorMixin",
+    "StructurePlacementAccessor"
   ],
   "client": [
     "HeldItemRendererMixin",
