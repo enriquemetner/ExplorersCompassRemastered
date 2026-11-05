@@ -1310,6 +1310,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
+        if (dialog == Dialog.DISABLED) { disabledView.drag(mouseY, width, height); return true; }
 		if (entryDetails != null) { entryDetails.drag(mouseY, width, height); return true; }
 		if (entryFiltersId != null) return true;
         if (dialog == Dialog.LOCKED) { lockedRequirementsView.drag(mouseY); return true; }
@@ -1335,6 +1336,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (dialog == Dialog.DISABLED) { disabledView.release(); return true; }
 		if (entryDetails != null) { entryDetails.release(); return true; }
 		if (entryFiltersId != null) return true;
         if (draggingStructureScrollbar && button == 0) {
@@ -1562,11 +1564,8 @@ public class ExplorersCompassScreen extends Screen {
         if (response.eligible() == 0 && !response.disabled().isEmpty()) {
             dialog = Dialog.DISABLED;
             disabledView = new DisabledStructureView(textRenderer,response.disabled(),!searchedListed,
-                    this::dismissDialog,() -> {
-                        Identifier id = response.disabled().get(0).structure();
-                        if (!isStructureHidden(id)) toggleStructureHidden(id);
-                        dismissDialog();processSearchTerm();
-                    },this::navigateToReplacement);
+                    this::dismissDialog,() -> toggleStructureHidden(response.disabled().get(0).structure()),
+                    () -> isStructureHidden(response.disabled().get(0).structure()),this::navigateToReplacement);
         }
     }
     private void navigateToReplacement(Identifier id) {
@@ -1627,6 +1626,11 @@ public class ExplorersCompassScreen extends Screen {
     }
 
 	private void dismissDialog() {
+        if (dialog == Dialog.DISABLED) {
+            pendingHiddenStructures.clear();
+            processSearchTerm();
+            disabledView = null;
+        }
         if ((dialog == Dialog.SEARCHING || (dialog == Dialog.NOT_FOUND && failedCanContinue)) && client.getNetworkHandler() != null) {
             ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(activeRequestId));
         }

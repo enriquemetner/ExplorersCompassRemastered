@@ -20,7 +20,7 @@ final class EntryDetailsPopup {
     private static final int COPY_HEIGHT = StructureSearchList.ACTION_BUTTON_HEIGHT;
     private final int copyWidth;
     private static final int ACTION_WIDTH = 70;
-    private static final String HIDE_TOOLTIP = "Removes the structure from the list on this client, across all worlds and servers. You can undo this in Settings.";
+    static final String HIDE_TOOLTIP = "Removes the structure from the list on this client, across all worlds and servers. You can undo this in Settings.";
     private final MinecraftClient client;
     private final TextRenderer textRenderer;
     private final List<Detail> details = new ArrayList<>();
