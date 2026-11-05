@@ -48,7 +48,8 @@ Validation:
   neither optional mod (including actual zero-frequency and wrong-dimension checks).
   A real disabled search request created no session and changed neither XP nor durability.
   The Structurify test used Fabric API 0.92.0 solely for its configuration-library
-  dependency. The project remains on its original Fabric API dependency.
+  dependency. That validation preceded the development runtime update; current dependency
+  versions are recorded in gradle.properties.
 - Other YUNG mappings were source-verified and exercised with config fixtures;
   they were not all separately installed for runtime checks.
 
