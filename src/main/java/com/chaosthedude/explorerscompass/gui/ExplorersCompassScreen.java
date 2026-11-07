@@ -280,15 +280,24 @@ public class ExplorersCompassScreen extends Screen {
 		return ExplorersCompassConfig.pauseGameWhenOpen;
 	}
 
+	public static void clearWorldSearchState() {
+		sessionSearchText = "";
+		FilterSelections.clear();
+	}
+
 	@Override
 	public void removed() {
-        if ((dialog == Dialog.SEARCHING || (dialog == Dialog.NOT_FOUND && failedCanContinue)) && !successfulClose && client.getNetworkHandler() != null) {
+        var handler = client.getNetworkHandler();
+        boolean connected = handler != null && handler.getConnection().isOpen();
+        if ((dialog == Dialog.SEARCHING || (dialog == Dialog.NOT_FOUND && failedCanContinue)) && !successfulClose && connected) {
             ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(activeRequestId));
         }
 		if (ExplorersCompassConfig.clearFiltersOnClose) {
 			FilterSelections.clear();
 		}
-		sessionSearchText = ExplorersCompassConfig.clearSearchBarOnClose ? "" : searchTextField.getText();
+		if (connected) {
+			sessionSearchText = ExplorersCompassConfig.clearSearchBarOnClose ? "" : searchTextField.getText();
+		}
 		pendingHiddenStructures.clear();
 		hiddenSearchText = "";
 		super.removed();

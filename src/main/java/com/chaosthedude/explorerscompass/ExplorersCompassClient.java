@@ -1,5 +1,6 @@
 package com.chaosthedude.explorerscompass;
 
+import com.chaosthedude.explorerscompass.gui.ExplorersCompassScreen;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
 import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
@@ -30,6 +31,8 @@ public class ExplorersCompassClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(RepairDurabilityPacket.ID, ClientPacketHandlers::applyRepairDurability);
 		ClientPlayNetworking.registerGlobalReceiver(RulesChangedPacket.ID, ClientPacketHandlers::applyRulesChanged);
         ClientPlayNetworking.registerGlobalReceiver(com.chaosthedude.explorerscompass.network.PartyRefreshPacket.ID, ClientPacketHandlers::applyPartyRefresh);
+        // Minecraft can discard queued client work during disconnect.
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ExplorersCompassScreen.clearWorldSearchState());
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             CompassRepairRecipe.clearServerDurability();
             needle.clear();
@@ -37,7 +40,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
             ClientPacketHandlers.pendingNoticeRevision = 0;
             ClientPacketHandlers.latestUnlockedStructures = java.util.Set.of();
             ClientPacketHandlers.showNewlyUnlockedFilter = false;
-            com.chaosthedude.explorerscompass.gui.FilterSelections.clearNewlyUnlocked();
+            client.execute(ExplorersCompassScreen::clearWorldSearchState);
         });
 		
 		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM, new Identifier("angle"), needle);
