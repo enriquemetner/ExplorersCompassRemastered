@@ -26,6 +26,8 @@ import net.minecraft.world.gen.structure.Structure;
 
 public abstract class StructureSearchWorker<T extends StructurePlacement> implements WorldWorkerManager.IWorker {
 
+	private static final int PROGRESS_INTERVAL_BLOCKS = 100;
+
 	protected String managerId;
     private final EmptyChunkCache storageCache = new EmptyChunkCache();
 	protected ServerWorld level;
@@ -87,11 +89,12 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	@Override
 	public boolean doWork() {
 		int radius = getRadius();
-		if (radius > 250 && radius / 250 > lastRadiusThreshold) {
+		int threshold = radius / PROGRESS_INTERVAL_BLOCKS;
+		if (threshold > lastRadiusThreshold) {
 			if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-				((ExplorersCompassItem) stack.getItem()).reportSearchProgress(player, stack, roundRadius(radius, 250));
+				((ExplorersCompassItem) stack.getItem()).reportSearchProgress(player, stack, roundRadius(radius, PROGRESS_INTERVAL_BLOCKS));
 			}
-			lastRadiusThreshold = radius / 250;
+			lastRadiusThreshold = threshold;
 		}
 		return false;
 	}
