@@ -7,7 +7,10 @@ import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
-/** Search progress must not depend on inventory synchronization, which stops while paused. */
+/**
+ * Sent with radius zero when a search starts, then with updated distances.
+ * Search progress must not depend on inventory synchronization, which stops while paused.
+ */
 public class SearchProgressPacket extends PacketByteBuf {
     public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "search_progress");
 

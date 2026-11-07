@@ -328,8 +328,9 @@ public class ExplorersCompassItem extends Item {
 			}
 			session.workers.createWorkers(world, player, stack, structures, structureOrGroupId, excludeVisited, creativeBypass, pos);
 			session.workers.setRadiusLimit(session.radiusLimit);
-			boolean started = session.workers.start();
-			if (!started) {
+			if (session.workers.start()) {
+				SearchProgressPacket.send((ServerPlayerEntity) player, requestId, 0);
+			} else {
 				fail(player, stack, structureOrGroupId, 0, 0);
 			}
 
@@ -366,7 +367,11 @@ public class ExplorersCompassItem extends Item {
         setSearching(stack, firstId);
 		session.workers.createWorkers(world, player, stack, structures, firstId, excludeVisited, creativeBypass, pos);
         session.workers.setRadiusLimit(session.radiusLimit);
-        if (!session.workers.start()) fail(player, stack, firstId, 0, 0);
+        if (session.workers.start()) {
+            SearchProgressPacket.send((ServerPlayerEntity) player, requestId, 0);
+        } else {
+            fail(player, stack, firstId, 0, 0);
+        }
     }
 
     // Retain the packet entry point for older clients, but searches no longer have continuation stages.
