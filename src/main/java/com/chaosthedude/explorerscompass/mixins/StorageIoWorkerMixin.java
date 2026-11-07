@@ -3,6 +3,9 @@ package com.chaosthedude.explorerscompass.mixins;
 import com.chaosthedude.explorerscompass.storage.EmptyChunkCache;
 import com.chaosthedude.explorerscompass.storage.EmptyChunkStorage;
 import com.mojang.datafixers.util.Either;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -51,16 +54,7 @@ public abstract class StorageIoWorkerMixin implements EmptyChunkStorage {
                 return this.<long[]>run(() -> {
                     try {
                         // Both header and pending-save map are read exclusively on Minecraft's IO executor.
-                        RegionFile file = ((RegionBasedStorageAccessor) (Object) storage).explorerscompass$getRegionFile(pos);
-                        long[] occupied = new long[16];
-                        int baseX = pos.x & ~31, baseZ = pos.z & ~31;
-                        for (int index = 0; index < 1024; index++) {
-                            ChunkPos chunk = new ChunkPos(baseX + (index & 31), baseZ + (index >> 5));
-                            if (file.hasChunk(chunk) || results.containsKey(chunk)) {
-                                occupied[index >>> 6] |= 1L << (index & 63);
-                            }
-                        }
-                        return Either.left(occupied);
+                        return Either.left(explorerscompass$snapshotRegion(pos));
                     } catch (Exception exception) {
                         return Either.right(exception);
                     }
@@ -70,5 +64,36 @@ public abstract class StorageIoWorkerMixin implements EmptyChunkStorage {
                 return null;
             }
         });
+    }
+
+    @Unique
+    private long[] explorerscompass$snapshotRegion(ChunkPos pos) throws IOException {
+        var regionStorage = (RegionBasedStorageAccessor) (Object) storage;
+        int regionX = pos.getRegionX();
+        int regionZ = pos.getRegionZ();
+        long[] occupied = new long[16];
+        // Preserve the normal lookup for open files and paths whose absence we cannot confirm.
+        if (!regionStorage.explorerscompass$getCachedRegionFiles().containsKey(ChunkPos.toLong(regionX, regionZ))
+                && Files.notExists(regionStorage.explorerscompass$getDirectory().resolve(
+                        "r." + regionX + "." + regionZ + RegionBasedStorage.MCA_EXTENSION), LinkOption.NOFOLLOW_LINKS)) {
+            for (ChunkPos pending : results.keySet()) {
+                if (pending.getRegionX() == regionX && pending.getRegionZ() == regionZ) {
+                    int index = pending.getRegionRelativeX() + (pending.getRegionRelativeZ() << 5);
+                    occupied[index >>> 6] |= 1L << (index & 63);
+                }
+            }
+            return occupied;
+        }
+
+        RegionFile file = regionStorage.explorerscompass$getRegionFile(pos);
+        int baseX = pos.x & ~31;
+        int baseZ = pos.z & ~31;
+        for (int index = 0; index < 1024; index++) {
+            ChunkPos chunk = new ChunkPos(baseX + (index & 31), baseZ + (index >> 5));
+            if (file.hasChunk(chunk) || results.containsKey(chunk)) {
+                occupied[index >>> 6] |= 1L << (index & 63);
+            }
+        }
+        return occupied;
     }
 }
