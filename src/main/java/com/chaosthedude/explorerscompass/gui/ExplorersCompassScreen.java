@@ -1689,10 +1689,10 @@ public class ExplorersCompassScreen extends Screen {
 
     private int dialogWidth() {
         if (dialog == Dialog.WRONG_DIMENSION) {
-            return Math.min(width - 20, textRenderer.getWidth(Text.literal("You're in the wrong dimension, buddy!")) + 12);
+            return Math.min(width - 20, textRenderer.getWidth(Text.literal("You're in the wrong dimension")) + 12);
         }
         if (dialog == Dialog.INSUFFICIENT_XP) {
-            return Math.min(width - 20, Math.max(textRenderer.getWidth(Text.literal("You don't have enough levels, buddy!")), xpCostLineWidth()) + 12);
+            return Math.min(width - 20, Math.max(textRenderer.getWidth(Text.literal("Not enough experience")), xpCostLineWidth()) + 12);
         }
         if (dialog == Dialog.FOUND) {
             int leftWidth = 0;
@@ -1729,7 +1729,7 @@ public class ExplorersCompassScreen extends Screen {
     private int dialogY() { return (height - dialogHeight()) / 2; }
 
     private int xpCostLineWidth() {
-        return textRenderer.getWidth(Text.literal("XP Cost:")) + 3
+        return textRenderer.getWidth(Text.literal("Level cost:")) + 3
                 + 5 + 3 + textRenderer.getWidth(Integer.toString(insufficientXpCost));
     }
 
@@ -1871,10 +1871,10 @@ public class ExplorersCompassScreen extends Screen {
 			}
             drawDialogButton(context, Text.literal("Close").getString(), foundCloseX(), foundActionsY(), FOUND_ACTION_BUTTON_WIDTH, mouseX, mouseY);
         } else if (dialog == Dialog.INSUFFICIENT_XP) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("You don't have enough levels, buddy!"), x + w / 2, y + 6, 0xffff4444);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Not enough experience"), x + w / 2, y + 6, 0xffff4444);
             int lineX = x + (w - xpCostLineWidth()) / 2;
             int lineY = y + 10 + textRenderer.fontHeight;
-            Text costLabel = Text.literal("XP Cost:");
+            Text costLabel = Text.literal("Level cost:");
             context.drawTextWithShadow(textRenderer, costLabel, lineX, lineY, 0xffffff);
             int orbX = lineX + textRenderer.getWidth(costLabel) + 3;
             int orbSize = 5;
@@ -1883,7 +1883,7 @@ public class ExplorersCompassScreen extends Screen {
             context.drawTexture(orbTexture, orbX, lineY + (textRenderer.fontHeight - orbSize) / 2, orbSize, orbSize, 0, 0, 16, 16, 16, 16);
             context.drawTextWithShadow(textRenderer, Integer.toString(insufficientXpCost), orbX + orbSize + 3, lineY, 0x80ff20);
         } else {
-            Text message = dialog == Dialog.WRONG_DIMENSION ? Text.literal("You're in the wrong dimension, buddy!")
+            Text message = dialog == Dialog.WRONG_DIMENSION ? Text.literal("You're in the wrong dimension")
                 : dialog == Dialog.NOT_FOUND ? Text.literal("Couldn't locate structure within " + failedRadius + " blocks")
                 : Text.literal("Search could not start");
             if (dialog == Dialog.NOT_FOUND) {
