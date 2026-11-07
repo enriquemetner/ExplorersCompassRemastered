@@ -21,6 +21,7 @@ import com.chaosthedude.explorerscompass.network.SearchListedPacket;
 import com.chaosthedude.explorerscompass.network.CancelSearchPacket;
 import com.chaosthedude.explorerscompass.network.ContinueSearchPacket;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
+import com.chaosthedude.explorerscompass.unlocking.RequirementNode;
 import com.chaosthedude.explorerscompass.network.RefreshCompassPacket;
 import com.chaosthedude.explorerscompass.network.TeleportPacket;
 import com.chaosthedude.explorerscompass.sorting.SortCriterion;
@@ -1534,11 +1535,6 @@ public class ExplorersCompassScreen extends Screen {
 
     private boolean beginSearch(Identifier id, boolean group) {
         if (dialog != Dialog.NONE || id == null) return false;
-        if (isStructureLocked(id)) {
-            showLockedRequirements(id, ExplorersCompass.lockedRequirements.get(id));
-            return false;
-        }
-
         searchedId = id;
         searchedGroup = group;
         searchedListed = false;
@@ -1564,17 +1560,10 @@ public class ExplorersCompassScreen extends Screen {
         List<Identifier> selected = structureIDsMatchingSearch.stream().filter(id -> !isStructureHidden(id)).toList();
 		finalizePendingHides();
         if (selected.isEmpty()) return;
-        selected = selected.stream().filter(id -> !isStructureLocked(id)).toList();
-        if (selected.isEmpty()) {
-            showLockedRequirements(null, new com.chaosthedude.explorerscompass.unlocking.RequirementNode(
-                    Text.literal("There are no unlocked structures in the current list."), false, java.util.List.of()));
-            return;
-        }
-        List<Identifier> eligible = selected;
         searchedListed = true;
         searchedGroup = false;
         searchedId = null;
-        listedSearchIds = List.copyOf(eligible);
+        listedSearchIds = List.copyOf(selected);
         listedSelectedCount = selected.size();
         listedSkippedCount = 0;
         listedDisabledCount = 0;
@@ -1582,14 +1571,17 @@ public class ExplorersCompassScreen extends Screen {
         searchRadius = 0;
         searchConfirmed = false;
         dialog = Dialog.SEARCHING;
-        ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(eligible, FilterSelections.excludeVisited(), ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
+        ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(selected, FilterSelections.excludeVisited(), ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
     }
 
     public void onSearchAvailability(com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.Response response) {
         if (!response.appliesTo(activeRequestId,dialog == Dialog.SEARCHING)) return;
         listedSkippedCount = response.wrongDimension();
         listedDisabledCount = response.disabled().size();
-        if (searchedListed) listedSearchIds = response.eligibleIds();
+        if (searchedListed) {
+            listedSearchIds = response.eligibleIds();
+            listedSelectedCount = response.eligible() + listedSkippedCount + listedDisabledCount;
+        }
         if (response.eligible() == 0 && !response.disabled().isEmpty()) {
             dialog = Dialog.DISABLED;
             disabledView = new DisabledStructureView(textRenderer,response.disabled(),!searchedListed,
@@ -1614,7 +1606,7 @@ public class ExplorersCompassScreen extends Screen {
         searchRadius = Math.max(searchRadius, radius);
     }
 
-    public void onSearchResult(int requestId, int result, int radius, boolean canContinue, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance) {
+    public void onSearchResult(int requestId, int result, int radius, boolean canContinue, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, RequirementNode requirements) {
         if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
         if (result == SearchResultPacket.FOUND) {
             if (ExplorersCompassConfig.closeOnFound) {
@@ -1638,6 +1630,8 @@ public class ExplorersCompassScreen extends Screen {
             notFoundCompassAngle = 0.0D;
             notFoundCompassSpeed = 0.0D;
             dialog = Dialog.NOT_FOUND;
+        } else if (result == SearchResultPacket.LOCKED) {
+            showLockedRequirements(searchedId, requirements);
         } else if (result == SearchResultPacket.WRONG_DIMENSION) {
             showWrongDimension();
         } else if (result == SearchResultPacket.INSUFFICIENT_XP) {
@@ -1802,7 +1796,7 @@ public class ExplorersCompassScreen extends Screen {
         questReturnScroll = selectionList.getScrollAmount();
     }
 
-    private void showLockedRequirements(Identifier id, com.chaosthedude.explorerscompass.unlocking.RequirementNode requirements) {
+    private void showLockedRequirements(Identifier id, RequirementNode requirements) {
         lockedRequirementsId = id;
         lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements, this::rememberQuestBookReturn);
         dialog = Dialog.LOCKED;

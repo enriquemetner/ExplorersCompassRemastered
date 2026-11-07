@@ -82,13 +82,14 @@ public final class ClientPacketHandlers {
             displayCoordinates = buf.readBoolean();
             displayDistance = buf.readBoolean();
         }
+        RequirementNode requirements = result == SearchResultPacket.LOCKED ? RequirementNode.read(buf) : null;
         final Identifier resultId = foundId;
         final int resultX = foundX, resultZ = foundZ;
         final boolean showCoordinates = displayCoordinates;
         final boolean showDistance = displayDistance;
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onSearchResult(requestId, result, radius, canContinue, resultId, resultX, resultZ, showCoordinates, showDistance);
+                screen.onSearchResult(requestId, result, radius, canContinue, resultId, resultX, resultZ, showCoordinates, showDistance, requirements);
             }
         });
     }

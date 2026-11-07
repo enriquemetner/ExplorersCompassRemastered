@@ -37,7 +37,6 @@ public class SearchPacket extends PacketByteBuf {
 		server.execute(() -> {
 			final ItemStack stack = ItemUtils.getHeldItem(player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
 			if (!stack.isEmpty()) {
-                ExplorersCompass.EXPLORERS_COMPASS_ITEM.ensureHolder(player, stack);
 				final ExplorersCompassItem explorersCompass = (ExplorersCompassItem) stack.getItem();
 				final ServerWorld world = (ServerWorld) player.getEntityWorld();
 				explorersCompass.searchForStructure(world, player, player.getBlockPos(), structureOrGroupId, isGroup, excludeVisited, creativeUnlocksAll, stack, requestId);

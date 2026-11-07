@@ -24,10 +24,18 @@ class AvailabilityTest {
         assertTrue(Availability.canGenerate(true,List.of(false,true)),"Another enabled or unknown custom placement must survive");
     }
     @Test void listedSkipsAndDeduplicatesWithoutLosingEligibleEntries() {
-        Identifier wrong=new Identifier("test:wrong"),disabled=new Identifier("test:disabled");
-        var result=AvailabilitySelection.classify(List.of(target,wrong,disabled,target),id -> id.equals(target)?Availability.available():id.equals(wrong)?Availability.wrongDimension():Availability.generic());
-        assertEquals(List.of(target),result.eligible());assertEquals(1,result.wrongDimension());
-        assertEquals(disabled,result.disabled().get(0).structure());
+        Identifier wrong = new Identifier("test:wrong");
+        Identifier disabled = new Identifier("test:disabled");
+        Identifier lockedElsewhere = new Identifier("test:locked_elsewhere");
+        var result = AvailabilitySelection.classify(List.of(target, wrong, disabled, lockedElsewhere, target),
+                id -> id.equals(disabled) ? Availability.generic()
+                        : id.equals(target) ? Availability.available() : Availability.wrongDimension(),
+                Set.of(target, wrong)::contains);
+
+        assertEquals(List.of(target), result.eligible());
+        assertEquals(List.of(disabled), result.disabled().stream().map(AvailabilitySelection.Disabled::structure).toList());
+        assertEquals(1, result.locked());
+        assertEquals(1, result.wrongDimension());
     }
     public static class General {
         public boolean disableVanillaPyramids,disableVanillaJungleTemples,disableVanillaWitchHuts,disableVanillaMonuments,disableVanillaFortresses;

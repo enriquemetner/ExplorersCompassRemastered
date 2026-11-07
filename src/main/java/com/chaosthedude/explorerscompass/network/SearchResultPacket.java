@@ -1,6 +1,7 @@
 package com.chaosthedude.explorerscompass.network;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.unlocking.RequirementNode;
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.PacketByteBuf;
@@ -9,7 +10,7 @@ import net.minecraft.util.Identifier;
 
 public class SearchResultPacket extends PacketByteBuf {
     public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "search_result");
-    public static final int FOUND = 0, NOT_FOUND = 1, REJECTED = 2, WRONG_DIMENSION = 3, INSUFFICIENT_XP = 4;
+    public static final int FOUND = 0, NOT_FOUND = 1, REJECTED = 2, WRONG_DIMENSION = 3, INSUFFICIENT_XP = 4, LOCKED = 5;
 
     public SearchResultPacket(int requestId, int result, int radius, boolean canContinue, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance) {
         super(Unpooled.buffer());
@@ -25,6 +26,12 @@ public class SearchResultPacket extends PacketByteBuf {
             writeBoolean(displayCoordinates);
             writeBoolean(displayDistance);
         }
+    }
+
+    public static void sendLocked(ServerPlayerEntity player, int requestId, RequirementNode requirements) {
+        SearchResultPacket packet = new SearchResultPacket(requestId, LOCKED, 0, false, null, 0, 0, false, false);
+        requirements.write(packet);
+        ServerPlayNetworking.send(player, ID, packet);
     }
 
     public static void send(ServerPlayerEntity player, int requestId, int result, int radius) {

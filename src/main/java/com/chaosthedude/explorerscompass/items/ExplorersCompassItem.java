@@ -5,17 +5,20 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.Map;
-import java.util.LinkedHashSet;
 import com.chaosthedude.explorerscompass.util.CompassTransfer;
 import com.chaosthedude.explorerscompass.util.CompassSearchData;
 import com.chaosthedude.explorerscompass.unlocking.UnlockedStructures;
 import com.chaosthedude.explorerscompass.unlocking.UnlockNotifications;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.availability.AvailabilitySelection;
+import com.chaosthedude.explorerscompass.availability.StructureAvailability;
+import com.chaosthedude.explorerscompass.unlocking.RequirementNode;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.gui.GuiWrapper;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
+import com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
 import com.chaosthedude.explorerscompass.network.SearchProgressPacket;
 import com.chaosthedude.explorerscompass.util.CompassState;
@@ -190,18 +193,32 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
-    private List<Identifier> availableForSearch(ServerWorld world, PlayerEntity player, List<Identifier> ids, int requestId) {
-        var selection = com.chaosthedude.explorerscompass.availability.AvailabilitySelection.classify(ids,
-                id -> com.chaosthedude.explorerscompass.availability.StructureAvailability.check(world,id));
-        com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.send((ServerPlayerEntity)player,requestId,selection);
-        if (selection.eligible().isEmpty()) {
-            cancelSearch(player,-1);
-            // Disabled entries have their own persistent popup. Do not overwrite it with a terminal result.
-            if (selection.disabled().isEmpty()) rejectWrongDimension(player,requestId);
-            else if (!net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking.canSend((ServerPlayerEntity)player,
-                    com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.ID))
-                SearchResultPacket.send((ServerPlayerEntity)player,requestId,SearchResultPacket.REJECTED,0);
+    private List<Identifier> availableForSearch(ServerWorld world, ServerPlayerEntity player, List<Identifier> ids,
+                                                boolean creativeBypass, boolean listed, int requestId) {
+        var selection = AvailabilitySelection.classify(ids, id -> StructureAvailability.check(world, id),
+                id -> creativeBypass || UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), id));
+        if (selection.eligible().isEmpty() && !selection.disabled().isEmpty()) {
+            cancelSearch(player, -1);
+            if (ServerPlayNetworking.canSend(player, SearchAvailabilityPacket.ID)) {
+                SearchAvailabilityPacket.send(player, requestId, selection);
+            } else {
+                SearchResultPacket.send(player, requestId, SearchResultPacket.REJECTED, 0);
+            }
+            return List.of();
         }
+        if (selection.eligible().isEmpty() && selection.locked() > 0) {
+            RequirementNode requirements = listed
+                    ? new RequirementNode(Text.literal("No unlocked structures in the list are available in this dimension."), false, List.of())
+                    : UnlockingRules.get().lockedRequirements(player, ids).get(ids.get(0));
+            SearchResultPacket.sendLocked(player, requestId, requirements);
+            return List.of();
+        }
+        if (rejectIfInsufficientXp(player, requestId)) return List.of();
+        if (selection.eligible().isEmpty()) {
+            rejectWrongDimension(player, requestId);
+            return List.of();
+        }
+        SearchAvailabilityPacket.send(player, requestId, selection);
         return selection.eligible();
     }
 
@@ -304,71 +321,40 @@ public class ExplorersCompassItem extends Item {
 		return MathHelper.hsvToRgb(Math.max(0.0F, (1.0F - f) / 3.0F), 1.0F, 1.0F);
 	}
 
-	public void searchForStructure(ServerWorld world, PlayerEntity player, BlockPos pos, Identifier structureOrGroupId, boolean isGroup, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
-        ensureHolder((ServerPlayerEntity) player, stack);
-        boolean creativeBypass = creativeUnlocksAll && player.getAbilities().creativeMode;
-        if (isGroup || (!creativeBypass && !UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), structureOrGroupId))) {
-            SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.REJECTED, 0);
+    public void searchForStructure(ServerWorld world, PlayerEntity player, BlockPos pos, Identifier structureOrGroupId, boolean isGroup, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
+        ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+        if (isGroup || isBroken(stack) || !StructureUtils.getAllowedStructureIDs(world).contains(structureOrGroupId)) {
+            SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
             return;
         }
-		if (!isBroken(stack)) {
-            List<Identifier> structureIds = List.of(structureOrGroupId);
-
-			List<Structure> structures = new ArrayList<Structure>();
-            if (!StructureUtils.getAllowedStructureIDs(world).contains(structureOrGroupId)) {
-                SearchResultPacket.send((ServerPlayerEntity)player,requestId,SearchResultPacket.REJECTED,0); return;
-            }
-            structureIds = availableForSearch(world, player, structureIds, requestId);
-            if (structureIds.isEmpty()) return;
-			if (rejectIfInsufficientXp(player, requestId)) return;
-            SearchSession session = beginSearch(world, player, stack, requestId, structureOrGroupId, creativeBypass);
-            setSearching(stack, structureOrGroupId);
-            for (Identifier id : structureIds) {
-				structures.add(StructureUtils.getStructureForID(world, id));
-			}
-			session.workers.createWorkers(world, player, stack, structures, structureOrGroupId, excludeVisited, creativeBypass, pos);
-			session.workers.setRadiusLimit(session.radiusLimit);
-			if (session.workers.start()) {
-				SearchProgressPacket.send((ServerPlayerEntity) player, requestId, 0);
-			} else {
-				fail(player, stack, structureOrGroupId, 0, 0);
-			}
-
-		} else {
-            SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.REJECTED, 0);
-        }
-	}
+        startValidatedSearch(world, serverPlayer, pos, List.of(structureOrGroupId), excludeVisited, creativeUnlocksAll, stack, false, requestId);
+    }
 
     public void searchForListedStructures(ServerWorld world, PlayerEntity player, BlockPos pos, List<Identifier> requestedIds, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
-        ensureHolder((ServerPlayerEntity) player, stack);
-        if (isBroken(stack) || requestedIds.isEmpty() || requestedIds.size() > 32767) {
-            SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.REJECTED, 0);
+        ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+        if (isBroken(stack) || requestedIds.isEmpty() || requestedIds.size() > 32767
+                || !StructureUtils.getAllowedStructureIDs(world).containsAll(requestedIds)) {
+            SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
             return;
         }
-        List<Identifier> allowed = StructureUtils.getAllowedStructureIDs(world);
-        if (!allowed.containsAll(requestedIds)) {
-            SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.REJECTED, 0);
-            return;
-        }
-        List<Identifier> uniqueIds = new ArrayList<>(new LinkedHashSet<>(requestedIds));
+        startValidatedSearch(world, serverPlayer, pos, requestedIds, excludeVisited, creativeUnlocksAll, stack, true, requestId);
+    }
+
+    private void startValidatedSearch(ServerWorld world, ServerPlayerEntity player, BlockPos pos, List<Identifier> ids,
+                                      boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, boolean listed, int requestId) {
+        ensureHolder(player, stack);
         boolean creativeBypass = creativeUnlocksAll && player.getAbilities().creativeMode;
-        if (!creativeBypass) uniqueIds.removeIf(id -> !UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), id));
-        if (uniqueIds.isEmpty()) {
-            SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.REJECTED, 0);
-            return;
-        }
-        List<Identifier> searchable = availableForSearch(world, player, uniqueIds, requestId);
+        List<Identifier> searchable = availableForSearch(world, player, ids, creativeBypass, listed, requestId);
         if (searchable.isEmpty()) return;
-		if (rejectIfInsufficientXp(player, requestId)) return;
         List<Structure> structures = new ArrayList<>();
         for (Identifier id : searchable) structures.add(StructureUtils.getStructureForID(world, id));
         Identifier firstId = searchable.get(0);
         SearchSession session = beginSearch(world, player, stack, requestId, firstId, creativeBypass);
         setSearching(stack, firstId);
-		session.workers.createWorkers(world, player, stack, structures, firstId, excludeVisited, creativeBypass, pos);
+        session.workers.createWorkers(world, player, stack, structures, firstId, excludeVisited, creativeBypass, pos);
         session.workers.setRadiusLimit(session.radiusLimit);
         if (session.workers.start()) {
-            SearchProgressPacket.send((ServerPlayerEntity) player, requestId, 0);
+            SearchProgressPacket.send(player, requestId, 0);
         } else {
             fail(player, stack, firstId, 0, 0);
         }
