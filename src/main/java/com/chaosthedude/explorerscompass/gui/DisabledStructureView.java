@@ -121,8 +121,13 @@ final class DisabledStructureView {
         c.drawCenteredTextWithShadow(renderer,Text.literal(text),x+w/2,y+6,0xffffffff);
     }
     void click(double mx,double my,int button,int sw,int sh) {
-        if(button!=0)return;
-        int w=width(sw),h=height(sw,sh),x=(sw-w)/2,y=(sh-h)/2,bw=buttonWidth(w);
+        int w = width(sw), h = height(sw, sh), x = (sw - w) / 2, y = (sh - h) / 2;
+        if (mx < x - 1 || mx >= x + w + 1 || my < y - 1 || my >= y + h + 1) {
+            back.run();
+            return;
+        }
+        if (button != 0) return;
+        int bw = buttonWidth(w);
         if(my>=y+h-30&&my<y+h-10) {
             if(single&&mx>=firstButtonX(x,w)&&mx<firstButtonX(x,w)+bw){hide.run();return;}
             if(mx>=backButtonX(x,w)&&mx<backButtonX(x,w)+bw){back.run();return;}

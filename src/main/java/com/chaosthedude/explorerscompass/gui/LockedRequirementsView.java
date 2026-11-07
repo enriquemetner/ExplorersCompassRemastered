@@ -239,16 +239,18 @@ final class LockedRequirementsView {
     }
 
     private void clickQuestPopup(double mouseX, double mouseY, int button, int screenWidth, int screenHeight) {
-        if (button != 0) return;
         PopupLayout p = popupLayout(screenWidth, screenHeight);
+        if (mouseX < p.x - 1 || mouseX >= p.x + p.width + 1 || mouseY < p.y - 1 || mouseY >= p.y + p.height + 1) {
+            closeQuestPopup();
+            return;
+        }
+        if (button != 0) return;
         if (mouseX >= p.openX && mouseX < p.openX + 70 && mouseY >= p.buttonY && mouseY < p.buttonY + 20) {
             long questId = questPopup.questId;
             questPopup = null;
             if (FtbQuestNavigation.openChapter(questId)) onQuestBookOpened.run();
-        } else if (mouseX < p.x - 1 || mouseX >= p.x + p.width + 1 || mouseY < p.y - 1
-                || mouseY >= p.y + p.height + 1 || (mouseX >= p.cancelX && mouseX < p.cancelX + 70
-                && mouseY >= p.buttonY && mouseY < p.buttonY + 20)) {
-            questPopup = null;
+        } else if (mouseX >= p.cancelX && mouseX < p.cancelX + 70 && mouseY >= p.buttonY && mouseY < p.buttonY + 20) {
+            closeQuestPopup();
         }
     }
     void keyPressed(int key) {

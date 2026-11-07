@@ -846,8 +846,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void closeEntryDetails() {
 		entryDetails = null;
-		pendingHiddenStructures.clear();
-		processSearchTerm();
+		finalizePendingHides();
 		focusActiveSearchField();
 	}
 
@@ -1661,10 +1660,8 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void dismissDialog() {
         if (dialog == Dialog.DISABLED || dialog == Dialog.NOT_FOUND) {
-            if (hiddenByFailedSearch.contains(navigationTarget)) navigationTarget = null;
             hiddenByFailedSearch.clear();
-            pendingHiddenStructures.clear();
-            processSearchTerm();
+            finalizePendingHides();
             disabledView = null;
         }
         if ((dialog == Dialog.SEARCHING || (dialog == Dialog.NOT_FOUND && failedCanContinue)) && client.getNetworkHandler() != null) {
@@ -2008,8 +2005,11 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void finalizePendingHides() {
 		if (pendingHiddenStructures.isEmpty()) return;
+		if (pendingHiddenStructures.contains(navigationTarget)) navigationTarget = null;
 		pendingHiddenStructures.clear();
+		double scroll = selectionList.getScrollAmount();
 		processSearchTerm();
+		selectionList.setScrollAmount(scroll);
 	}
 
 	public void teleport() {
