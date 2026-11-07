@@ -34,7 +34,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public final class UnlockingCommands {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
-        dispatcher.register(literal("explorerscompass").requires(source -> source.hasPermissionLevel(2))
+        var command = dispatcher.register(literal("explorerscompass").requires(source -> source.hasPermissionLevel(2))
                 .then(literal("reload").executes(context -> {
                     int count = UnlockingRules.reload(context.getSource().getServer());
                     if (count < 0) throw error("Could not reload Explorer's Compass unlocking rules. See the server log; active rules and player data were kept.");
@@ -55,7 +55,7 @@ public final class UnlockingCommands {
                         .then(literal("everything").executes(c -> reportCleared(c, VisitedStructures.get(c.getSource().getServer()).clear(player(c), null))))
                         .then(literal("structure").then(visitRanges(false)))
                         .then(literal("structureSet").then(visitRanges(true)))))));
-
+        dispatcher.register(literal("ecomp").requires(command::canUse).redirect(command));
     }
 
     private static RequiredArgumentBuilder<ServerCommandSource, String> playerArgument() {
