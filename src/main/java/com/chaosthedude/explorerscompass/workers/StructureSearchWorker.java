@@ -1,6 +1,7 @@
 package com.chaosthedude.explorerscompass.workers;
 
 import java.util.List;
+import com.chaosthedude.explorerscompass.storage.EmptyChunkCache;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
@@ -26,6 +27,7 @@ import net.minecraft.world.gen.structure.Structure;
 public abstract class StructureSearchWorker<T extends StructurePlacement> implements WorldWorkerManager.IWorker {
 
 	protected String managerId;
+    private final EmptyChunkCache storageCache = new EmptyChunkCache();
 	protected ServerWorld level;
 	protected PlayerEntity player;
 	protected ItemStack stack;
@@ -101,7 +103,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 					&& !com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(level.getServer(), player.getUuid(), id))) continue;
 			StructurePresence result = SearchPlacementFilter.lookup(chunkPos.toLong(), structure,
                     () -> placement.shouldGenerate(level.getChunkManager().getStructurePlacementCalculator(), chunkPos.x, chunkPos.z),
-                    () -> level.getStructureAccessor().getStructurePresence(chunkPos, structure, false));
+                    storageCache, () -> level.getStructureAccessor().getStructurePresence(chunkPos, structure, false));
 			if (result != StructurePresence.START_NOT_PRESENT) {
 				if (result == StructurePresence.START_PRESENT) {
 					if (wasVisited(structure, chunkPos)) continue;
@@ -127,6 +129,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void succeed(BlockPos pos, Structure structure) {
+        storageCache.clear();
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " succeeded with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
 			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, structure), pos.getX(), pos.getZ(), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
@@ -137,6 +140,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	protected void fail() {
+        storageCache.clear();
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " failed with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
 			((ExplorersCompassItem) stack.getItem()).fail(player, stack, structureOrGroupId, getRadius(), samples);
@@ -147,6 +151,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	}
 
 	public void stop() {
+        storageCache.clear();
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " stopped with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		finished = true;
 	}

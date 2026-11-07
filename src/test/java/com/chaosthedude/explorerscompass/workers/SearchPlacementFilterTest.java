@@ -47,6 +47,27 @@ class SearchPlacementFilterTest {
                 () -> SearchPlacementFilter.rejects(1, structure), () -> SearchPlacementFilter.rejects(1, structure)));
     }
 
+    @Test void storageCacheIsScopedToMatchingLookupAndRestoredAfterExceptions() {
+        var cache = new com.chaosthedude.explorerscompass.storage.EmptyChunkCache();
+        assertNull(SearchPlacementFilter.storageCache(1));
+        SearchPlacementFilter.lookup(1, structure, () -> {
+            assertNull(SearchPlacementFilter.storageCache(1));
+            return true;
+        }, cache, () -> {
+            assertSame(cache, SearchPlacementFilter.storageCache(1));
+            assertNull(SearchPlacementFilter.storageCache(2));
+            assertNull(java.util.concurrent.CompletableFuture.supplyAsync(() -> SearchPlacementFilter.storageCache(1)).join());
+            assertThrows(IllegalStateException.class, () -> SearchPlacementFilter.lookup(1, structure, () -> true, () -> {
+                assertNull(SearchPlacementFilter.storageCache(1));
+                throw new IllegalStateException();
+            }));
+            assertSame(cache, SearchPlacementFilter.storageCache(1));
+            assertFalse(SearchPlacementFilter.rejects(1, structure));
+            return null;
+        });
+        assertNull(SearchPlacementFilter.storageCache(1));
+    }
+
     @Test void doesNotAffectOtherThreads() {
         SearchPlacementFilter.lookup(1, structure, () -> false, () -> {
             boolean other = java.util.concurrent.CompletableFuture.supplyAsync(

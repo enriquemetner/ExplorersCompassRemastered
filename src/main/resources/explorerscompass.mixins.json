@@ -7,6 +7,8 @@
     "FtbQuestFileMixin",
     "PlayerAdvancementTrackerMixin",
     "StructureLocatorMixin",
+    "StorageIoWorkerMixin",
+    "RegionBasedStorageAccessor",
     "StructurePlacementAccessor"
   ],
   "client": [
