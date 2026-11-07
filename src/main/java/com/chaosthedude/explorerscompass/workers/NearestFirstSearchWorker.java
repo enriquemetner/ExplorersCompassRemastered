@@ -11,7 +11,7 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.gen.chunk.placement.*;
 import net.minecraft.world.gen.structure.Structure;
 
-/** One coordinator orders all placement grids, including Search Listed, by horizontal locate distance. */
+/** One coordinator orders all placement grids, including searches for multiple structures, by horizontal locate distance. */
 final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlacement> {
     private record Target(StructurePlacement placement, List<Structure> structures, ChunkPos chunk) {}
     private final NearestFirstQueue<Target> queue;

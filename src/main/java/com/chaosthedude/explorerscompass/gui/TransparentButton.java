@@ -4,6 +4,7 @@ import com.chaosthedude.explorerscompass.util.RenderUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.Text;
@@ -28,13 +29,17 @@ public class TransparentButton extends ButtonWidget {
 					: isHovered() ? RenderUtils.HIGHLIGHTED_BACKGROUND_OPACITY_PERCENT
 					: RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT;
 			context.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), RenderUtils.blackWithOpacity(opacity));
-			String label = getMessage().getString();
-			int availableWidth = Math.max(1, getWidth() - rightInset - 8);
-			if (mc.textRenderer.getWidth(label) > availableWidth) {
-				label = mc.textRenderer.trimToWidth(label, Math.max(1, availableWidth - mc.textRenderer.getWidth("..."))) + "...";
-			}
-			context.drawCenteredTextWithShadow(mc.textRenderer, label, getX() + (getWidth() - rightInset) / 2, getY() + (getHeight() - 8) / 2, 0xffffff);
+			renderLabel(context, mc.textRenderer);
 		}
+	}
+
+	protected void renderLabel(DrawContext context, TextRenderer renderer) {
+		String label = getMessage().getString();
+		int availableWidth = Math.max(1, getWidth() - rightInset - 8);
+		if (renderer.getWidth(label) > availableWidth) {
+			label = renderer.trimToWidth(label, Math.max(1, availableWidth - renderer.getWidth("..."))) + "...";
+		}
+		context.drawCenteredTextWithShadow(renderer, label, getX() + (getWidth() - rightInset) / 2, getY() + (getHeight() - 8) / 2, 0xffffff);
 	}
 
 }

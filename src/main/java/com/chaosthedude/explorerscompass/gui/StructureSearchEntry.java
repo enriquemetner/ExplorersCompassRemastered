@@ -14,7 +14,6 @@ import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
-import net.minecraft.util.Util;
 
 @Environment(EnvType.CLIENT)
 public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<StructureSearchEntry> {
@@ -24,7 +23,6 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 	private final ExplorersCompassScreen parentScreen;
 	private final Identifier structureID;
 	private final StructureSearchList structuresList;
-	private long lastClickTime;
 
 	public StructureSearchEntry(StructureSearchList structuresList, Identifier structureID) {
 		this.structuresList = structuresList;
@@ -76,23 +74,21 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 			if (structuresList.isFilterButtonClick(this, mouseX, mouseY)) {
 				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
 				parentScreen.openEntryFilters(structureID);
-				lastClickTime = 0;
+				structuresList.resetDoubleClick();
 				return true;
 			}
 			if (structuresList.isActionButtonClick(this, mouseX, mouseY)) {
 				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
 				parentScreen.openEntryDetails(structureID);
-				lastClickTime = 0;
+				structuresList.resetDoubleClick();
 				return true;
 			}
-			structuresList.setSelected(this);
-			if (!parentScreen.isStructureHidden(structureID) && Util.getMeasuringTimeMs() - lastClickTime < 250L) {
-				searchForStructure();
-				return true;
-			} else {
-				lastClickTime = Util.getMeasuringTimeMs();
-				return false;
-			}
+            if (parentScreen.isStructureHidden(structureID)) {
+                structuresList.resetDoubleClick();
+                return true;
+            }
+            if (structuresList.selectClickedRow(structureID)) searchForStructure();
+            return true;
 		}
 		return false;
 	}

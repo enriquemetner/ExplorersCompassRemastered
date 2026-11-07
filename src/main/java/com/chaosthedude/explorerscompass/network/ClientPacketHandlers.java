@@ -2,6 +2,7 @@ package com.chaosthedude.explorerscompass.network;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.gui.ExplorersCompassScreen;
+import com.chaosthedude.explorerscompass.gui.FilterSelections;
 import com.chaosthedude.explorerscompass.gui.UnlockToast;
 import com.chaosthedude.explorerscompass.recipe.CompassRepairRecipe;
 import com.chaosthedude.explorerscompass.unlocking.RequirementNode;
@@ -147,7 +148,10 @@ public final class ClientPacketHandlers {
             trackedStructureId = tracked;
             latestUnlockedStructures = java.util.Set.copyOf(latest);
             showNewlyUnlockedFilter = showLatestFilter;
-            if (!showLatestFilter) com.chaosthedude.explorerscompass.gui.FilterSelections.clearNewlyUnlocked();
+            if (!showLatestFilter && FilterSelections.newlyUnlocked()) {
+                FilterSelections.clearNewlyUnlocked();
+                if (client.currentScreen instanceof ExplorersCompassScreen screen) screen.showNormalResults();
+            }
             pendingNoticeRevision = noticeRevision;
             pendingNoticeRelocked = noticeRelocked;
             ExplorersCompass.canTeleport = canTeleport;

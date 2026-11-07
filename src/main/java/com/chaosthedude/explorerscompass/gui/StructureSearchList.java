@@ -6,31 +6,36 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
-import org.jetbrains.annotations.Nullable;
+import net.minecraft.util.Util;
+
+import java.util.List;
 
 @Environment(EnvType.CLIENT)
 public class StructureSearchList extends AlwaysSelectedEntryListWidget<StructureSearchEntry> {
 	static final int SCROLLBAR_WIDTH = Scrollbar.WIDTH;
 	static final int ACTION_BUTTON_HEIGHT = 16;
 	static final int ACTION_BUTTON_GAP = 2;
+	private static final long DOUBLE_CLICK_INTERVAL_MS = 250L;
 
 	private final ExplorersCompassScreen parentScreen;
-	private final PlayerEntity player;
+	private final StructureSelection selection;
+	private Identifier lastPlainClick;
+	private long lastPlainClickTime;
 	private boolean draggingScrollbar;
 	private double scrollbarGrabOffset;
 
-	public StructureSearchList(ExplorersCompassScreen parentScreen, MinecraftClient client, PlayerEntity player, Identifier structureIdToSelect, int x, int y, int width, int height, int slotHeight) {
+	public StructureSearchList(ExplorersCompassScreen parentScreen, MinecraftClient client, StructureSelection selection, int x, int y, int width, int height, int slotHeight) {
 		super(client, width, height, y, y + height, ExplorersCompassConfig.adjustRowsToFitView ? fittedRowHeight(height, slotHeight) : slotHeight);
 		this.parentScreen = parentScreen;
-		this.player = player;
+		this.selection = selection;
 		// Cancel the list widget's default 4px top padding so rows meet the scrollbar track.
 		headerHeight = -4;
         setLeftPos(x);
-		refreshList(structureIdToSelect);
+		refreshList();
 	}
 
 	private static int fittedRowHeight(int viewportHeight, int preferredRowHeight) {
@@ -93,13 +98,18 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		if (mouseX < getScrollbarPositionX() && mouseY >= fullRowsBottom() && mouseY < bottom) {
 			// Vanilla resolves clicks using uniform row heights. Route the extension to its row.
 			StructureSearchEntry row = getEntryAtPosition(mouseX, fullRowsBottom() - 1);
-			if (row == null || !row.mouseClicked(mouseX, mouseY, button)) return false;
+			if (row == null) {
+				resetDoubleClick();
+				return false;
+			}
+			if (!row.mouseClicked(mouseX, mouseY, button)) return false;
 			setFocused(row);
 			setDragging(button == 0);
 			return true;
 		}
 		Scrollbar scrollbar = scrollbar();
 		if (button == 0 && scrollbar.contains(mouseX, mouseY)) {
+			resetDoubleClick();
 			draggingScrollbar = true;
 			scrollbarGrabOffset = scrollbar.grabOffset(mouseY, Scrollbar.GRAB_PADDING);
 			if (scrollbar.outsideThumb(mouseY, Scrollbar.GRAB_PADDING)) {
@@ -107,7 +117,9 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 			}
 			return true;
 		}
-		return super.mouseClicked(mouseX, mouseY, button);
+		boolean handled = super.mouseClicked(mouseX, mouseY, button);
+		if (!handled) resetDoubleClick();
+		return handled;
 	}
 
 	@Override
@@ -135,7 +147,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 
 	@Override
 	protected boolean isSelectedEntry(int slotIndex) {
-		return slotIndex >= 0 && slotIndex < children().size() ? children().get(slotIndex).equals(getSelectedOrNull()) : false;
+		return slotIndex >= 0 && slotIndex < getEntryCount() && selection.contains(getEntry(slotIndex).getStructureID());
 	}
 
 	@Override
@@ -161,7 +173,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
                 StructureSearchEntry entry = getEntry(i);
                 boolean isHovering = isMouseOver(mouseX, mouseY) && mouseY >= entryTop && mouseY < entryBottom;
 				entry.render(context, i, entryTop, getRowLeft(), getRowWidth(), entryBottom - entryTop, mouseX, mouseY, isHovering, partialTicks);
-				if (entry == getSelectedOrNull()) {
+				if (isSelectedEntry(i)) {
 					context.fill(getRowLeft(), entryTop, getRowLeft() + 1, entryBottom, 0xffffffff);
 				}
             }
@@ -171,61 +183,79 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		scrollbar().render(context);
 	}
 
-    @Override
-    public void setSelected(StructureSearchEntry entry) {
-        if (entry == null || entry.isEnabled()) {
-            super.setSelected(entry);
+    public void refreshList() {
+        clearEntries();
+        lastPlainClick = null;
+        for (Identifier id : parentScreen.sortStructures()) addEntry(new StructureSearchEntry(this, id));
+        setScrollAmount(0);
+    }
+
+    public void focusStructure(Identifier id) {
+        if (id == null || parentScreen.isStructureHidden(id)) return;
+        for (int index = 0; index < getEntryCount(); index++) {
+            if (id.equals(getEntry(index).getStructureID())) {
+                resetDoubleClick();
+                selection.click(id, List.of(), false, false, false);
+                setScrollAmount(getScrollAmount() + getRowTop(index) - top);
+                return;
+            }
         }
     }
 
-	public void refreshList(Identifier structureIdToSelect) {
-		clearEntries();
-		setSelected(null);
-		for (Identifier id : parentScreen.sortStructures()) {
-			StructureSearchEntry entry = new StructureSearchEntry(this, id);
-			addEntry(entry);
-			if (id.equals(structureIdToSelect)) {
-				setSelected(entry);
-			}
-		}
-		setScrollAmount(0);
-	}
+    private List<Identifier> selectableRows() {
+        boolean selectedOnly = parentScreen.isSelectedOnly();
+        return children().stream().map(StructureSearchEntry::getStructureID)
+                .filter(id -> !parentScreen.isStructureHidden(id) && (!selectedOnly || selection.contains(id))).toList();
+    }
 
-	public void refreshList(boolean maintainSelection) {
-		Identifier select = maintainSelection && hasSelection() ? getSelectedOrNull().getStructureID() : null;
-		refreshList(select);
-	}
+    void selectAllMatches() {
+        lastPlainClick = null;
+        selection.addAll(selectableRows());
+    }
 
-	public void refreshList() {
-		refreshList(null);
-	}
+    void resetDoubleClick() {
+        lastPlainClick = null;
+    }
 
-	public void focusStructure(Identifier id) {
-		if (id == null) return;
-		for (int index = 0; index < getEntryCount(); index++) {
-			StructureSearchEntry entry = getEntry(index);
-			if (!entry.getStructureID().equals(id)) continue;
-			setSelected(entry);
-			setScrollAmount(getScrollAmount() + getRowTop(index) - top);
-			return;
-		}
-	}
+    boolean awaitingPlainDoubleClick() {
+        return lastPlainClick != null && Util.getMeasuringTimeMs() - lastPlainClickTime < DOUBLE_CLICK_INTERVAL_MS;
+    }
 
-	public boolean hasSelection() {
-		return getSelectedOrNull() != null;
-	}
+    /** Applies the click and returns whether it completes a plain double-click. */
+    boolean selectClickedRow(Identifier id) {
+        boolean control = Screen.hasControlDown();
+        boolean shift = Screen.hasShiftDown();
+        boolean selectedOnly = parentScreen.isSelectedOnly();
+        if (selectedOnly && (control || shift) && !selection.contains(id)) {
+            resetDoubleClick();
+            return false;
+        }
+        long now = Util.getMeasuringTimeMs();
+        boolean doubleClick = !control && !shift && id.equals(lastPlainClick) && now - lastPlainClickTime < DOUBLE_CLICK_INTERVAL_MS;
+        lastPlainClick = control || shift || doubleClick ? null : id;
+        lastPlainClickTime = now;
+        selection.click(id, shift && !selectedOnly ? selectableRows() : List.of(), control, shift, selectedOnly);
+        return doubleClick;
+    }
 
-	public void selectRelative(int direction) {
-		if (getEntryCount() == 0) return;
-		int selectedIndex = hasSelection() ? children().indexOf(getSelectedOrNull()) : -1;
-		int nextIndex = selectedIndex < 0 ? 0 : MathHelper.clamp(selectedIndex + direction, 0, getEntryCount() - 1);
-		setSelected(getEntry(nextIndex));
-		if (getRowTop(nextIndex) < top) {
-			setScrollAmount(getScrollAmount() - (top - getRowTop(nextIndex)));
-		} else if (getRowBottom(nextIndex) > fullRowsBottom()) {
-			setScrollAmount(getScrollAmount() + getRowBottom(nextIndex) - fullRowsBottom());
-		}
-	}
+    public void selectRelative(int direction) {
+        List<Identifier> rows = selectableRows();
+        if (rows.isEmpty()) return;
+        int current = selection.lead() == null ? -1 : rows.indexOf(selection.lead());
+        int next = current < 0 ? 0 : MathHelper.clamp(current + direction, 0, rows.size() - 1);
+        Identifier id = rows.get(next);
+        lastPlainClick = null;
+        selection.click(id, List.of(), false, false, false);
+        for (int index = 0; index < getEntryCount(); index++) {
+            if (!id.equals(getEntry(index).getStructureID())) continue;
+            if (getRowTop(index) < top) {
+                setScrollAmount(getScrollAmount() - (top - getRowTop(index)));
+            } else if (getRowBottom(index) > fullRowsBottom()) {
+                setScrollAmount(getScrollAmount() + getRowBottom(index) - fullRowsBottom());
+            }
+            break;
+        }
+    }
 
 	public StructureSearchEntry soleSearchableEntry() {
 		StructureSearchEntry only = null;
