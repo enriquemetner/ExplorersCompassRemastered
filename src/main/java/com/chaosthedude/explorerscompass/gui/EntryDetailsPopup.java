@@ -9,8 +9,6 @@ import com.chaosthedude.explorerscompass.util.StructureUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.sound.PositionedSoundInstance;
-import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
@@ -95,7 +93,7 @@ final class EntryDetailsPopup {
                 Scrollbar.pixelThumbHeight(track, maxScroll(layout), 12, 0), scroll, maxScroll(layout));
     }
 
-    void render(DrawContext context, int width, int height, int mouseX, int mouseY) {
+    void render(DrawContext context, int width, int height, int mouseX, int mouseY, boolean held) {
         Layout layout = layout(width, height);
         scroll = MathHelper.clamp(scroll, 0, maxScroll(layout));
         context.getMatrices().push();
@@ -115,7 +113,7 @@ final class EntryDetailsPopup {
             int readableWidth = technicalWidth;
             drawLine(context, detail.readableLine(), textX, rowY + 4, readableWidth, 0xffffff);
             drawLine(context, detail.technicalLine(), textX, technicalY, technicalWidth, 0xaaaaaa);
-            drawButton(context, "Copy", layout.copyX(), technicalY - 4, copyWidth, COPY_HEIGHT, mouseX, mouseY, detail.canCopy());
+            drawButton(context, "Copy", layout.copyX(), technicalY - 4, copyWidth, COPY_HEIGHT, mouseX, mouseY, detail.canCopy(), held && mouseY >= layout.top && mouseY < layout.bottom);
             if (mouseY >= layout.top && mouseY < layout.bottom) {
                 if (textHovered(detail.readableLine(), textX, rowY + 4, readableWidth, mouseX, mouseY)) hoveredText = detail.readableLine();
                 if (textHovered(detail.technicalLine(), textX, technicalY, technicalWidth, mouseX, mouseY)) hoveredText = detail.technicalLine();
@@ -123,8 +121,8 @@ final class EntryDetailsPopup {
         }
         context.disableScissor();
         scrollbar(layout).render(context, 0xff242424, 0xff909090);
-        drawButton(context, hidden.getAsBoolean() ? "Undo" : "Hide", layout.hideX(), layout.actionsY(), ACTION_WIDTH, mouseX, mouseY, true);
-        drawButton(context, "Back", layout.backX(), layout.actionsY(), ACTION_WIDTH, mouseX, mouseY, true);
+        drawButton(context, hidden.getAsBoolean() ? "Undo" : "Hide", layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true, held);
+        drawButton(context, "Back", layout.backX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true, held);
         if (!hidden.getAsBoolean() && inside(mouseX, mouseY, layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20)) {
             context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(HIDE_TOOLTIP), Math.min(220, width - 30)), mouseX, mouseY);
         } else if (hoveredText != null) {
@@ -143,15 +141,35 @@ final class EntryDetailsPopup {
         return textRenderer.getWidth(text) > width && inside(mouseX, mouseY, x, y, width, textRenderer.fontHeight);
     }
 
-    private void drawButton(DrawContext context, String label, int x, int y, int width, int mouseX, int mouseY, boolean enabled) {
-        drawButton(context, label, x, y, width, 20, mouseX, mouseY, enabled);
+    private void drawButton(DrawContext context, String label, int x, int y, int width, int height,
+                            int mouseX, int mouseY, boolean enabled, boolean held) {
+        boolean hovered = inside(mouseX, mouseY, x, y, width, height);
+        boolean available = enabled && !(held && hovered);
+        context.fill(x, y, x + width, y + height, available ? 0xff909090 : 0xff505050);
+        context.fill(x + 1, y + 1, x + width - 1, y + height - 1,
+                available && hovered ? 0xff424242 : 0xff242424);
+        context.drawCenteredTextWithShadow(textRenderer, label, x + width / 2, y + (height == COPY_HEIGHT ? 4 : 6),
+                available ? 0xffffff : 0x808080);
     }
 
-    private void drawButton(DrawContext context, String label, int x, int y, int width, int height, int mouseX, int mouseY, boolean enabled) {
-        context.fill(x, y, x + width, y + height, enabled ? 0xff909090 : 0xff505050);
-        context.fill(x + 1, y + 1, x + width - 1, y + height - 1,
-                enabled && inside(mouseX, mouseY, x, y, width, height) ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(textRenderer, label, x + width / 2, y + (height == COPY_HEIGHT ? 4 : 6), enabled ? 0xffffff : 0x808080);
+    ButtonPress buttonAt(double mouseX, double mouseY, int width, int height) {
+        Layout layout = layout(width, height);
+        if (inside(mouseX, mouseY, layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20)) {
+            return new ButtonPress(this, "hide", toggleHidden);
+        }
+        if (inside(mouseX, mouseY, layout.backX(), layout.actionsY(), ACTION_WIDTH, 20)) {
+            return new ButtonPress(this, "back", close);
+        }
+        if (mouseY >= layout.top && mouseY < layout.bottom) {
+            for (int i = 0; i < details.size(); i++) {
+                int rowY = layout.top + i * rowHeight() - (int) scroll;
+                Detail detail = details.get(i);
+                if (detail.canCopy() && inside(mouseX, mouseY, layout.copyX(), rowY + textRenderer.fontHeight, copyWidth, COPY_HEIGHT)) {
+                    return new ButtonPress(this, i, () -> client.keyboard.setClipboard(detail.technical));
+                }
+            }
+        }
+        return null;
     }
 
     void click(double mouseX, double mouseY, int button, int width, int height) {
@@ -160,27 +178,10 @@ final class EntryDetailsPopup {
             close.run();
             return;
         }
-        if (button != 0) return;
-        if (inside(mouseX, mouseY, layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20)) {
-            playClick();
-            toggleHidden.run();
-        } else if (inside(mouseX, mouseY, layout.backX(), layout.actionsY(), ACTION_WIDTH, 20)) {
-            playClick();
-            close.run();
-        } else if (scrollbar(layout).contains(mouseX, mouseY)) {
+        if (button == 0 && scrollbar(layout).contains(mouseX, mouseY)) {
             dragging = true;
             grabOffset = scrollbar(layout).grabOffset(mouseY, 0);
             drag(mouseY, width, height);
-        } else if (mouseY >= layout.top && mouseY < layout.bottom) {
-            for (int i = 0; i < details.size(); i++) {
-                int rowY = layout.top + i * rowHeight() - (int) scroll;
-                Detail detail = details.get(i);
-                if (detail.canCopy() && inside(mouseX, mouseY, layout.copyX(), rowY + textRenderer.fontHeight, copyWidth, COPY_HEIGHT)) {
-                    client.keyboard.setClipboard(detail.technical);
-                    playClick();
-                    return;
-                }
-            }
         }
     }
 
@@ -193,10 +194,6 @@ final class EntryDetailsPopup {
     }
 
     void release() { dragging = false; }
-
-    private void playClick() {
-        client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
-    }
 
     private static boolean inside(double mouseX, double mouseY, int x, int y, int width, int height) {
         return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;

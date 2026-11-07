@@ -267,6 +267,20 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		return only;
 	}
 
+    ButtonPress buttonAt(double mouseX, double mouseY) {
+        if (mouseX >= getScrollbarPositionX() || mouseY < top || mouseY >= bottom) return null;
+        double rowY = mouseY >= fullRowsBottom() ? fullRowsBottom() - 1 : mouseY;
+        StructureSearchEntry row = getEntryAtPosition(mouseX, rowY);
+        if (row == null || !row.isEnabled()) return null;
+        if (isFilterButtonClick(row, mouseX, mouseY)) {
+            return new ButtonPress(row, "filters", () -> parentScreen.openEntryFilters(row.getStructureID()));
+        }
+        if (isActionButtonClick(row, mouseX, mouseY)) {
+            return new ButtonPress(row, "more", () -> parentScreen.openEntryDetails(row.getStructureID()));
+        }
+        return null;
+    }
+
 	public boolean isActionButtonClick(StructureSearchEntry entry, double mouseX, double mouseY) {
 		return isRowButtonClick(entry, mouseX, mouseY, false);
 	}

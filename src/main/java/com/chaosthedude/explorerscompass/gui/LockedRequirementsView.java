@@ -88,7 +88,7 @@ final class LockedRequirementsView {
                 Scrollbar.pixelThumbHeight(bodyHeight, maxScroll(), 12, 0), scroll, maxScroll());
     }
 
-    void render(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY) {
+    void render(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY, boolean held) {
         layout(screenWidth, screenHeight);
         context.getMatrices().push();
         context.getMatrices().translate(0, 0, 300);
@@ -120,13 +120,10 @@ final class LockedRequirementsView {
         // The thumb's transparent grip dots reveal the track color.
         scrollbar().render(context, BUTTON_BORDER, BUTTON_BACKGROUND);
         int buttonX = x + (width - 70) / 2;
-        boolean hovered = mouseX >= buttonX && mouseX < buttonX + 70 && mouseY >= backTop() && mouseY < backTop() + 20;
-        context.fill(buttonX, backTop(), buttonX + 70, backTop() + 20, BUTTON_BORDER);
-        context.fill(buttonX + 1, backTop() + 1, buttonX + 69, backTop() + 19, hovered ? 0xff424242 : BUTTON_BACKGROUND);
-        context.drawCenteredTextWithShadow(renderer, Text.literal("Back"), x + width / 2, backTop() + 6, 0xffffff);
+        renderPopupButton(context, buttonX, backTop(), Text.literal("Back"), mouseX, mouseY, held && questPopup == null);
         context.getMatrices().pop();
         if (questPopup != null) {
-            renderQuestPopup(context, screenWidth, screenHeight, mouseX, mouseY);
+            renderQuestPopup(context, screenWidth, screenHeight, mouseX, mouseY, held);
         } else if (hoveredQuest != null) {
             context.drawTooltip(renderer, Text.translatable("gui.explorerscompass.open_quest_tooltip"), mouseX, mouseY);
         } else if (hoveredAdvancement != null) {
@@ -137,11 +134,29 @@ final class LockedRequirementsView {
         }
     }
 
-    /** Returns true when Back or the area outside the panel was clicked. */
+    Object buttonLayer() { return questPopup == null ? this : questPopup; }
+
+    ButtonPress buttonAt(double mouseX, double mouseY, int screenWidth, int screenHeight, Runnable back) {
+        layout(screenWidth, screenHeight);
+        if (questPopup == null) {
+            return ButtonPress.at(mouseX, mouseY, x + (width - 70) / 2, backTop(), 70, 20, this, "back", back);
+        }
+        PopupLayout p = popupLayout(screenWidth, screenHeight);
+        if (ButtonPress.contains(mouseX, mouseY, p.openX, p.buttonY, 70, 20)) {
+            return new ButtonPress(questPopup, "open", () -> {
+                long questId = questPopup.questId;
+                closeQuestPopup();
+                if (FtbQuestNavigation.openChapter(questId)) onQuestBookOpened.run();
+            });
+        }
+        return ButtonPress.at(mouseX, mouseY, p.cancelX, p.buttonY, 70, 20, questPopup, "cancel", this::closeQuestPopup);
+    }
+
+    /** Returns true when the area outside the panel was clicked. */
     boolean click(double mouseX, double mouseY, int button, int width, int height) {
         layout(width, height);
         if (questPopup != null) {
-            clickQuestPopup(mouseX, mouseY, button, width, height);
+            clickQuestPopup(mouseX, mouseY, width, height);
             return false;
         }
         if (mouseX < x - 1 || mouseX >= x + this.width + 1
@@ -165,8 +180,7 @@ final class LockedRequirementsView {
             }
             return false;
         }
-        return mouseX >= x + (this.width - 70) / 2 && mouseX < x + (this.width + 70) / 2
-                && mouseY >= backTop() && mouseY < backTop() + 20;
+        return false;
     }
 
     void scroll(double amount) {
@@ -209,7 +223,7 @@ final class LockedRequirementsView {
                 openX, openX + 76, title, message);
     }
 
-    private void renderQuestPopup(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY) {
+    private void renderQuestPopup(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY, boolean held) {
         PopupLayout p = popupLayout(screenWidth, screenHeight);
         context.getMatrices().push();
         context.getMatrices().translate(0, 0, 400);
@@ -226,33 +240,26 @@ final class LockedRequirementsView {
             context.drawText(renderer, line, p.x + 12, rowY, 0xffffff, true);
             rowY += lineHeight;
         }
-        renderPopupButton(context, p.openX, p.buttonY, Text.translatable("gui.explorerscompass.open"), mouseX, mouseY);
-        renderPopupButton(context, p.cancelX, p.buttonY, Text.translatable("gui.explorerscompass.cancel"), mouseX, mouseY);
+        renderPopupButton(context, p.openX, p.buttonY, Text.translatable("gui.explorerscompass.open"), mouseX, mouseY, held);
+        renderPopupButton(context, p.cancelX, p.buttonY, Text.translatable("gui.explorerscompass.cancel"), mouseX, mouseY, held);
         context.getMatrices().pop();
     }
 
-    private void renderPopupButton(DrawContext context, int buttonX, int buttonY, Text label, int mouseX, int mouseY) {
-        boolean hovered = mouseX >= buttonX && mouseX < buttonX + 70 && mouseY >= buttonY && mouseY < buttonY + 20;
-        context.fill(buttonX, buttonY, buttonX + 70, buttonY + 20, BUTTON_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + 69, buttonY + 19, hovered ? 0xff424242 : BUTTON_BACKGROUND);
-        context.drawCenteredTextWithShadow(renderer, label, buttonX + 35, buttonY + 6, 0xffffff);
+    private void renderPopupButton(DrawContext context, int buttonX, int buttonY, Text label, int mouseX, int mouseY, boolean held) {
+        boolean hovered = ButtonPress.contains(mouseX, mouseY, buttonX, buttonY, 70, 20);
+        boolean available = !(hovered && held);
+        context.fill(buttonX, buttonY, buttonX + 70, buttonY + 20, available ? BUTTON_BORDER : 0xff505050);
+        context.fill(buttonX + 1, buttonY + 1, buttonX + 69, buttonY + 19, available && hovered ? 0xff424242 : BUTTON_BACKGROUND);
+        context.drawCenteredTextWithShadow(renderer, label, buttonX + 35, buttonY + 6, available ? 0xffffff : 0x808080);
     }
 
-    private void clickQuestPopup(double mouseX, double mouseY, int button, int screenWidth, int screenHeight) {
+    private void clickQuestPopup(double mouseX, double mouseY, int screenWidth, int screenHeight) {
         PopupLayout p = popupLayout(screenWidth, screenHeight);
         if (mouseX < p.x - 1 || mouseX >= p.x + p.width + 1 || mouseY < p.y - 1 || mouseY >= p.y + p.height + 1) {
             closeQuestPopup();
-            return;
-        }
-        if (button != 0) return;
-        if (mouseX >= p.openX && mouseX < p.openX + 70 && mouseY >= p.buttonY && mouseY < p.buttonY + 20) {
-            long questId = questPopup.questId;
-            questPopup = null;
-            if (FtbQuestNavigation.openChapter(questId)) onQuestBookOpened.run();
-        } else if (mouseX >= p.cancelX && mouseX < p.cancelX + 70 && mouseY >= p.buttonY && mouseY < p.buttonY + 20) {
-            closeQuestPopup();
         }
     }
+
     void keyPressed(int key) {
         switch (key) {
             case GLFW.GLFW_KEY_UP -> scroll(1);

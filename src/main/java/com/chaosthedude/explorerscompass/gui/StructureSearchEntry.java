@@ -48,14 +48,16 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Group").getString() + ": " + StructureUtils.getStructureName(ExplorersCompass.structureIDsToGroupIDs.get(structureID)), textWidth), left + 5, top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 0), infoColor, true);
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Dimension").getString() + ": " + StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)), textWidth), left + 5, top + (height / 2) + ((client.textRenderer.fontHeight + 2) * 1), infoColor, true);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, 0xff909090);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, filterHovered ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("filters"), buttonX + buttonWidth / 2, buttonY + 4, 0xffffff);
+        boolean filterHeld = parentScreen.isButtonHeld(this, "filters");
+        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, filterHeld ? 0xff505050 : 0xff909090);
+        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, filterHovered && !filterHeld ? 0xff424242 : 0xff242424);
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("filters"), buttonX + buttonWidth / 2, buttonY + 4, filterHeld ? 0x808080 : 0xffffff);
         buttonY += buttonHeight + StructureSearchList.ACTION_BUTTON_GAP;
         boolean buttonHovered = structuresList.isActionButtonClick(this, mouseX, mouseY);
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, 0xff909090);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, buttonHovered ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("more"), buttonX + buttonWidth / 2, buttonY + 4, 0xffffff);
+        boolean moreHeld = parentScreen.isButtonHeld(this, "more");
+        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, moreHeld ? 0xff505050 : 0xff909090);
+        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, buttonHovered && !moreHeld ? 0xff424242 : 0xff242424);
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("more"), buttonX + buttonWidth / 2, buttonY + 4, moreHeld ? 0x808080 : 0xffffff);
 		if (locked) {
 			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 			RenderSystem.enableBlend();
@@ -71,18 +73,6 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (button == 0 && isEnabled()) {
-			if (structuresList.isFilterButtonClick(this, mouseX, mouseY)) {
-				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
-				parentScreen.openEntryFilters(structureID);
-				structuresList.resetDoubleClick();
-				return true;
-			}
-			if (structuresList.isActionButtonClick(this, mouseX, mouseY)) {
-				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
-				parentScreen.openEntryDetails(structureID);
-				structuresList.resetDoubleClick();
-				return true;
-			}
             if (parentScreen.isStructureHidden(structureID)) {
                 structuresList.resetDoubleClick();
                 return true;
