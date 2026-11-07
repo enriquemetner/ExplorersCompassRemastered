@@ -22,9 +22,10 @@ public final class UnlockNotifications {
             UnlockingRules.get().evaluateOnOpen(player);
             return;
         }
-        UnlockingRules.get().evaluateOnOpen(player);
+        UnlockingRules rules = UnlockingRules.get();
+        rules.evaluateOnOpen(player);
         PartySharing.synchronize(player.getServer());
-        if (state.enableNotifications(player.getUuid())) {
+        if (state.enableNotifications(player.getUuid()) && rules.hasUnlockingRequirements(player)) {
             UnlockToastPacket.send(player, state.getStructures(player.getUuid()).size());
         }
     }
