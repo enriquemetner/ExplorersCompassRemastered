@@ -5,6 +5,7 @@ import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,9 +43,12 @@ public final class UnlockingRules {
     private static final Logger LOGGER = LogManager.getLogger("explorerscompass");
     private static UnlockingRules active = new UnlockingRules();
     private static String activeDefinition = "";
-    private boolean defaultUnlocked = true;
+    private enum DefaultMode { UNLOCKED, LOCKED_UNTIL_VISITED, LOCKED_UNTIL_VISITED_SET }
+
+    private DefaultMode defaultMode = DefaultMode.UNLOCKED;
     private final Map<String, Rule> rules = new LinkedHashMap<>();
     private final Map<Identifier, Rule> byStructure = new LinkedHashMap<>();
+    private final Map<Identifier, List<Set<Identifier>>> visitSetsByStructure = new LinkedHashMap<>();
 
     private record Condition(Predicate<Progress> test, Function<Progress, RequirementNode> display,
                              Set<Identifier> visits, Set<Identifier> advancements) {}
@@ -145,8 +149,13 @@ public final class UnlockingRules {
         Map<Identifier, List<Integer>> declarationLines = new LinkedHashMap<>();
         Set<Identifier> duplicates = new LinkedHashSet<>();
         String mode = root.has("default") ? string(root, "default") : "unlocked";
-        if (!mode.equals("unlocked") && !mode.equals("lockedUntilVisited")) throw invalid("Unknown default: " + mode);
-        result.defaultUnlocked = mode.equals("unlocked");
+        result.defaultMode = switch (mode) {
+            case "unlocked" -> DefaultMode.UNLOCKED;
+            case "lockedUntilVisited" -> DefaultMode.LOCKED_UNTIL_VISITED;
+            case "lockedUntilVisitedSet" -> DefaultMode.LOCKED_UNTIL_VISITED_SET;
+            default -> throw invalid("Unknown default: " + mode);
+        };
+        if (result.defaultMode == DefaultMode.LOCKED_UNTIL_VISITED_SET) result.indexVisitSets(catalog);
         JsonObject entries = root.has("rules") ? root.getAsJsonObject("rules") : new JsonObject();
         for (Map.Entry<String, JsonElement> entry : entries.entrySet()) {
             try {
@@ -178,12 +187,31 @@ public final class UnlockingRules {
         return result;
     }
 
+    private void indexVisitSets(Catalog catalog) {
+        Set<Identifier> known = catalog.structures();
+        for (Identifier setId : catalog.structureSets().stream().sorted().toList()) {
+            Set<Identifier> members = new LinkedHashSet<>(catalog.structureSet(setId));
+            members.retainAll(known);
+            for (Identifier member : members) {
+                visitSetsByStructure.computeIfAbsent(member, ignored -> new ArrayList<>()).add(members);
+            }
+        }
+    }
+
+    private Set<Identifier> defaultVisitTypes(Identifier id) {
+        var sets = visitSetsByStructure.get(id);
+        if (sets == null || sets.size() == 1) return sets == null ? Set.of(id) : sets.get(0);
+        Set<Identifier> types = new LinkedHashSet<>();
+        sets.forEach(types::addAll);
+        return types;
+    }
+
     public boolean hasUnlockingRequirements(ServerPlayerEntity player) {
         return hasUnlockingRequirements(FtbStructureRewards.snapshot(player));
     }
 
     boolean hasUnlockingRequirements(FtbStructureRewards.Snapshot rewards) {
-        return !defaultUnlocked || !rules.isEmpty() || !rewards.rewardTargets().isEmpty();
+        return defaultMode != DefaultMode.UNLOCKED || !rules.isEmpty() || !rewards.rewardTargets().isEmpty();
     }
 
     public Set<String> ruleNames() { return Set.copyOf(rules.keySet()); }
@@ -220,9 +248,22 @@ public final class UnlockingRules {
 
     Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress, Set<Identifier> rewardCovered) {
         Set<Identifier> earned = new LinkedHashSet<>();
+        Predicate<Identifier> defaultSatisfied = switch (defaultMode) {
+            case UNLOCKED -> id -> true;
+            case LOCKED_UNTIL_VISITED -> progress::visited;
+            case LOCKED_UNTIL_VISITED_SET -> {
+                // The same membership set is shared by every member in the index.
+                Map<Set<Identifier>, Boolean> visitedSets = new IdentityHashMap<>();
+                yield id -> {
+                    var sets = visitSetsByStructure.get(id);
+                    return sets == null ? progress.visited(id) : sets.stream().anyMatch(set ->
+                            visitedSets.computeIfAbsent(set, members -> members.stream().anyMatch(progress::visited)));
+                };
+            }
+        };
         for (Identifier id : structures) {
             if (!rewardCovered.contains(id) && !byStructure.containsKey(id)
-                    && (defaultUnlocked || progress.visited(id))) earned.add(id);
+                    && defaultSatisfied.test(id)) earned.add(id);
         }
         for (Map.Entry<Identifier, Rule> entry : byStructure.entrySet())
             if (!rewardCovered.contains(entry.getKey()) && entry.getValue().condition.test.test(progress)) earned.add(entry.getKey());
@@ -244,7 +285,11 @@ public final class UnlockingRules {
 
     Set<Identifier> earnedOnProgress(Progress progress, Identifier visit, Identifier advancement, Set<Identifier> rewardCovered) {
         Set<Identifier> earned = new LinkedHashSet<>();
-        if (visit != null && !rewardCovered.contains(visit) && !byStructure.containsKey(visit)) earned.add(visit);
+        if (visit != null) {
+            for (Identifier id : defaultVisitTypes(visit)) {
+                if (!rewardCovered.contains(id) && !byStructure.containsKey(id)) earned.add(id);
+            }
+        }
         for (Map.Entry<Identifier, Rule> entry : byStructure.entrySet()) {
             Rule rule = entry.getValue();
             if (!rewardCovered.contains(entry.getKey()) && ((visit != null && rule.condition.visits.contains(visit))
@@ -268,7 +313,10 @@ public final class UnlockingRules {
 
     RequirementNode requirements(Identifier id, Progress progress) {
         Rule rule = byStructure.get(id);
-        if (rule == null) return visitNode(Set.of(id), true, Set.of(id), progress);
+        if (rule == null) {
+            Set<Identifier> required = defaultVisitTypes(id);
+            return visitNode(required, false, required, progress);
+        }
         return rule.condition.display.apply(progress);
     }
 

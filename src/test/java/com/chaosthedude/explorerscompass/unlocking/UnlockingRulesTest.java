@@ -76,15 +76,18 @@ class UnlockingRulesTest {
         assertTrue(saved.notificationsEnabled(player));
     }
     private static final Set<Identifier> STRUCTURES = Set.of(A, B, C);
-    private final UnlockingRules.Catalog catalog = new UnlockingRules.Catalog() {
-        public Set<Identifier> structures() { return STRUCTURES; }
-        public Set<Identifier> structureSets() { return Set.of(SET, new Identifier("minecraft:other_set")); }
-        public Set<Identifier> structureSet(Identifier id) { return id.equals(SET) ? Set.of(A, B) : id.toString().equals("minecraft:other_set") ? Set.of(A, C) : Set.of(); }
-        public boolean advancementExists(Identifier id) { return id.equals(ADVANCEMENT) || id.equals(DRAGON_EGG); }
-        public Text advancementTitle(Identifier id) { return Text.literal(id.equals(DRAGON_EGG) ? "The Next Generation" : "Stone Age"); }
-        public Text advancementDescription(Identifier id) { return Text.literal(id.equals(DRAGON_EGG) ? "Hold the Dragon Egg" : "Mine stone"); }
-        public Formatting advancementColor(Identifier id) { return id.equals(DRAGON_EGG) ? Formatting.DARK_PURPLE : Formatting.GREEN; }
-    };
+    private final UnlockingRules.Catalog catalog = catalog(STRUCTURES);
+    private static UnlockingRules.Catalog catalog(Set<Identifier> structures) {
+        return new UnlockingRules.Catalog() {
+            public Set<Identifier> structures() { return structures; }
+            public Set<Identifier> structureSets() { return Set.of(SET, new Identifier("minecraft:other_set")); }
+            public Set<Identifier> structureSet(Identifier id) { return id.equals(SET) ? Set.of(A, B) : id.toString().equals("minecraft:other_set") ? Set.of(A, C) : Set.of(); }
+            public boolean advancementExists(Identifier id) { return id.equals(ADVANCEMENT) || id.equals(DRAGON_EGG); }
+            public Text advancementTitle(Identifier id) { return Text.literal(id.equals(DRAGON_EGG) ? "The Next Generation" : "Stone Age"); }
+            public Text advancementDescription(Identifier id) { return Text.literal(id.equals(DRAGON_EGG) ? "Hold the Dragon Egg" : "Mine stone"); }
+            public Formatting advancementColor(Identifier id) { return id.equals(DRAGON_EGG) ? Formatting.DARK_PURPLE : Formatting.GREEN; }
+        };
+    }
     private static class Progress implements UnlockingRules.Progress {
         final Set<Identifier> visits = new HashSet<>(), advancements = new HashSet<>();
         public boolean visited(Identifier id) { return visits.contains(id); }
@@ -106,6 +109,47 @@ class UnlockingRulesTest {
         assertEquals(Set.of(A), rules("{\"default\":\"lockedUntilVisited\"}").earnedOnOpen(STRUCTURES, p));
         UnlockingRules rules = rules("{\"default\":\"unlocked\",\"rules\":{\"test\":" + rule("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}") + "}}");
         assertEquals(Set.of(A, C), rules.earnedOnOpen(STRUCTURES, p));
+    }
+
+    @Test void visitedSetDefaultUsesDirectMembershipAndFallsBackToSelf() {
+        Identifier ungrouped = new Identifier("minecraft:test_structure");
+        Set<Identifier> structures = Set.of(A, B, C, ungrouped);
+        var rules = UnlockingRules.parse("{\"default\":\"lockedUntilVisitedSet\"}", catalog(structures));
+        Progress progress = new Progress();
+        assertTrue(rules.hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
+        assertTrue(rules.earnedOnOpen(structures, progress).isEmpty());
+        assertEquals(3, rules.requirements(A, progress).children().size());
+        assertEquals("Visit any Structure:", rules.requirements(B, progress).label().getString());
+        assertEquals("Visit Structure:", rules.requirements(ungrouped, progress).label().getString());
+
+        progress.visits.add(B);
+        assertEquals(Set.of(A, B), rules.earnedOnProgress(progress, B, null));
+        assertEquals(Set.of(A, B), rules.earnedOnOpen(structures, progress));
+        assertTrue(rules.requirements(A, progress).checked());
+        assertFalse(rules.requirements(C, progress).checked());
+
+        progress.visits.add(A);
+        assertEquals(STRUCTURES, rules.earnedOnProgress(progress, A, null));
+        progress.visits.add(ungrouped);
+        assertEquals(Set.of(ungrouped), rules.earnedOnProgress(progress, ungrouped, null));
+        assertEquals(structures, rules.earnedOnOpen(structures, progress));
+    }
+
+    @Test void visitedSetDefaultRespectsExplicitRulesAndFtbRewards() {
+        var rules = rules("{\"default\":\"lockedUntilVisitedSet\",\"rules\":{\"test\":"
+                + rule("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}") + "}}");
+        Progress progress = new Progress();
+        progress.visits.add(A);
+        assertEquals(Set.of(A), rules.earnedOnProgress(progress, A, null, Set.of(C)));
+        assertEquals(Set.of(A), rules.earnedOnOpen(STRUCTURES, progress, Set.of(C)));
+        assertEquals("Complete Advancement:", rules.requirements(B, progress).label().getString());
+
+        progress.visits.clear();
+        progress.visits.add(B);
+        assertEquals(Set.of(A), rules.earnedOnProgress(progress, B, null));
+        assertEquals(Set.of(A), rules.earnedOnOpen(STRUCTURES, progress));
+        progress.advancements.add(ADVANCEMENT);
+        assertEquals(Set.of(B), rules.earnedOnProgress(progress, null, ADVANCEMENT));
     }
 
     @Test void ftbRewardsTakePrecedenceWithoutRelockingSavedStructures() {

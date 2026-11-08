@@ -9,7 +9,7 @@ The server reads `config/explorerscompass/unlocking_rules.json` at startup. A ne
 }
 ```
 
-[The full example](unlocking_rules.example.json) demonstrates the selectors and condition forms, including the other default, `lockedUntilVisited`. Copy it to the config directory to try it.
+[The full example](unlocking_rules.example.json) demonstrates selectors and conditions with `lockedUntilVisited` as the default. Copy it to the config directory to try it.
 
 ## Rules
 
@@ -25,6 +25,8 @@ A visit condition has `type: "visit"` and a nonempty `structures` array. Entries
 `structures` selectors support `*` for zero or more characters. Patterns match complete IDs in both the structure and structure-set registries, including namespace; omitting the namespace means `minecraft`. `?` is not supported. If the same ID names a structure and a structure set, the structure takes precedence and a warning is logged. Advancement IDs remain exact. Patterns resolve at startup and on `/explorerscompass reloadRules`. Unmatched patterns produce warnings. An exact but unavailable visit ID remains an unsatisfied requirement; a visit selection that resolves to nothing never satisfies `all`.
 
 Explicit rules override the default. If multiple rules target the same structure, the rule farther down in the file supplies its condition and requirement text. The server warns with the structure ID and the line numbers of the matching `unlocks` entries, including entries that expand from patterns or structure sets. `lockedUntilVisited` applies only to structures without an explicit rule and requires a visit to that structure type.
+
+With `lockedUntilVisitedSet`, a visit to any structure in a shared set satisfies the default for the other members of that set. If a structure belongs to multiple sets, a visit to a member of any of those sets counts. Structures without a set still require a visit to their own type.
 
 ## FTB Quests rewards
 
