@@ -68,7 +68,7 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
             structureSet = target.structures;
             samples++;
             var result = getStructureGeneratingAt(target.chunk);
-            if (result != null) succeed(result.getFirst(), result.getSecond());
+            if (result != null) succeed(result);
         }
         return hasWork();
     }

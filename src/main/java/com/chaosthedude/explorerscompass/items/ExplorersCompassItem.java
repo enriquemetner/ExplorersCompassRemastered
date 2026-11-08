@@ -41,6 +41,7 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 import net.minecraft.world.gen.structure.Structure;
@@ -367,7 +368,7 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
-	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, int x, int z, int samples, boolean displayCoordinates, boolean displayDistance) {
+	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, ChunkPos startChunk, int x, int z, int samples, boolean displayCoordinates, boolean displayDistance) {
 		SearchSession session = searches.get(player.getUuid());
 		if (session == null || session.stack != stack || structureID == null) return;
         if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }
@@ -392,6 +393,7 @@ public class ExplorersCompassItem extends Item {
 			stack.getNbt().putInt("FoundX", x);
 			stack.getNbt().putInt("FoundZ", z);
 			stack.getNbt().putString("FoundDimension", player.getWorld().getRegistryKey().getValue().toString());
+            stack.getNbt().putLong(CompassSearchData.FOUND_START_CHUNK, startChunk.toLong());
 			stack.getNbt().putInt("Samples", samples);
 			stack.getNbt().putBoolean("DisplayCoordinates", displayCoordinates);
 			stack.getNbt().putBoolean("DisplayDistance", displayDistance);

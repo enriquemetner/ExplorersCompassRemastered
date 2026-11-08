@@ -3,22 +3,28 @@ package com.chaosthedude.explorerscompass.network;
 import java.util.Collections;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
-import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
+import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
+import com.chaosthedude.explorerscompass.util.CompassSearchData;
 import com.chaosthedude.explorerscompass.util.CompassState;
 import com.chaosthedude.explorerscompass.util.ItemUtils;
 import com.chaosthedude.explorerscompass.util.PlayerUtils;
+import com.chaosthedude.explorerscompass.util.StructureDestination;
+import com.chaosthedude.explorerscompass.util.StructureLanding;
+import com.chaosthedude.explorerscompass.util.StructureUtils;
 
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.minecraft.item.ItemStack;
+import net.minecraft.nbt.NbtElement;
 import net.minecraft.network.PacketByteBuf;
-import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.structure.StructureStart;
+import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.util.math.ChunkPos;
 
 public class TeleportPacket extends PacketByteBuf {
 
@@ -28,60 +34,50 @@ public class TeleportPacket extends PacketByteBuf {
 		super(Unpooled.buffer());
 	}
 
-	public static void apply(MinecraftServer server, ServerPlayerEntity player, ServerPlayNetworkHandler handler, PacketByteBuf buf, PacketSender responseSender) {
-		server.execute(() -> {
-			final ItemStack stack = ItemUtils.getHeldItem(player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
-			if (!stack.isEmpty()) {
-                ExplorersCompass.EXPLORERS_COMPASS_ITEM.validateTarget(player, stack);
-				final ExplorersCompassItem explorersCompass = (ExplorersCompassItem) stack.getItem();
-				if (PlayerUtils.canTeleport(player)) {
-					if (explorersCompass.getState(stack) == CompassState.FOUND
-                            && explorersCompass.isInFoundDimension(stack, player.getWorld())
-                            && (com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(server, player.getUuid(), explorersCompass.getStructureID(stack))
-                                || (player.getAbilities().creativeMode && stack.getOrCreateNbt().getBoolean("CreativeBypass")))) {
-						final int x = explorersCompass.getFoundStructureX(stack);
-						final int z = explorersCompass.getFoundStructureZ(stack);
-						final int y = findValidTeleportHeight(player.getEntityWorld(), x, z);
+    public static void apply(MinecraftServer server, ServerPlayerEntity player, ServerPlayNetworkHandler handler, PacketByteBuf buf, PacketSender responseSender) {
+        server.execute(() -> {
+            var compass = ExplorersCompass.EXPLORERS_COMPASS_ITEM;
+            ItemStack stack = ItemUtils.getHeldItem(player, compass);
+            if (stack.isEmpty()) return;
 
-						player.stopRiding();
-						((ServerPlayerEntity) player).networkHandler.requestTeleport(x, y, z, player.getYaw(), player.getPitch(), Collections.emptySet());
+            compass.validateTarget(player, stack);
+            if (!PlayerUtils.canTeleport(player)) {
+                ExplorersCompass.LOGGER.warn("Player " + player.getDisplayName().getString() + " tried to teleport but does not have permission.");
+                return;
+            }
+            var world = player.getServerWorld();
+            if (compass.getState(stack) != CompassState.FOUND || !compass.isInFoundDimension(stack, world)) return;
 
-						if (!player.isFallFlying()) {
-							player.setVelocity(player.getVelocity().getX(), 0, player.getVelocity().getZ());
-							player.setOnGround(true);
-						}
-					}
-				} else {
-					ExplorersCompass.LOGGER.warn("Player " + player.getDisplayName().getString() + " tried to teleport but does not have permission.");
-				}
-			}
-		});
-	}
+            var nbt = stack.getOrCreateNbt();
+            Identifier id = compass.getStructureID(stack);
+            if (!UnlockingRules.isUnlocked(server, player.getUuid(), id)
+                    && !(player.getAbilities().creativeMode && nbt.getBoolean("CreativeBypass"))) return;
 
-	private static int findValidTeleportHeight(World world, int x, int z) {
-		int upY = world.getSeaLevel();
-		int downY = world.getSeaLevel();
-		while ((!world.isOutOfHeightLimit(upY) || !world.isOutOfHeightLimit(downY)) && !(isValidTeleportPosition(world, new BlockPos(x, upY, z)) || isValidTeleportPosition(world, new BlockPos(x, downY, z)))) {
-			upY++;
-			downY--;
-		}
-		BlockPos upPos = new BlockPos(x, upY, z);
-		BlockPos downPos = new BlockPos(x, downY, z);
-		if (isValidTeleportPosition(world, upPos)) {
-			return upY;
-		}
-		if (isValidTeleportPosition(world, downPos)) {
-			return downY;
-		}
-		return 256;
-	}
-	
-	private static boolean isValidTeleportPosition(World world, BlockPos pos) {
-		return isFree(world, pos) && isFree(world, pos.up()) && !isFree(world, pos.down());
-	}
-	
-	private static boolean isFree(World world, BlockPos pos) {
-		return world.getBlockState(pos).isAir() || world.getBlockState(pos).isIn(BlockTags.FIRE) || world.getBlockState(pos).isLiquid() || world.getBlockState(pos).isReplaceable();
-	}
+            var target = new BlockPos(compass.getFoundStructureX(stack), 0, compass.getFoundStructureZ(stack));
+            StructureStart start = null;
+            if (nbt.contains(CompassSearchData.FOUND_START_CHUNK, NbtElement.LONG_TYPE)) {
+                var chunk = new ChunkPos(nbt.getLong(CompassSearchData.FOUND_START_CHUNK));
+                // Some pieces adjust their bounds to the terrain when their blocks are placed.
+                world.getChunk(target);
+                start = StructureDestination.readStart(world, chunk, StructureUtils.getStructureForID(world, id));
+            }
+
+            var landing = StructureLanding.find(player, target, StructureDestination.pieces(start));
+            if (landing == null) {
+                player.sendMessage(Text.translatable("message.explorerscompass.no_teleport_destination"), false);
+                return;
+            }
+
+            player.stopRiding();
+            var pos = landing.position();
+            handler.requestTeleport(pos.x, pos.y, pos.z, player.getYaw(), player.getPitch(), Collections.emptySet());
+            if (landing.pose() != null) player.setPose(landing.pose());
+
+            if (!player.isFallFlying()) {
+                player.setVelocity(player.getVelocity().getX(), 0, player.getVelocity().getZ());
+                player.setOnGround(true);
+            }
+        });
+    }
 
 }

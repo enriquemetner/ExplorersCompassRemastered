@@ -8,8 +8,9 @@ import net.minecraft.nbt.NbtCompound;
 public final class CompassSearchData {
     public static final String BACKUP = "CompassSearchBackup";
     public static final String TOKEN = "CompassSearchToken";
+    public static final String FOUND_START_CHUNK = "FoundStartChunk";
     private static final List<String> KEYS = List.of("State", "StructureID", "CreativeBypass",
-            CompassTransfer.INHERITED, "FoundX", "FoundZ", "FoundDimension", "PrevPos", "IsGroup",
+            CompassTransfer.INHERITED, "FoundX", "FoundZ", "FoundDimension", FOUND_START_CHUNK, "PrevPos", "IsGroup",
             "IsListed", "DisplayCoordinates", "DisplayDistance", "SearchRadius", "Samples");
     private CompassSearchData() {}
     public static NbtCompound snapshot(NbtCompound data) {

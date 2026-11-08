@@ -6,9 +6,9 @@ import com.chaosthedude.explorerscompass.storage.EmptyChunkCache;
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
+import com.chaosthedude.explorerscompass.util.StructureDestination;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
-import com.mojang.datafixers.util.Pair;
 
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
@@ -25,6 +25,8 @@ import net.minecraft.world.gen.chunk.placement.StructurePlacement;
 import net.minecraft.world.gen.structure.Structure;
 
 public abstract class StructureSearchWorker<T extends StructurePlacement> implements WorldWorkerManager.IWorker {
+
+    protected record Match(Structure structure, ChunkPos startChunk, StructureStart start) {}
 
 	private static final int PROGRESS_INTERVAL_BLOCKS = 100;
 
@@ -99,7 +101,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 		return false;
 	}
 
-	protected Pair<BlockPos, Structure> getStructureGeneratingAt(ChunkPos chunkPos) {
+	protected Match getStructureGeneratingAt(ChunkPos chunkPos) {
 		for (Structure structure : structureSet) {
             Identifier id = StructureUtils.getIDForStructure(level, structure);
             if (id == null || (!(creativeBypass && player.getAbilities().creativeMode)
@@ -110,13 +112,13 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 			if (result != StructurePresence.START_NOT_PRESENT) {
 				if (result == StructurePresence.START_PRESENT) {
 					if (wasVisited(structure, chunkPos)) continue;
-					return Pair.of(placement.getLocatePos(chunkPos), structure);
+					return new Match(structure, chunkPos, null);
 				}
 
 				Chunk chunk = level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.STRUCTURE_STARTS);
 				StructureStart structureStart = level.getStructureAccessor().getStructureStart(ChunkSectionPos.from(chunk), structure, chunk);
 				if (structureStart != null && structureStart.hasChildren() && !wasVisited(structure, structureStart.getPos())) {
-					return Pair.of(placement.getLocatePos(structureStart.getPos()), structure);
+					return new Match(structure, structureStart.getPos(), structureStart);
 				}
 			}
 		}
@@ -131,11 +133,15 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 			level.getRegistryKey().getValue(), structureId, startChunk);
 	}
 
-	protected void succeed(BlockPos pos, Structure structure) {
+	protected void succeed(Match match) {
         storageCache.clear();
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " succeeded with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, structure), pos.getX(), pos.getZ(), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
+            StructureStart start = match.start() != null ? match.start()
+                    : StructureDestination.readStart(level, match.startChunk(), match.structure());
+            BlockPos pos = StructureDestination.refine(StructureDestination.pieces(start), placement.getLocatePos(match.startChunk())).pos();
+			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, match.structure()),
+                    match.startChunk(), pos.getX(), pos.getZ(), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
 		} else {
 			ExplorersCompass.LOGGER.error("SearchWorkerManager " + managerId + ": " + getName() + " found invalid compass after successful search");
 		}

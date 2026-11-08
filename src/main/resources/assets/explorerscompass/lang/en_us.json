@@ -1,4 +1,5 @@
 {
+  "message.explorerscompass.no_teleport_destination": "No teleport destination at this location",
   "toast.explorerscompass.party_member": "Unlocked by a party member",
   "toast.explorerscompass.structure_unlocked": "New structure unlocked!",
   "toast.explorerscompass.structures_unlocked": "%s new structures unlocked!",

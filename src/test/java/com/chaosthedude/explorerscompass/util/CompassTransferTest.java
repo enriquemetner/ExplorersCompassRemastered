@@ -68,6 +68,7 @@ class CompassTransferTest {
         data.putInt("State", CompassState.FOUND.getID());
         data.putString("StructureID", CITY.toString());
         data.putInt("FoundX", 100);
+        data.putLong(CompassSearchData.FOUND_START_CHUNK, 42L);
         data.putBoolean(CompassTransfer.INHERITED, true);
         UUID token = UUID.randomUUID();
         CompassSearchData.begin(data, token, CompassSearchData.snapshot(data));
@@ -81,12 +82,14 @@ class CompassTransferTest {
         assertEquals(newHolder, copy.getUuid(CompassTransfer.HOLDER));
         assertEquals(9, copy.getInt("CompassDamage"));
         assertEquals(CompassState.FOUND.getID(), copy.getInt("State"));
+        assertEquals(42L, copy.getLong(CompassSearchData.FOUND_START_CHUNK));
         assertTrue(copy.getBoolean(CompassTransfer.INHERITED));
         UUID newer = UUID.randomUUID();
         CompassSearchData.begin(copy, newer, CompassSearchData.snapshot(copy));
         assertFalse(CompassSearchData.restore(copy, token));
         assertEquals(newer, copy.getUuid(CompassSearchData.TOKEN));
         CompassSearchData.clear(copy);
+        assertFalse(copy.contains(CompassSearchData.FOUND_START_CHUNK));
         assertFalse(copy.contains(CompassTransfer.INHERITED));
         assertFalse(copy.contains(CompassSearchData.BACKUP));
         assertEquals(9, copy.getInt("CompassDamage"));

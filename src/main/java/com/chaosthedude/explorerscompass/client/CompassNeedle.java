@@ -44,7 +44,9 @@ public final class CompassNeedle implements ClampedModelPredicateProvider {
                 && dimension != null && dimension.equals(world.getRegistryKey().getValue());
         double angle;
         if (pointing) {
-            double target = Math.atan2(data.getInt("FoundZ") - context.position().z, data.getInt("FoundX") - context.position().x);
+            double targetX = data.getInt("FoundX") + 0.5;
+            double targetZ = data.getInt("FoundZ") + 0.5;
+            double target = Math.atan2(targetZ - context.position().z, targetX - context.position().x);
             angle = (Math.PI - ((context.yaw() - 90) * Math.PI / 180 - target)) / (Math.PI * 2);
         } else {
             angle = 0; // Random target and wobble are maintained separately for each stack/context.

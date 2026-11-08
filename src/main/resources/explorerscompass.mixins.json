@@ -9,6 +9,7 @@
     "StructureLocatorMixin",
     "StorageIoWorkerMixin",
     "RegionBasedStorageAccessor",
+    "StructureChunkStorageAccessor",
     "StructurePlacementAccessor"
   ],
   "client": [
