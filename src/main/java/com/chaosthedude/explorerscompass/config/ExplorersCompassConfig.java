@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,7 +57,7 @@ public class ExplorersCompassConfig {
 	public static List<String> sortOrder = defaultSortOrder();
 
 	private static List<String> defaultSortOrder() {
-		return new ArrayList<>(Arrays.asList("NAME", "SOURCE", "DIMENSION", "GROUP"));
+		return new ArrayList<>(Arrays.asList("NAME", "SOURCE", "DIMENSION", "SET"));
 	}
 
 	private static List<String> normalizeSortOrder(List<String> savedOrder) {
@@ -88,8 +89,7 @@ public class ExplorersCompassConfig {
 						|| clientConfig.get("singleplayerAndCreative.pauseGameWhenOpen") == null
 						|| clientConfig.get("singleplayerAndCreative.creativeUnlocksAll") == null
 						|| clientConfig.get("singleplayerAndCreative.showTeleportOnlyInCreative") == null;
-				loadClient(clientConfig);
-				if (migrateClient) {
+				if (loadClient(clientConfig) || migrateClient) {
 					clientConfig.remove("behavior.pauseGameWhenOpen");
 					writeClient(clientConfig);
 					write(directory().resolve(CLIENT), clientConfig);
@@ -181,7 +181,7 @@ public class ExplorersCompassConfig {
 		allowSearchWithoutEnoughXp = bool(config, "search.allowSearchWithoutEnoughXp", allowSearchWithoutEnoughXp);
 	}
 
-	private static void loadClient(CommentedConfig config) {
+	static boolean loadClient(CommentedConfig config) {
 		displayWithChatOpen = bool(config, "overlay.displayWithChatOpen", displayWithChatOpen);
 		pauseGameWhenOpen = config.get("singleplayerAndCreative.pauseGameWhenOpen") != null
 				? bool(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen)
@@ -206,8 +206,10 @@ public class ExplorersCompassConfig {
 			}
 		}
 		List<String> order = strings(config, "sorting.sortOrder", sortOrder);
-		if (!normalizeSortOrder(order).equals(order)) throw bad("sorting.sortOrder", "permutation of NAME, SOURCE, DIMENSION, GROUP");
+		boolean migratedSortOrder = Collections.replaceAll(order, "GROUP", "SET");
+		if (!normalizeSortOrder(order).equals(order)) throw bad("sorting.sortOrder", "permutation of NAME, SOURCE, DIMENSION, SET");
 		sortOrder = order;
+		return migratedSortOrder;
 	}
 
 	private static void put(CommentedConfig config, String key, Object value, String comment) {

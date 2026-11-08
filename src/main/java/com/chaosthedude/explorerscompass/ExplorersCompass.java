@@ -56,7 +56,7 @@ public class ExplorersCompass implements ModInitializer {
 	public static int defaultXpCost;
 	public static boolean allowSearchWithoutEnoughXp;
 	public static ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs;
-	public static Map<Identifier, Identifier> structureIDsToGroupIDs;
+	public static Map<Identifier, Identifier> structureIDsToSetIDs;
 
 	@Override
 	public void onInitialize() {
@@ -116,7 +116,7 @@ public class ExplorersCompass implements ModInitializer {
 
 		allowedStructureIDs = new ArrayList<Identifier>();
 		allowedStructureIDsToDimensionIDs = ArrayListMultimap.create();
-		structureIDsToGroupIDs = new HashMap<Identifier, Identifier>();
+		structureIDsToSetIDs = new HashMap<Identifier, Identifier>();
 	}
 
 }

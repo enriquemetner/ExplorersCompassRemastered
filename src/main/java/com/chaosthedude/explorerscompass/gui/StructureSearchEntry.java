@@ -45,7 +45,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int nameY = top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 2);
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(readableName, textWidth), left + 5, nameY, nameColor, true);
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Source").getString() + ": " + StructureUtils.getStructureSource(structureID), textWidth), left + 5, top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 1), infoColor, true);
-        context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Group").getString() + ": " + StructureUtils.getStructureName(ExplorersCompass.structureIDsToGroupIDs.get(structureID)), textWidth), left + 5, top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 0), infoColor, true);
+        context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Set").getString() + ": " + StructureUtils.getStructureName(ExplorersCompass.structureIDsToSetIDs.get(structureID)), textWidth), left + 5, top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 0), infoColor, true);
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Dimension").getString() + ": " + StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)), textWidth), left + 5, top + (height / 2) + ((client.textRenderer.fontHeight + 2) * 1), infoColor, true);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
         boolean filterHeld = parentScreen.isButtonHeld(this, "filters");
@@ -96,8 +96,8 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 		return structureID;
 	}
 
-	public Identifier getGroupID() {
-		return ExplorersCompass.structureIDsToGroupIDs.get(structureID);
+	public Identifier getSetID() {
+		return ExplorersCompass.structureIDsToSetIDs.get(structureID);
 	}
 
 	@Override

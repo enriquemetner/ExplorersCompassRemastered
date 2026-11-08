@@ -22,7 +22,7 @@ public class DimensionSorting implements ISorting {
 
 	@Override
 	public ISorting next() {
-		return new GroupSorting();
+		return new SetSorting();
 	}
 
 	@Override

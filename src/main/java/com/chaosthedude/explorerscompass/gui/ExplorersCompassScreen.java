@@ -227,7 +227,7 @@ public class ExplorersCompassScreen extends Screen {
     private boolean failedCanContinue;
     private final Set<Identifier> hiddenByFailedSearch = new HashSet<>();
     private Identifier searchedId;
-    private boolean searchedGroup;
+    private boolean searchedSet;
     private boolean searchedListed;
     private List<Identifier> listedSearchIds = List.of();
     private int listedSelectedCount;
@@ -804,14 +804,14 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		Map<String, FilterOption> sources = new HashMap<>();
 		Set<Identifier> dimensions = new TreeSet<>();
-		Set<Identifier> groups = new TreeSet<>();
+		Set<Identifier> sets = new TreeSet<>();
 		for (Identifier structure : allowedStructureIDs) {
 			String namespace = structure.getNamespace();
 			sources.putIfAbsent(namespace, new FilterOption(StructureUtils.getStructureSource(structure), namespace, null, false));
 			dimensions.addAll(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structure));
-			Identifier group = ExplorersCompass.structureIDsToGroupIDs.get(structure);
-			if (group != null) {
-				groups.add(group);
+			Identifier set = ExplorersCompass.structureIDsToSetIDs.get(structure);
+			if (set != null) {
+				sets.add(set);
 			}
 		}
 		showSourceColumn = sources.size() != 1 || !sources.containsKey("minecraft");
@@ -824,8 +824,8 @@ public class ExplorersCompassScreen extends Screen {
 		for (Identifier dimension : dimensions) {
 			filterOptions.get(1).add(new FilterOption(StructureUtils.getDimensionName(dimension), null, dimension, false));
 		}
-		for (Identifier group : groups) {
-			filterOptions.get(2).add(new FilterOption(StructureUtils.getStructureName(group), null, group, false));
+		for (Identifier set : sets) {
+			filterOptions.get(2).add(new FilterOption(StructureUtils.getStructureName(set), null, set, false));
 		}
 		Collator collator = englishCollator();
 		Comparator<FilterOption> alphabetical = Comparator.comparing((FilterOption option) -> option.label, collator)
@@ -845,7 +845,7 @@ public class ExplorersCompassScreen extends Screen {
 		return switch (column) {
 			case 0 -> FilterSelections.sources.contains(option.source);
 			case 1 -> FilterSelections.dimensions.contains(option.id);
-			default -> FilterSelections.groups.contains(option.id);
+			default -> FilterSelections.sets.contains(option.id);
 		};
 	}
 
@@ -859,7 +859,7 @@ public class ExplorersCompassScreen extends Screen {
 				FilterSelections.toggleDimension(option.id);
 			}
 		} else {
-			toggleSet(FilterSelections.groups, option.id);
+			toggleSet(FilterSelections.sets, option.id);
 		}
 		showNormalResults();
 		processSearchTerm();
@@ -921,10 +921,10 @@ public class ExplorersCompassScreen extends Screen {
 			rows.add(new EntryFilterRow("Dimension:", StructureUtils.getDimensionName(dimension), 1,
 					new FilterOption("", null, dimension, false)));
 		}
-		Identifier group = ExplorersCompass.structureIDsToGroupIDs.get(entryFiltersId);
-		if (group != null) {
-			rows.add(new EntryFilterRow("Group:", StructureUtils.getStructureName(group), 2,
-					new FilterOption("", null, group, false)));
+		Identifier set = ExplorersCompass.structureIDsToSetIDs.get(entryFiltersId);
+		if (set != null) {
+			rows.add(new EntryFilterRow("Set:", StructureUtils.getStructureName(set), 2,
+					new FilterOption("", null, set, false)));
 		}
 		return rows;
 	}
@@ -1175,7 +1175,7 @@ public class ExplorersCompassScreen extends Screen {
 		String[] headings = {
 			Text.literal("Source").getString(),
 			Text.literal("Dimension").getString(),
-			Text.literal("Group").getString()
+			Text.literal("Set").getString()
 		};
 		for (int column = showSourceColumn ? 0 : 1; column < 3; column++) {
 			int columnLeft = filterColumnLeft(column);
@@ -1690,10 +1690,10 @@ public class ExplorersCompassScreen extends Screen {
 		return !filtersOpen && !settingsOpen && !hiddenStructuresOpen;
 	}
 
-    private boolean beginSearch(Identifier id, boolean group) {
+    private boolean beginSearch(Identifier id, boolean set) {
         if (dialog != Dialog.NONE || id == null) return false;
         searchedId = id;
-        searchedGroup = group;
+        searchedSet = set;
         searchedListed = false;
         listedDisabledCount = 0;
         listedSkippedCount = 0;
@@ -1722,7 +1722,7 @@ public class ExplorersCompassScreen extends Screen {
             return;
         }
         searchedListed = true;
-        searchedGroup = false;
+        searchedSet = false;
         searchedId = null;
         listedSearchIds = List.copyOf(selected);
         listedSelectedCount = selected.size();
@@ -1843,8 +1843,8 @@ public class ExplorersCompassScreen extends Screen {
             List<Identifier> targets;
             if (searchedListed) targets = listedSearchIds;
             else if (searchedId == null) return;
-            else if (searchedGroup) targets = allowedStructureIDs.stream()
-                    .filter(id -> searchedId.equals(ExplorersCompass.structureIDsToGroupIDs.get(id))).toList();
+            else if (searchedSet) targets = allowedStructureIDs.stream()
+                    .filter(id -> searchedId.equals(ExplorersCompass.structureIDsToSetIDs.get(id))).toList();
             else targets = List.of(searchedId);
             for (Identifier id : targets) {
                 if (isStructureHidden(id)) continue;
@@ -1894,11 +1894,11 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private Text[] foundInfoLines() {
-        Identifier groupId = foundStructureId == null ? null : ExplorersCompass.structureIDsToGroupIDs.get(foundStructureId);
+        Identifier setId = foundStructureId == null ? null : ExplorersCompass.structureIDsToSetIDs.get(foundStructureId);
         return new Text[] {
             Text.literal("Name").append(": ").append(Text.literal(StructureUtils.getStructureName(foundStructureId)).formatted(Formatting.GRAY)),
             Text.literal("Source").append(": ").append(Text.literal(StructureUtils.getStructureSource(foundStructureId)).formatted(Formatting.GRAY)),
-            Text.literal("Group").append(": ").append(Text.literal(StructureUtils.getStructureName(groupId)).formatted(Formatting.GRAY))
+            Text.literal("Set").append(": ").append(Text.literal(StructureUtils.getStructureName(setId)).formatted(Formatting.GRAY))
         };
     }
 

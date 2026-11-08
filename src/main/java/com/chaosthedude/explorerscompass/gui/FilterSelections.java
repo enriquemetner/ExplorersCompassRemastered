@@ -12,7 +12,7 @@ import net.minecraft.util.Identifier;
 public final class FilterSelections {
 	public static final Set<String> sources = new HashSet<>();
 	public static final Set<Identifier> dimensions = new HashSet<>();
-	public static final Set<Identifier> groups = new HashSet<>();
+	public static final Set<Identifier> sets = new HashSet<>();
 	private static boolean currentSelected;
 	private static boolean excludeVisited;
 	private static boolean excludeLocked;
@@ -28,7 +28,7 @@ public final class FilterSelections {
 	public static void clear() {
 		sources.clear();
 		dimensions.clear();
-		groups.clear();
+		sets.clear();
 		currentSelected = false;
 		excludeVisited = false;
 		excludeLocked = false;
@@ -36,7 +36,7 @@ public final class FilterSelections {
 	}
 
 	public static boolean isEmpty() {
-		return sources.isEmpty() && dimensions.isEmpty() && !currentSelected && groups.isEmpty() && !excludeVisited && !excludeLocked && !newlyUnlocked;
+		return sources.isEmpty() && dimensions.isEmpty() && !currentSelected && sets.isEmpty() && !excludeVisited && !excludeLocked && !newlyUnlocked;
 	}
 
 	public static boolean excludeVisited() {
@@ -78,8 +78,8 @@ public final class FilterSelections {
 		if (!sources.isEmpty() && !sources.contains(structureId.getNamespace())) {
 			return false;
 		}
-		Identifier group = ExplorersCompass.structureIDsToGroupIDs.get(structureId);
-		if (!groups.isEmpty() && !groups.contains(group)) {
+		Identifier set = ExplorersCompass.structureIDsToSetIDs.get(structureId);
+		if (!sets.isEmpty() && !sets.contains(set)) {
 			return false;
 		}
 		if (dimensions.isEmpty() && !currentSelected) {

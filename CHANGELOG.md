@@ -252,13 +252,13 @@
 ## Version 2.1.1
 #### Fabric 1.19
 - Updated to Fabric 1.19
-- Improved structure grouping so that structures will be listed under more specific groups
+- Improved how structures are listed under more specific sets
 - Fixed an issue in which clearing the compass state did not cancel the current search
 
 ## Version 1.2.2
 #### Forge 1.19
 - Updated to Forge 1.19
-- Improved structure grouping so that structures will be listed under more specific groups
+- Improved how structures are listed under more specific sets
 - Fixed an issue in which clearing the compass state did not cancel the current search
 
 ## Version 1.2.1
@@ -268,7 +268,7 @@
 ## Version 1.2.0
 #### Forge 1.18.2
 - Updated to Forge 1.18.2
-- Added a feature to allow searching for a group of related structures all at once
+- Added a feature to allow searching for a set of related structures all at once
 
 ## Version 2.0.3
 #### Fabric 1.18.1

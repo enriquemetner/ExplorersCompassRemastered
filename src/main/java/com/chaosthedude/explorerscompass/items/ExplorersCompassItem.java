@@ -282,10 +282,10 @@ public class ExplorersCompassItem extends Item {
 		boolean hasInfiniteXp = player.getAbilities().creativeMode;
 		List<Identifier> allowedStructures = StructureUtils.getAllowedStructureIDs(world);
 		ListMultimap<Identifier, Identifier> dimensionsForAllowedStructures = StructureUtils.getGeneratingDimensionIDsForAllowedStructures(world, allowedStructures);
-		Map<Identifier, Identifier> structureIDsToGroupIDs = StructureUtils.getStructureIDsToGroupIDs(world);
+		Map<Identifier, Identifier> structureIDsToSetIDs = StructureUtils.getStructureIDsToSetIDs(world);
 		ServerPlayNetworking.send(player, SyncPacket.ID, new SyncPacket(canTeleport, ExplorersCompassConfig.allowExcludeVisited,
 				hasInfiniteXp, ExplorersCompassConfig.defaultXpCost, ExplorersCompassConfig.allowSearchWithoutEnoughXp,
-				allowedStructures, dimensionsForAllowedStructures, structureIDsToGroupIDs,
+				allowedStructures, dimensionsForAllowedStructures, structureIDsToSetIDs,
 				UnlockingRules.get().lockedRequirements(player, allowedStructures),
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRevision(player.getUuid()),
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRelocked(player.getUuid()),
@@ -322,13 +322,13 @@ public class ExplorersCompassItem extends Item {
 		return MathHelper.hsvToRgb(Math.max(0.0F, (1.0F - f) / 3.0F), 1.0F, 1.0F);
 	}
 
-    public void searchForStructure(ServerWorld world, PlayerEntity player, BlockPos pos, Identifier structureOrGroupId, boolean isGroup, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
+    public void searchForStructure(ServerWorld world, PlayerEntity player, BlockPos pos, Identifier structureOrSetId, boolean isSet, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
         ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-        if (isGroup || isBroken(stack) || !StructureUtils.getAllowedStructureIDs(world).contains(structureOrGroupId)) {
+        if (isSet || isBroken(stack) || !StructureUtils.getAllowedStructureIDs(world).contains(structureOrSetId)) {
             SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
             return;
         }
-        startValidatedSearch(world, serverPlayer, pos, List.of(structureOrGroupId), excludeVisited, creativeUnlocksAll, stack, false, requestId);
+        startValidatedSearch(world, serverPlayer, pos, List.of(structureOrSetId), excludeVisited, creativeUnlocksAll, stack, false, requestId);
     }
 
     public void searchForListedStructures(ServerWorld world, PlayerEntity player, BlockPos pos, List<Identifier> requestedIds, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {

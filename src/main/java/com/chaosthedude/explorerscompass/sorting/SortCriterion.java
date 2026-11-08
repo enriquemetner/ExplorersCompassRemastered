@@ -12,7 +12,7 @@ public enum SortCriterion {
 	NAME("Name", new NameSorting()),
 	SOURCE("Source", new SourceSorting()),
 	DIMENSION("Dimension", new DimensionSorting()),
-	GROUP("Group", new GroupSorting());
+	SET("Set", new SetSorting());
 
 	private final String label;
 	private final ISorting comparator;

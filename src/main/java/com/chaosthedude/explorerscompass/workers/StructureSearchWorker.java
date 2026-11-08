@@ -39,7 +39,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	protected BlockPos currentPos;
 	protected T placement;
 	protected List<Structure> structureSet;
-	protected Identifier structureOrGroupId;
+	protected Identifier structureOrSetId;
 	protected boolean excludeVisited;
 	protected boolean creativeBypass;
 	protected int samples;
@@ -47,13 +47,13 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	protected int lastRadiusThreshold;
 	protected int radiusLimit = ExplorersCompassItem.MAX_SEARCH_RADIUS;
 
-	public StructureSearchWorker(ServerWorld level, PlayerEntity player, ItemStack stack, BlockPos startPos, T placement, List<Structure> structureSet, Identifier structureOrGroupId, boolean excludeVisited, String managerId) {
+	public StructureSearchWorker(ServerWorld level, PlayerEntity player, ItemStack stack, BlockPos startPos, T placement, List<Structure> structureSet, Identifier structureOrSetId, boolean excludeVisited, String managerId) {
 		this.level = level;
 		this.player = player;
 		this.stack = stack;
 		this.startPos = startPos;
 		this.structureSet = structureSet;
-		this.structureOrGroupId = structureOrGroupId;
+		this.structureOrSetId = structureOrSetId;
 		this.excludeVisited = excludeVisited && ExplorersCompassConfig.allowExcludeVisited;
 		this.placement = placement;
 		this.managerId = managerId;
@@ -152,7 +152,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
         storageCache.clear();
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " failed with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-			((ExplorersCompassItem) stack.getItem()).fail(player, stack, structureOrGroupId, getRadius(), samples);
+			((ExplorersCompassItem) stack.getItem()).fail(player, stack, structureOrSetId, getRadius(), samples);
 		} else {
 			ExplorersCompass.LOGGER.error("SearchWorkerManager " + managerId + ": " + getName() + " found invalid compass after failed search");
 			finished = true;

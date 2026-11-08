@@ -36,15 +36,15 @@ import net.minecraft.world.gen.structure.Structure;
 
 public class StructureUtils {
 
-	public static Map<Identifier, Identifier> getStructureIDsToGroupIDs(ServerWorld world) {
-		Map<Identifier, Identifier> structureIDsToGroupIDs = new HashMap<Identifier, Identifier>();
+	public static Map<Identifier, Identifier> getStructureIDsToSetIDs(ServerWorld world) {
+		Map<Identifier, Identifier> structureIDsToSetIDs = new HashMap<Identifier, Identifier>();
 		for (Structure structure : getStructureRegistry(world)) {
-			structureIDsToGroupIDs.put(getIDForStructure(world, structure), getGroupForStructure(world, structure));
+			structureIDsToSetIDs.put(getIDForStructure(world, structure), getSetForStructure(world, structure));
 		}
-		return structureIDsToGroupIDs;
+		return structureIDsToSetIDs;
 	}
 
-	public static Identifier getGroupForStructure(ServerWorld world, Structure structure) {
+	public static Identifier getSetForStructure(ServerWorld world, Structure structure) {
 		Registry<StructureSet> registry = getStructureSetRegistry(world);
 		for (StructureSet set : registry) {
 			for (WeightedEntry entry : set.structures()) {
@@ -56,10 +56,10 @@ public class StructureUtils {
 		return new Identifier(ExplorersCompass.MODID, "none");
 	}
 
-	public static List<Identifier> getStructuresForGroup(ServerWorld world, Identifier groupId) {
+	public static List<Identifier> getStructuresForSet(ServerWorld world, Identifier setId) {
 		List<Identifier> structureIds = new ArrayList<Identifier>();
 		Registry<StructureSet> registry = getStructureSetRegistry(world);
-		StructureSet set = registry.get(groupId);
+		StructureSet set = registry.get(setId);
 		if (set != null) {
 			for (WeightedEntry entry : set.structures()) {
 				Identifier structureId = getIDForStructure(world, entry.structure().value());

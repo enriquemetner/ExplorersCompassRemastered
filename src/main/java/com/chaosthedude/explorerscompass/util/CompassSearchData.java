@@ -10,7 +10,7 @@ public final class CompassSearchData {
     public static final String TOKEN = "CompassSearchToken";
     public static final String FOUND_START_CHUNK = "FoundStartChunk";
     private static final List<String> KEYS = List.of("State", "StructureID", "CreativeBypass",
-            CompassTransfer.INHERITED, "FoundX", "FoundZ", "FoundDimension", FOUND_START_CHUNK, "PrevPos", "IsGroup",
+            CompassTransfer.INHERITED, "FoundX", "FoundZ", "FoundDimension", FOUND_START_CHUNK, "PrevPos", "IsSet",
             "IsListed", "DisplayCoordinates", "DisplayDistance", "SearchRadius", "Samples");
     private CompassSearchData() {}
     public static NbtCompound snapshot(NbtCompound data) {
@@ -20,6 +20,7 @@ public final class CompassSearchData {
     }
     public static void clear(NbtCompound data) {
         KEYS.forEach(data::remove);
+        data.remove("IsGroup"); // Legacy search state saved before the structure set rename.
         data.remove(BACKUP);
         data.remove(TOKEN);
     }

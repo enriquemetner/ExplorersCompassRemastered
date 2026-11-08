@@ -18,18 +18,18 @@ public class SearchPacket extends PacketByteBuf {
 
 	public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "search");
 
-	public SearchPacket(Identifier structureOrGroupId, boolean isGroup, boolean excludeVisited, boolean creativeUnlocksAll, int requestId) {
+	public SearchPacket(Identifier structureOrSetId, boolean isSet, boolean excludeVisited, boolean creativeUnlocksAll, int requestId) {
 		super(Unpooled.buffer());
-		writeIdentifier(structureOrGroupId);
-		writeBoolean(isGroup);
+		writeIdentifier(structureOrSetId);
+		writeBoolean(isSet);
 		writeBoolean(excludeVisited);
 		writeBoolean(creativeUnlocksAll);
 		writeInt(requestId);
 	}
 
 	public static void apply(MinecraftServer server, ServerPlayerEntity player, ServerPlayNetworkHandler handler, PacketByteBuf buf, PacketSender responseSender) {
-		final Identifier structureOrGroupId = buf.readIdentifier();
-		final boolean isGroup = buf.readBoolean();
+		final Identifier structureOrSetId = buf.readIdentifier();
+		final boolean isSet = buf.readBoolean();
 		final boolean excludeVisited = buf.readBoolean();
 		final boolean creativeUnlocksAll = buf.readBoolean();
 		final int requestId = buf.readInt();
@@ -39,7 +39,7 @@ public class SearchPacket extends PacketByteBuf {
 			if (!stack.isEmpty()) {
 				final ExplorersCompassItem explorersCompass = (ExplorersCompassItem) stack.getItem();
 				final ServerWorld world = (ServerWorld) player.getEntityWorld();
-				explorersCompass.searchForStructure(world, player, player.getBlockPos(), structureOrGroupId, isGroup, excludeVisited, creativeUnlocksAll, stack, requestId);
+				explorersCompass.searchForStructure(world, player, player.getBlockPos(), structureOrSetId, isSet, excludeVisited, creativeUnlocksAll, stack, requestId);
 			} else {
 				SearchResultPacket.send(player, requestId, SearchResultPacket.REJECTED, 0);
 			}

@@ -108,7 +108,7 @@ public final class ClientPacketHandlers {
         final boolean allowSearchWithoutEnoughXp = buf.readBoolean();
         final List<Identifier> allowedStructureIDs = new ArrayList<Identifier>();
         final ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs = ArrayListMultimap.create();
-        final Map<Identifier, Identifier> structureIDsToGroupIDs = new HashMap<Identifier, Identifier>();
+        final Map<Identifier, Identifier> structureIDsToSetIDs = new HashMap<Identifier, Identifier>();
 
         final int numStructures = buf.readInt();
         for (int i = 0; i < numStructures; i++) {
@@ -118,12 +118,12 @@ public final class ClientPacketHandlers {
             for (int j = 0; j < numDimensions; j++) {
                 dimensionIDs.add(buf.readIdentifier());
             }
-            Identifier groupID = buf.readIdentifier();
+            Identifier setID = buf.readIdentifier();
 
             if (structureID != null) {
                 allowedStructureIDs.add(structureID);
                 allowedStructureIDsToDimensionIDs.putAll(structureID, dimensionIDs);
-                structureIDsToGroupIDs.put(structureID, groupID);
+                structureIDsToSetIDs.put(structureID, setID);
             }
         }
 
@@ -161,7 +161,7 @@ public final class ClientPacketHandlers {
             ExplorersCompass.defaultXpCost = defaultXpCost;
             ExplorersCompass.allowSearchWithoutEnoughXp = allowSearchWithoutEnoughXp;
             ExplorersCompass.allowedStructureIDsToDimensionIDs = allowedStructureIDsToDimensionIDs;
-            ExplorersCompass.structureIDsToGroupIDs = structureIDsToGroupIDs;
+            ExplorersCompass.structureIDsToSetIDs = structureIDsToSetIDs;
         });
     }
 }
