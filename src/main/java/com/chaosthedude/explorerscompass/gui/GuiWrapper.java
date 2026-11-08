@@ -11,6 +11,7 @@ import net.minecraft.world.World;
 public class GuiWrapper {
 	
 	public static void openGUI(World world, PlayerEntity player, ItemStack stack) {
+		ExplorersCompass.synced = false;
 		MinecraftClient.getInstance().setScreen(new ExplorersCompassScreen(world, player, stack, (ExplorersCompassItem) stack.getItem(), ExplorersCompass.allowedStructureIDs));
 	}
 

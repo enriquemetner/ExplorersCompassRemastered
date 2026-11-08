@@ -16,6 +16,7 @@ import java.util.stream.Collectors;
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
+import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchPacket;
 import com.chaosthedude.explorerscompass.network.SearchListedPacket;
 import com.chaosthedude.explorerscompass.network.CancelSearchPacket;
@@ -174,6 +175,7 @@ public class ExplorersCompassScreen extends Screen {
 	private TransparentTextField hiddenSearchTextField;
 	private final StructureSelection structureSelection = new StructureSelection();
 	private StructureSearchList selectionList;
+	private boolean awaitingOpeningSync = true;
 	private EntryDetailsPopup entryDetails;
 	private final Set<Identifier> pendingHiddenStructures = new HashSet<>();
 	private String hiddenSearchText = "";
@@ -273,6 +275,7 @@ public class ExplorersCompassScreen extends Screen {
 		this.player = player;
 		this.stack = stack;
 		this.explorersCompass = explorersCompass;
+		lastCreativeBypass = creativeBypassActive();
 		FilterSelections.openedInDimension(world.getRegistryKey().getValue());
 
 		this.allowedStructureIDs = new ArrayList<Identifier>(allowedStructureIDs);
@@ -414,6 +417,9 @@ public class ExplorersCompassScreen extends Screen {
 				}
 			}
 			entryFiltersId = null;
+			boolean focusTrackedStructure = awaitingOpeningSync && !restoreQuestListAfterSync;
+			awaitingOpeningSync = false;
+			foundStructureId = ClientPacketHandlers.trackedStructureId;
 			double scroll = restoreQuestListAfterSync ? questReturnScroll : selectionList.getScrollAmount();
 			remove(selectionList);
 			allowedStructureIDs = new ArrayList<Identifier>(ExplorersCompass.allowedStructureIDs);
@@ -432,6 +438,7 @@ public class ExplorersCompassScreen extends Screen {
 			rebuildFilterOptions();
 			processSearchTerm();
 			selectionList.setScrollAmount(scroll);
+			if (focusTrackedStructure) selectionList.focusStructure(foundStructureId);
 			restoreQuestListAfterSync = false;
 			focusActiveSearchField();
 
@@ -446,7 +453,6 @@ public class ExplorersCompassScreen extends Screen {
                 lockedRequirementsId = null;
                 com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRevision = 0;
             }
-            foundStructureId = com.chaosthedude.explorerscompass.network.ClientPacketHandlers.trackedStructureId;
 			ExplorersCompass.synced = false;
 		}
 	}
