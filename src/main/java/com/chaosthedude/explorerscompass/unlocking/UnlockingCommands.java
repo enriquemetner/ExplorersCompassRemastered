@@ -10,12 +10,14 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.util.CompassTeleport;
 import com.chaosthedude.explorerscompass.util.StructureDestination;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -27,6 +29,8 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.text.ClickEvent;
+import net.minecraft.text.HoverEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Formatting;
@@ -51,6 +55,17 @@ public final class UnlockingCommands {
                 }))
                 .then(literal("lock").then(structureTargets(false)))
                 .then(literal("unlock").then(structureTargets(true)))
+                .then(literal("tp").executes(c -> {
+                    CompassTeleport.toHeldTarget(c.getSource().getPlayerOrThrow());
+                    return 1;
+                }).then(structureArgument().then(argument("x", IntegerArgumentType.integer(-30_000_000, 29_999_999))
+                        .then(argument("z", IntegerArgumentType.integer(-30_000_000, 29_999_999)).executes(c -> {
+                            int x = IntegerArgumentType.getInteger(c, "x");
+                            int z = IntegerArgumentType.getInteger(c, "z");
+                            CompassTeleport.toCoordinates(c.getSource().getPlayerOrThrow(),
+                                    IdentifierArgumentType.getIdentifier(c, "id"), new BlockPos(x, 0, z));
+                            return 1;
+                        })))))
                 .then(literal("visits")
                     .then(literal("list").then(playerArgument()
                         .then(literal("structure").then(visitArgument(false).executes(c -> listVisits(c, false))))
@@ -186,15 +201,18 @@ public final class UnlockingCommands {
             var start = StructureDestination.readStart(world, chunk, structure);
             var target = StructureDestination.refine(StructureDestination.pieces(start),
                     new BlockPos(chunk.getCenterX(), 0, chunk.getCenterZ())).pos();
-            int x = target.getX(), z = target.getZ();
-            Text coords = Text.literal("[" + x + ", ~, " + z + "]").styled(style -> style.withColor(Formatting.GREEN)
-                .withClickEvent(new net.minecraft.text.ClickEvent(net.minecraft.text.ClickEvent.Action.SUGGEST_COMMAND, "/tp " + x + " ~ " + z))
-                .withHoverEvent(new net.minecraft.text.HoverEvent(net.minecraft.text.HoverEvent.Action.SHOW_TEXT, Text.translatable("chat.coordinates.tooltip"))));
-            Text line = Text.literal(i + ": " + v.structure() + " (" + v.dimension() + ") ").append(coords);
+            Text line = Text.literal(i + ": " + v.structure() + " (" + v.dimension() + ") ")
+                    .append(visitCoordinates(v.structure(), target.getX(), target.getZ()));
             c.getSource().sendFeedback(() -> line, false);
         }
         if (entries.isEmpty()) c.getSource().sendFeedback(() -> Text.literal("No matching visits."), false);
         return entries.size();
+    }
+
+    static Text visitCoordinates(Identifier id, int x, int z) {
+        return Text.literal("[" + x + ", " + z + "]").styled(style -> style.withColor(Formatting.GREEN)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/explorerscompass tp " + id + " " + x + " " + z))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Text.translatable("chat.coordinates.tooltip"))));
     }
 
     private static RequiredArgumentBuilder<ServerCommandSource, Identifier> visitRanges(boolean set) {

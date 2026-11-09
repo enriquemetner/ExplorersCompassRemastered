@@ -1977,8 +1977,7 @@ public class ExplorersCompassScreen extends Screen {
 	private boolean canTeleportToTarget() {
 		if (client.player == null) return false;
 		ItemStack held = ItemUtils.getHeldItem(client.player, explorersCompass);
-		if (explorersCompass.getState(held) != CompassState.FOUND
-				|| !explorersCompass.isInFoundDimension(held, client.player.getWorld())) return false;
+		if (explorersCompass.getState(held) != CompassState.FOUND) return false;
 		return !ExplorersCompass.lockedRequirements.containsKey(explorersCompass.getStructureID(held))
 				|| (client.player.getAbilities().creativeMode && held.getNbt().getBoolean("CreativeBypass"));
 	}

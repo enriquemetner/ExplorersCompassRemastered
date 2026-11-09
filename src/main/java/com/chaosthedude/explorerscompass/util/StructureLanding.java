@@ -19,14 +19,14 @@ import net.minecraft.world.Heightmap;
 public final class StructureLanding {
     public record Landing(Vec3d position, EntityPose pose) {}
 
+    static final int RADIUS = 2;
     private static final List<BlockPos> OFFSETS = columnOffsets();
     private static final List<EntityPose> POSES = List.of(EntityPose.STANDING, EntityPose.CROUCHING, EntityPose.SWIMMING);
 
     private StructureLanding() {}
 
-    public static Landing find(ServerPlayerEntity player, BlockPos target, List<BlockBox> pieces) {
+    public static Landing find(ServerPlayerEntity player, ServerWorld world, BlockPos target, List<BlockBox> pieces) {
         var preferred = StructureDestination.refine(pieces, target);
-        var world = player.getServerWorld();
         for (BlockPos offset : OFFSETS) {
             int x = target.getX() + offset.getX();
             int z = target.getZ() + offset.getZ();
@@ -111,9 +111,9 @@ public final class StructureLanding {
     }
 
     private static List<BlockPos> columnOffsets() {
-        List<BlockPos> offsets = new ArrayList<>(25);
-        for (int x = -2; x <= 2; x++) {
-            for (int z = -2; z <= 2; z++) offsets.add(new BlockPos(x, 0, z));
+        List<BlockPos> offsets = new ArrayList<>();
+        for (int x = -RADIUS; x <= RADIUS; x++) {
+            for (int z = -RADIUS; z <= RADIUS; z++) offsets.add(new BlockPos(x, 0, z));
         }
         offsets.sort(Comparator.comparingInt(pos -> pos.getX() * pos.getX() + pos.getZ() * pos.getZ()));
         return List.copyOf(offsets);
