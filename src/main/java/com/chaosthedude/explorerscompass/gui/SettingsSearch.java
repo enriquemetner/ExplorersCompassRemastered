@@ -1,0 +1,40 @@
+package com.chaosthedude.explorerscompass.gui;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.function.IntPredicate;
+
+final class SettingsSearch {
+    private SettingsSearch() {}
+
+    static List<Integer> matchingRows(String[] labels, IntPredicate isDivider, String query) {
+        String[] fragments = query.strip().toLowerCase(Locale.ROOT).split("\\s+");
+        List<Integer> rows = new ArrayList<>();
+        int section = -1;
+        int displayedSection = -1;
+        String sectionName = "";
+        for (int row = 0; row < labels.length; row++) {
+            if (isDivider.test(row)) {
+                section = row;
+                sectionName = labels[row];
+                continue;
+            }
+            String searchable = (sectionName + " " + labels[row]).toLowerCase(Locale.ROOT);
+            if (!matches(searchable, fragments)) continue;
+            if (section != displayedSection) {
+                rows.add(section);
+                displayedSection = section;
+            }
+            rows.add(row);
+        }
+        return rows;
+    }
+
+    private static boolean matches(String searchable, String[] fragments) {
+        for (String fragment : fragments) {
+            if (!searchable.contains(fragment)) return false;
+        }
+        return true;
+    }
+}

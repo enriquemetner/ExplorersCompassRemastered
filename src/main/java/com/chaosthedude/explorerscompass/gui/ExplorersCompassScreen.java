@@ -84,6 +84,7 @@ public class ExplorersCompassScreen extends Screen {
 	private static final String SETTINGS_RESET_ALL_LABEL = "All";
 	private static final int SETTINGS_OFFSET_ROW = 2;
 	private static final int SETTINGS_HIDDEN_ROW = 17;
+	private static final String HIDDEN_STRUCTURES_TITLE = "Hidden Structures";
 	private static final int SETTINGS_PAUSE_ROW = 13;
 	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 14;
 	private static final int SETTINGS_TELEPORT_ROW = 15;
@@ -113,7 +114,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Unlock All Structures in Creative",
 		"Show Teleport Only in Creative",
 		"Other",
-		"Hidden Structures",
+		HIDDEN_STRUCTURES_TITLE,
 	};
 	private static final String[] SETTINGS_TOOLTIPS = {
 		null,
@@ -178,6 +179,7 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget cancelButton;
 	private TransparentTextField searchTextField;
 	private TransparentTextField filterSearchTextField;
+	private TransparentTextField settingsSearchTextField;
 	private TransparentTextField hiddenSearchTextField;
 	private final StructureSelection structureSelection = new StructureSelection();
 	private StructureSearchList selectionList;
@@ -247,6 +249,7 @@ public class ExplorersCompassScreen extends Screen {
     private boolean showFoundDistance;
 	private double filterScroll;
 	private int settingsFirstRow;
+	private List<Integer> settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, "");
 	private boolean lastCreativeBypass;
 	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN, NOT_FOUND }
 	private ScrollPanel draggedScrollbar;
@@ -395,6 +398,7 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		searchTextField.tick();
 		filterSearchTextField.tick();
+		settingsSearchTextField.tick();
 		hiddenSearchTextField.tick();
 		if (lastCreativeBypass != creativeBypassActive()) {
 			lastCreativeBypass = creativeBypassActive();
@@ -511,8 +515,7 @@ public class ExplorersCompassScreen extends Screen {
 		if (filtersOpen) {
 			context.drawTextWithShadow(textRenderer, Text.literal("Filters"), FILTER_TITLE_X, 15, 0xffffff);
         } else if (hiddenStructuresOpen) {
-            String breadcrumb = Text.literal("Settings > Hidden Structures").getString();
-            context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(breadcrumb,
+            context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(HIDDEN_STRUCTURES_TITLE,
                     Math.max(1, hiddenSearchTextField.getX() - 20)), 10, 15, 0xffffff);
 		} else if (settingsOpen) {
 			context.drawTextWithShadow(textRenderer, Text.literal("Settings"), FILTER_TITLE_X, 15, 0xffffff);
@@ -801,7 +804,7 @@ public class ExplorersCompassScreen extends Screen {
 			case FILTERS -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
 					Scrollbar.pixelThumbHeight(trackHeight, filterMaxScroll(), 32, 8), filterScroll, filterMaxScroll());
 			case SETTINGS -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
-					Scrollbar.rowThumbHeight(trackHeight, settingsVisibleRows(), SETTINGS_LABELS.length), settingsFirstRow, settingsMaxFirstRow());
+					Scrollbar.rowThumbHeight(trackHeight, settingsVisibleRows(), settingsRows.size()), settingsFirstRow, settingsMaxFirstRow());
 			case HIDDEN -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
 					Scrollbar.rowThumbHeight(trackHeight, hiddenVisibleRows(), filteredHiddenStructures().size()), hiddenScroll, hiddenMaxScroll());
 			case NOT_FOUND -> notFoundScrollbar();
@@ -1041,7 +1044,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int settingsRowY(int row) {
-		return filterTop() + (row - settingsFirstRow) * SETTINGS_ROW_HEIGHT;
+		return filterTop() + (settingsRows.indexOf(row) - settingsFirstRow) * SETTINGS_ROW_HEIGHT;
 	}
 
 	private int settingsVisibleRows() {
@@ -1049,7 +1052,12 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int settingsMaxFirstRow() {
-		return Math.max(0, SETTINGS_LABELS.length - settingsVisibleRows());
+		return Math.max(0, settingsRows.size() - settingsVisibleRows());
+	}
+
+	private boolean isSettingsRowVisible(int row) {
+		int index = settingsRows.indexOf(row);
+		return index >= settingsFirstRow && index < settingsFirstRow + settingsVisibleRows();
 	}
 
 	private int settingsControlHeight() {
@@ -1081,12 +1089,18 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void renderSettingsPanel(DrawContext context) {
-		int lastVisibleRow = Math.min(SETTINGS_LABELS.length, settingsFirstRow + settingsVisibleRows());
 		context.fill(filterLeft(), filterTop(), filterRight(), filterBottom(),
 				RenderUtils.blackWithOpacity(RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT));
+		if (settingsRows.isEmpty()) {
+			context.drawCenteredTextWithShadow(textRenderer, "No matching settings", (filterLeft() + filterRight()) / 2,
+					filterTop() + 10, SETTINGS_DIVIDER_COLOR);
+			return;
+		}
+		int lastVisibleRow = Math.min(settingsRows.size(), settingsFirstRow + settingsVisibleRows());
 		int labelX = filterLeft() + 10;
 		int labelWidth = Math.max(1, settingsControlX() - labelX - 10);
-		for (int row = settingsFirstRow; row < lastVisibleRow; row++) {
+		for (int index = settingsFirstRow; index < lastVisibleRow; index++) {
+			int row = settingsRows.get(index);
 			if (isSettingsDivider(row)) {
 				renderSettingsDivider(context, row);
 				continue;
@@ -1107,7 +1121,7 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		String offset = Integer.toString(ExplorersCompassConfig.overlayLineOffset);
 		float offsetScale = Math.min(1.0f, 46.0f / Math.max(1, textRenderer.getWidth(offset)));
-		if (settingsFirstRow <= SETTINGS_OFFSET_ROW && SETTINGS_OFFSET_ROW < settingsFirstRow + settingsVisibleRows()) {
+		if (isSettingsRowVisible(SETTINGS_OFFSET_ROW)) {
 			context.getMatrices().push();
 			context.getMatrices().translate(settingsControlX() + SETTINGS_CONTROL_WIDTH / 2.0,
 					settingsRowY(SETTINGS_OFFSET_ROW) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight * offsetScale) / 2.0, 0);
@@ -1119,13 +1133,15 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void renderSettingsTooltip(DrawContext context, int mouseX, int mouseY) {
-		if (mouseY < settingsRowY(settingsFirstRow) || mouseY >= filterBottom()) {
+		if (mouseY < filterTop() || mouseY >= filterBottom()) {
 			return;
 		}
-		int row = settingsFirstRow + (mouseY - settingsRowY(settingsFirstRow)) / SETTINGS_ROW_HEIGHT;
-		if (row >= SETTINGS_LABELS.length || row >= settingsFirstRow + settingsVisibleRows() || isSettingsDivider(row)) {
+		int rowIndex = settingsFirstRow + (mouseY - filterTop()) / SETTINGS_ROW_HEIGHT;
+		if (rowIndex >= settingsRows.size() || rowIndex >= settingsFirstRow + settingsVisibleRows()) {
 			return;
 		}
+		int row = settingsRows.get(rowIndex);
+		if (isSettingsDivider(row)) return;
 		int labelX = filterLeft() + 10;
 		int labelWidth = Math.max(1, settingsControlX() - labelX - 10);
 		String label = SETTINGS_LABELS[row];
@@ -1494,7 +1510,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private TransparentTextField searchFieldAt(double mouseX, double mouseY) {
-		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, hiddenSearchTextField}) {
+		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, settingsSearchTextField, hiddenSearchTextField}) {
 			if (field != null && field.isVisible() && mouseX >= field.getX() && mouseX < field.getX() + field.getWidth()
 					&& mouseY >= field.getY() && mouseY < field.getY() + field.getHeight()) return field;
 		}
@@ -1504,13 +1520,13 @@ public class ExplorersCompassScreen extends Screen {
 	private TransparentTextField activeSearchField() {
 		if (hiddenStructuresOpen) return hiddenSearchTextField;
 		if (filtersOpen) return filterSearchTextField;
-		return settingsOpen ? null : searchTextField;
+		return settingsOpen ? settingsSearchTextField : searchTextField;
 	}
 
 	private void focusActiveSearchField() {
 		if (entryDetails != null) return;
 		TransparentTextField active = activeSearchField();
-		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, hiddenSearchTextField}) {
+		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, settingsSearchTextField, hiddenSearchTextField}) {
 			if (field != null && field != active) field.setFocused(false);
 		}
 		if (active == null) {
@@ -2546,8 +2562,22 @@ public class ExplorersCompassScreen extends Screen {
 		});
 		addDrawableChild(filterSearchTextField);
 		filterSearchTextField.setVisible(filtersOpen);
+		String settingsQuery = settingsSearchTextField == null ? "" : settingsSearchTextField.getText();
+		int settingsSearchX = settingsSearchX();
+		settingsSearchTextField = new TransparentTextField(textRenderer, settingsSearchX, 10,
+				settingsSearchWidth(settingsSearchX), 20, Text.literal("Search Settings"));
+		settingsSearchTextField.setMaxLength(256);
+		settingsSearchTextField.setText(settingsQuery);
+		settingsSearchTextField.setChangedListener(value -> {
+			settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, value);
+			settingsFirstRow = 0;
+			if (draggedScrollbar == ScrollPanel.SETTINGS) draggedScrollbar = null;
+			updateViewButtons();
+		});
+		addDrawableChild(settingsSearchTextField);
+		settingsSearchTextField.setVisible(settingsOpen);
 		int headerEnd = backButton.getX() - HEADER_GAP;
-		int hiddenSearchX = Math.min(10 + textRenderer.getWidth(Text.literal("Settings > Hidden Structures")) + 10,
+		int hiddenSearchX = Math.min(10 + textRenderer.getWidth(HIDDEN_STRUCTURES_TITLE) + 10,
 				Math.max(10, headerEnd - 80));
 		hiddenSearchTextField = new TransparentTextField(textRenderer, hiddenSearchX, 10,
 				Math.max(1, headerEnd - hiddenSearchX),
@@ -2587,6 +2617,14 @@ public class ExplorersCompassScreen extends Screen {
 		return buttonWidthForLabel(SETTINGS_RESET_ALL_LABEL) + SETTINGS_RESET_ICON_SIZE + SETTINGS_RESET_LABEL_GAP;
 	}
 
+	private int settingsSearchX() {
+		return FILTER_TITLE_X + textRenderer.getWidth("Settings") + HEADER_GAP;
+	}
+
+	private int settingsSearchWidth(int x) {
+		return Math.max(1, restoreDefaultsButton.getX() - HEADER_GAP - x);
+	}
+
 	private int excludeButtonWidth(String label) {
 		return textRenderer.getWidth(label) + FILTER_CHECKBOX_SIZE
 				+ EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP + EXCLUDE_BUTTON_CONTENT_PADDING * 2;
@@ -2614,10 +2652,11 @@ public class ExplorersCompassScreen extends Screen {
         hiddenStructuresButton.setY(settingsRowY(SETTINGS_HIDDEN_ROW));
 		teleportButton.setY(settingsButton.getY() - teleportButton.getHeight() - 5);
 		backButton.setX(cancelButton.getX() - backButton.getWidth() - 5);
-		int settingsTitleEnd = FILTER_TITLE_X + textRenderer.getWidth("Settings") + HEADER_GAP;
+		int settingsSearchX = settingsSearchX();
 		int restoreRight = backButton.getX() - 5;
-		restoreDefaultsButton.setWidth(Math.max(1, Math.min(restoreDefaultsButtonWidth(), restoreRight - settingsTitleEnd)));
+		restoreDefaultsButton.setWidth(Math.max(1, Math.min(restoreDefaultsButtonWidth(), restoreRight - settingsSearchX)));
 		restoreDefaultsButton.setX(restoreRight - restoreDefaultsButton.getWidth());
+		if (settingsSearchTextField != null) settingsSearchTextField.setWidth(settingsSearchWidth(settingsSearchX));
 		clearFiltersTopButton.setX(width - 10 - clearFiltersTopButton.getWidth());
 		clearFiltersTopButton.setY(40);
 		excludeVisitedButton.setX(filterLeft());
@@ -2661,6 +2700,7 @@ public class ExplorersCompassScreen extends Screen {
         newlyUnlockedButton.visible = filtersOpen && com.chaosthedude.explorerscompass.network.ClientPacketHandlers.showNewlyUnlockedFilter;
 		backButton.visible = filtersOpen || settingsOpen || hiddenStructuresOpen;
 		restoreDefaultsButton.visible = settingsOpen;
+		if (settingsSearchTextField != null) settingsSearchTextField.setVisible(settingsOpen);
 		if (hiddenSearchTextField != null) hiddenSearchTextField.setVisible(hiddenStructuresOpen);
 		placeSetting(overlaySideButton, 1);
 		placeSetting(offsetDecreaseButton, SETTINGS_OFFSET_ROW);
@@ -2681,7 +2721,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void placeSetting(ButtonWidget button, int row) {
 		button.setY(settingsRowY(row) + (SETTINGS_ROW_HEIGHT - settingsControlHeight()) / 2);
-		button.visible = settingsOpen && row >= settingsFirstRow && row < settingsFirstRow + settingsVisibleRows();
+		button.visible = settingsOpen && isSettingsRowVisible(row);
 	}
 
 }
