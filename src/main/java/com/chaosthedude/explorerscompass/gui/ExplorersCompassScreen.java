@@ -15,6 +15,7 @@ import java.util.stream.Collectors;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
+import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
 import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchPacket;
@@ -35,6 +36,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -76,6 +78,10 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SIDEBAR_BUTTON_STEP = 25;
 	private static final int SETTINGS_ROW_HEIGHT = SIDEBAR_BUTTON_STEP;
 	private static final int SETTINGS_CONTROL_WIDTH = 90;
+	private static final Identifier SETTINGS_RESET_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/restore_default.png");
+	private static final int SETTINGS_RESET_ICON_SIZE = 9;
+	private static final int SETTINGS_RESET_LABEL_GAP = 4;
+	private static final String SETTINGS_RESET_ALL_LABEL = "All";
 	private static final int SETTINGS_OFFSET_ROW = 2;
 	private static final int SETTINGS_HIDDEN_ROW = 17;
 	private static final int SETTINGS_PAUSE_ROW = 13;
@@ -147,6 +153,8 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget sortOrderButton;
 	private ButtonWidget filtersButton;
 	private ButtonWidget settingsButton;
+	private ButtonWidget restoreDefaultsButton;
+	private final Map<Integer, ButtonWidget> settingResetButtons = new HashMap<>();
 	private ButtonWidget chatOverlayButton;
 	private ButtonWidget allowIdSearchesButton;
 	private ButtonWidget overlaySideButton;
@@ -1049,7 +1057,11 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int settingsControlX() {
-		return filterRight() - SETTINGS_CONTROL_WIDTH - 10;
+		return settingsResetX() - SEARCH_BUTTON_GAP - SETTINGS_CONTROL_WIDTH;
+	}
+
+	private int settingsResetX() {
+		return filterRight() - 10 - SMALL_BUTTON_SIZE;
 	}
 
 	private boolean isSettingsDivider(int row) {
@@ -1149,6 +1161,46 @@ public class ExplorersCompassScreen extends Screen {
 		closeOnFoundButton.setMessage(onOff(ExplorersCompassConfig.closeOnFound));
 		adjustRowsToFitViewButton.setMessage(onOff(ExplorersCompassConfig.adjustRowsToFitView));
 		overlaySideButton.setMessage(Text.literal(ExplorersCompassConfig.overlaySide == OverlaySide.LEFT ? "Left" : "Right"));
+	}
+
+	private void addSettingResetButton(int row, ClientSetting setting) {
+		Text label = Text.literal("Restore default for " + SETTINGS_LABELS[row]);
+		var button = new TransparentButton(settingsResetX(), settingsRowY(row), SMALL_BUTTON_SIZE,
+				settingsControlHeight(), label, ignored -> restoreSettings(setting::restoreDefault)) {
+			@Override
+			protected void renderLabel(DrawContext context, net.minecraft.client.font.TextRenderer renderer) {
+				int x = getX() + (getWidth() - SETTINGS_RESET_ICON_SIZE) / 2;
+				drawSettingsResetIcon(context, x, getY(), getHeight());
+			}
+		};
+		button.setTooltip(Tooltip.of(label));
+		settingResetButtons.put(row, addDrawableChild(button));
+	}
+
+	private static void drawSettingsResetIcon(DrawContext context, int x, int top, int height) {
+		int y = top + (height - SETTINGS_RESET_ICON_SIZE) / 2;
+		context.drawTexture(SETTINGS_RESET_ICON, x, y, 0, 0, SETTINGS_RESET_ICON_SIZE, SETTINGS_RESET_ICON_SIZE,
+				SETTINGS_RESET_ICON_SIZE, SETTINGS_RESET_ICON_SIZE);
+	}
+
+	private void restoreSettings(Runnable reset) {
+		boolean fittedRows = ExplorersCompassConfig.adjustRowsToFitView;
+		boolean allowedIdSearches = ExplorersCompassConfig.allowIdSearches;
+		double scroll = selectionList.getScrollAmount();
+		reset.run();
+		ExplorersCompassConfig.saveClient();
+		updateSettingsButtonLabels();
+		sortOrder.clear();
+		for (String name : ExplorersCompassConfig.sortOrder) sortOrder.add(SortCriterion.valueOf(name));
+		if (fittedRows != ExplorersCompassConfig.adjustRowsToFitView) {
+			remove(selectionList);
+			selectionList = new StructureSearchList(this, client, structureSelection, 130, 40,
+					width - 130 - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
+		}
+		processSearchTerm();
+		selectionList.setScrollAmount(scroll);
+		filterScroll = allowedIdSearches == ExplorersCompassConfig.allowIdSearches
+				? MathHelper.clamp(filterScroll, 0, filterMaxScroll()) : 0;
 	}
 
 	private static Text onOff(boolean enabled) {
@@ -2401,6 +2453,20 @@ public class ExplorersCompassScreen extends Screen {
 			focusActiveSearchField();
         }));
 
+		settingResetButtons.clear();
+		addSettingResetButton(1, ClientSetting.OVERLAY_SIDE);
+		addSettingResetButton(SETTINGS_OFFSET_ROW, ClientSetting.OVERLAY_LINE_OFFSET);
+		addSettingResetButton(3, ClientSetting.DISPLAY_WITH_CHAT_OPEN);
+		addSettingResetButton(5, ClientSetting.CHECKED_FILTERS_FIRST);
+		addSettingResetButton(6, ClientSetting.ADJUST_ROWS_TO_FIT_VIEW);
+		addSettingResetButton(8, ClientSetting.CLOSE_ON_FOUND);
+		addSettingResetButton(9, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
+		addSettingResetButton(10, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
+		addSettingResetButton(11, ClientSetting.ALLOW_ID_SEARCHES);
+		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
+		addSettingResetButton(SETTINGS_CREATIVE_UNLOCK_ROW, ClientSetting.CREATIVE_UNLOCKS_ALL);
+		addSettingResetButton(SETTINGS_TELEPORT_ROW, ClientSetting.SHOW_TELEPORT_ONLY_IN_CREATIVE);
+
 		cancelButton = addDrawableChild(new TransparentButton(width - 30, 10, 20, 20, Text.literal(""), (onPress) -> {
 			client.setScreen(null);
 		}));
@@ -2442,6 +2508,19 @@ public class ExplorersCompassScreen extends Screen {
 				setFiltersOpen(false);
 			}
 		}));
+		restoreDefaultsButton = addDrawableChild(new TransparentButton(10, 10, restoreDefaultsButtonWidth(), 20,
+				Text.literal("Restore Defaults"), ignored -> restoreSettings(ExplorersCompassConfig::restoreClientDefaults)) {
+			@Override
+			protected void renderLabel(DrawContext context, net.minecraft.client.font.TextRenderer renderer) {
+				int iconOffset = renderer.getWidth(SETTINGS_RESET_ALL_LABEL) + SETTINGS_RESET_LABEL_GAP;
+				int contentWidth = iconOffset + SETTINGS_RESET_ICON_SIZE;
+				int x = getX() + (getWidth() - contentWidth) / 2;
+				context.drawTextWithShadow(renderer, SETTINGS_RESET_ALL_LABEL, x,
+						getY() + (getHeight() - 8) / 2, 0xffffff);
+				drawSettingsResetIcon(context, x + iconOffset, getY(), getHeight());
+			}
+		});
+		restoreDefaultsButton.setTooltip(Tooltip.of(restoreDefaultsButton.getMessage()));
 		positionTopButtons();
 		updateViewButtons();
 	}
@@ -2504,6 +2583,10 @@ public class ExplorersCompassScreen extends Screen {
 		return textRenderer.getWidth(label) + HEADER_BUTTON_TEXT_PADDING;
 	}
 
+	private int restoreDefaultsButtonWidth() {
+		return buttonWidthForLabel(SETTINGS_RESET_ALL_LABEL) + SETTINGS_RESET_ICON_SIZE + SETTINGS_RESET_LABEL_GAP;
+	}
+
 	private int excludeButtonWidth(String label) {
 		return textRenderer.getWidth(label) + FILTER_CHECKBOX_SIZE
 				+ EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP + EXCLUDE_BUTTON_CONTENT_PADDING * 2;
@@ -2531,6 +2614,10 @@ public class ExplorersCompassScreen extends Screen {
         hiddenStructuresButton.setY(settingsRowY(SETTINGS_HIDDEN_ROW));
 		teleportButton.setY(settingsButton.getY() - teleportButton.getHeight() - 5);
 		backButton.setX(cancelButton.getX() - backButton.getWidth() - 5);
+		int settingsTitleEnd = FILTER_TITLE_X + textRenderer.getWidth("Settings") + HEADER_GAP;
+		int restoreRight = backButton.getX() - 5;
+		restoreDefaultsButton.setWidth(Math.max(1, Math.min(restoreDefaultsButtonWidth(), restoreRight - settingsTitleEnd)));
+		restoreDefaultsButton.setX(restoreRight - restoreDefaultsButton.getWidth());
 		clearFiltersTopButton.setX(width - 10 - clearFiltersTopButton.getWidth());
 		clearFiltersTopButton.setY(40);
 		excludeVisitedButton.setX(filterLeft());
@@ -2573,6 +2660,7 @@ public class ExplorersCompassScreen extends Screen {
 		excludeLockedButton.visible = filtersOpen;
         newlyUnlockedButton.visible = filtersOpen && com.chaosthedude.explorerscompass.network.ClientPacketHandlers.showNewlyUnlockedFilter;
 		backButton.visible = filtersOpen || settingsOpen || hiddenStructuresOpen;
+		restoreDefaultsButton.visible = settingsOpen;
 		if (hiddenSearchTextField != null) hiddenSearchTextField.setVisible(hiddenStructuresOpen);
 		placeSetting(overlaySideButton, 1);
 		placeSetting(offsetDecreaseButton, SETTINGS_OFFSET_ROW);
@@ -2588,6 +2676,7 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(creativeUnlocksAllButton, SETTINGS_CREATIVE_UNLOCK_ROW);
 		placeSetting(showTeleportOnlyInCreativeButton, SETTINGS_TELEPORT_ROW);
 		placeSetting(hiddenStructuresButton, SETTINGS_HIDDEN_ROW);
+		settingResetButtons.forEach((row, button) -> placeSetting(button, row));
 	}
 
 	private void placeSetting(ButtonWidget button, int row) {

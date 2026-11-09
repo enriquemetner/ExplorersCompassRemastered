@@ -46,19 +46,53 @@ public class ExplorersCompassConfig {
 	public static List<String> structureBlacklist = new ArrayList<>();
 	public static List<String> hiddenStructures = new ArrayList<>();
 
-	public static boolean displayWithChatOpen = true;
-	public static boolean pauseGameWhenOpen = false;
-	public static boolean creativeUnlocksAll = false;
-	public static boolean showTeleportOnlyInCreative = true;
-	public static boolean clearFiltersOnClose = true;
-	public static boolean clearSearchBarOnClose = true;
-	public static boolean closeOnFound = true;
-	public static boolean checkedFiltersFirst = true;
-	public static boolean adjustRowsToFitView = true;
-	public static boolean allowIdSearches = false;
-	public static int overlayLineOffset = 0;
-	public static OverlaySide overlaySide = OverlaySide.LEFT;
-	public static List<String> sortOrder = defaultSortOrder();
+	public static boolean displayWithChatOpen;
+	public static boolean pauseGameWhenOpen;
+	public static boolean creativeUnlocksAll;
+	public static boolean showTeleportOnlyInCreative;
+	public static boolean clearFiltersOnClose;
+	public static boolean clearSearchBarOnClose;
+	public static boolean closeOnFound;
+	public static boolean checkedFiltersFirst;
+	public static boolean adjustRowsToFitView;
+	public static boolean allowIdSearches;
+	public static int overlayLineOffset;
+	public static OverlaySide overlaySide;
+	public static List<String> sortOrder;
+
+	public enum ClientSetting {
+		OVERLAY_SIDE(() -> overlaySide = OverlaySide.LEFT),
+		OVERLAY_LINE_OFFSET(() -> overlayLineOffset = 0),
+		DISPLAY_WITH_CHAT_OPEN(() -> displayWithChatOpen = true),
+		CHECKED_FILTERS_FIRST(() -> checkedFiltersFirst = true),
+		ADJUST_ROWS_TO_FIT_VIEW(() -> adjustRowsToFitView = true),
+		CLOSE_ON_FOUND(() -> closeOnFound = true),
+		CLEAR_FILTERS_ON_CLOSE(() -> clearFiltersOnClose = true),
+		CLEAR_SEARCH_BAR_ON_CLOSE(() -> clearSearchBarOnClose = true),
+		ALLOW_ID_SEARCHES(() -> allowIdSearches = false),
+		PAUSE_GAME_WHEN_OPEN(() -> pauseGameWhenOpen = false),
+		CREATIVE_UNLOCKS_ALL(() -> creativeUnlocksAll = false),
+		SHOW_TELEPORT_ONLY_IN_CREATIVE(() -> showTeleportOnlyInCreative = true),
+		SORT_ORDER(() -> sortOrder = defaultSortOrder());
+
+		private final Runnable reset;
+
+		ClientSetting(Runnable reset) {
+			this.reset = reset;
+		}
+
+		public void restoreDefault() {
+			reset.run();
+		}
+	}
+
+	static {
+		restoreClientDefaults();
+	}
+
+	public static void restoreClientDefaults() {
+		for (ClientSetting setting : ClientSetting.values()) setting.restoreDefault();
+	}
 
 	private static List<String> defaultSortOrder() {
 		return new ArrayList<>(Arrays.asList("NAME", "SOURCE", "DIMENSION", "SET"));
