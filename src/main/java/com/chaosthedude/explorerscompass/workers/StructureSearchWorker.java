@@ -45,7 +45,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	protected int samples;
 	protected boolean finished;
 	protected int lastRadiusThreshold;
-	protected int radiusLimit = ExplorersCompassItem.MAX_SEARCH_RADIUS;
+	protected int radiusLimit = ExplorersCompassConfig.maxSearchRadius;
 
 	public StructureSearchWorker(ServerWorld level, PlayerEntity player, ItemStack stack, BlockPos startPos, T placement, List<Structure> structureSet, Identifier structureOrSetId, boolean excludeVisited, String managerId) {
 		this.level = level;

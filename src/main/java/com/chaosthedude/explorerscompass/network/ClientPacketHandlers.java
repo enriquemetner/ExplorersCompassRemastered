@@ -72,7 +72,7 @@ public final class ClientPacketHandlers {
 
     public static void applySearchResult(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         int requestId = buf.readInt(), result = buf.readInt(), radius = buf.readInt();
-        boolean canContinue = buf.readBoolean();
+        buf.readBoolean(); // Legacy search continuation flag.
         Identifier foundId = null;
         int foundX = 0, foundZ = 0;
         boolean displayCoordinates = false, displayDistance = false;
@@ -90,7 +90,7 @@ public final class ClientPacketHandlers {
         final boolean showDistance = displayDistance;
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onSearchResult(requestId, result, radius, canContinue, resultId, resultX, resultZ, showCoordinates, showDistance, requirements);
+                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, requirements);
             }
         });
     }

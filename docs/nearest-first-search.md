@@ -28,7 +28,9 @@ remain synchronous, on the existing server task queue. No parallel chunk checks
 are introduced. Cancellation, ownership validation, pause support, unlock/visited
 filters and search costs continue using existing code.
 
-Interactive searches run once to an exclusive 30,000-block horizontal radius.
+Interactive searches run once to the exclusive horizontal radius set by
+`search.maxSearchRadius` in `common.toml`. The default is 30,000 blocks and the
+maximum is 50,000.
 There is no candidate-count limit or intermediate continuation prompt. Progress
 reports the lower bound of remaining work, not the farthest candidate prepared.
 Candidate counts are retained for reporting only. Cancellation and scheduler slices

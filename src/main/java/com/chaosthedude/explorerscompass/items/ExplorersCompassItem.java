@@ -130,7 +130,6 @@ public class ExplorersCompassItem extends Item {
 
 
 	public static final String NAME = "explorerscompass";
-	public static final int MAX_SEARCH_RADIUS = 30000;
 
 	private final Map<UUID, SearchSession> searches = new HashMap<>();
 
@@ -143,7 +142,7 @@ public class ExplorersCompassItem extends Item {
         final ServerWorld world;
         final Identifier searchId;
 		final boolean creativeBypass;
-        final int radiusLimit = MAX_SEARCH_RADIUS;
+        final int radiusLimit = ExplorersCompassConfig.maxSearchRadius;
         SearchSession(ServerWorld world, ItemStack stack, int requestId, Identifier searchId, boolean creativeBypass) {
             this.world = world;
             this.stack = stack;
