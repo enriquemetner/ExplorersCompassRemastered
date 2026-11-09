@@ -251,7 +251,7 @@ public class ExplorersCompassConfig {
 		put(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose, "Clear the search bar when the compass screen closes.");
 		config.remove("behavior.pauseGameWhenOpen");
 		config.remove("behavior.searchTechnicalNames");
-		put(config, "behavior.allowIdSearches", allowIdSearches, "Enables searching for structure IDs such as minecraft:ancient_city as well.\n Works for filter searches too.");
+		put(config, "behavior.allowIdSearches", allowIdSearches, "Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.");
 		put(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen, "Pause singleplayer while the compass screen is open, except while locating a structure.");
 		put(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll, "Temporarily unlock all structures while in Creative mode without changing saved unlocks.");
 		put(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative, "Show the Teleport button only in Creative mode. Teleport permission is still required.");

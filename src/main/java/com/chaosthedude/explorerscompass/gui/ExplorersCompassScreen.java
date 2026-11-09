@@ -73,7 +73,8 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int EXCLUDE_BUTTON_CONTENT_PADDING = HEADER_BUTTON_TEXT_PADDING / 2;
 	private static final int EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP = 5;
 	private static final int SCROLLBAR_WIDTH = Scrollbar.WIDTH;
-	private static final int SETTINGS_ROW_HEIGHT = 30;
+	private static final int SIDEBAR_BUTTON_STEP = 25;
+	private static final int SETTINGS_ROW_HEIGHT = SIDEBAR_BUTTON_STEP;
 	private static final int SETTINGS_CONTROL_WIDTH = 90;
 	private static final int SETTINGS_OFFSET_ROW = 2;
 	private static final int SETTINGS_HIDDEN_ROW = 17;
@@ -120,7 +121,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Close the compass screen when a structure is located.",
 		"Clear selected structure filters when you close the compass screen.",
 		"Clears the search bar when you close the compass screen.",
-		"Enables searching for structure IDs such as minecraft:ancient_city as well.\n Works for filter searches too.",
+		"Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.",
 		null,
 		"Pauses singleplayer while the compass screen is open, except while locating a structure. Searches need the game to keep ticking to make progress.",
 		"Temporarily unlock all structures while in Creative mode. Changing the mode back relocks previously locked structures.",
@@ -2302,17 +2303,17 @@ public class ExplorersCompassScreen extends Screen {
 			}
 		});
 
-		sortOrderButton = addDrawableChild(new TransparentButton(10, 65, 110, 20, Text.literal("Sort Priority"), (onPress) -> {
+		sortOrderButton = addDrawableChild(new TransparentButton(10, searchButton.getY() + SIDEBAR_BUTTON_STEP, 110, 20, Text.literal("Sort Priority"), (onPress) -> {
 			if (sortMenuOpen) {
 				closeSortMenu();
 			} else {
 				sortMenuOpen = true;
 			}
 		}));
-		filtersButton = addDrawableChild(new TransparentButton(10, sortOrderButton.getY() + 25, 85, 20, Text.literal("Filters"), (onPress) -> {
+		filtersButton = addDrawableChild(new TransparentButton(10, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP, 85, 20, Text.literal("Filters"), (onPress) -> {
 			setFiltersOpen(!filtersOpen);
 		}));
-		clearFiltersButton = addDrawableChild(new TransparentButton(100, sortOrderButton.getY() + 25,
+		clearFiltersButton = addDrawableChild(new TransparentButton(100, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP,
 				SMALL_BUTTON_SIZE, SMALL_BUTTON_SIZE, Text.empty(), button -> clearFilters()));
 		settingsButton = addDrawableChild(new TransparentButton(10, height - 30, 110, 20, Text.literal("Settings"), (onPress) -> {
 			setSettingsOpen(true);
@@ -2495,8 +2496,8 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void positionFilterButtons() {
-		filtersButton.setY(sortOrderButton.getY() + 25);
-		clearFiltersButton.setY(sortOrderButton.getY() + 25);
+		filtersButton.setY(sortOrderButton.getY() + SIDEBAR_BUTTON_STEP);
+		clearFiltersButton.setY(sortOrderButton.getY() + SIDEBAR_BUTTON_STEP);
 	}
 
 	private int buttonWidthForLabel(String label) {
