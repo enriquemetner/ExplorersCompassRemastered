@@ -6,30 +6,18 @@ OPAC is an optional compile-only dependency; it is not bundled with the compass.
 For local testing, install OPAC Fabric 1.20.1 (tested with 0.33.0) and its Forge
 Config API Port dependency (tested with 8.0.3) in the test server and clients.
 
-Members of the same OPAC party permanently receive one another's saved unlocked
-structures, including progress earned before joining and offline members' data.
-Leaving, disbanding, or disabling integration does not remove imported progress.
-Invitations and allied parties do not share anything. Membership changes are
-checked once per second and sharing is also synchronized before opening the UI.
-New saved unlock additions propagate on the next server tick.
+Each OPAC party shares the combined saved personal unlocks of its current
+members, including offline members. Joining grants access to those structures.
+Leaving, removal, or disbanding takes away access from that party. A structure
+remains available if the player earned it personally or a current party member
+still supplies it. Invitations and alliances grant no access.
 
-All saved unlock sources participate, including FTB reward claims, admin grants,
-and compass-transfer imports. Visits, advancements, and quest progress are not
-copied. Creative's temporary search bypass never becomes a saved or shared unlock;
-real visits and claims still behave normally in Creative.
+Personal unlocks from rules, FTB rewards, admin commands, and compass transfers
+can contribute to the party. Creative access and borrowed party access are
+temporary. Missing and blacklisted structures are excluded from the shared list.
 
-The original player gets the usual toast. Other members get the same count title
-with “Unlocked by a party member” beneath it. Offline shared additions are queued
-and consolidated on login. Players who have never obtained a compass receive no
-toast until their existing first-compass notification, which includes saved shared
-structures. Repeated imports do not count as new additions.
-
-With sharing enabled, a lock command targeting a party member affects every current
-member, including offline members. Clear-visit commands still affect only their
-named player. Reloads preserve the existing relock setting: full relocking discards
-stale party copies before merging new earned progress, and restored IDs do not
-produce duplicate toasts. Missing and common-blacklisted structures are excluded
-from imports; client-hidden structures remain eligible.
-
-Shared additions refresh an open compass without a rules-change Info popup or
-changing its active view, filters, search text, selection, or scroll position.
+Admin lock and unlock commands change the named player's personal unlocks.
+Party gains can show the party unlock toast to online players who have obtained
+a compass. Gains and losses refresh an open compass, while **Newly Unlocked**
+continues to show personal progress. A target that becomes locked can no longer
+be searched or used for compass teleport.

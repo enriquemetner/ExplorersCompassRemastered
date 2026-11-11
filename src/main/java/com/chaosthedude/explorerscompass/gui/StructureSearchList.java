@@ -19,6 +19,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	static final int SCROLLBAR_WIDTH = Scrollbar.WIDTH;
 	static final int ACTION_BUTTON_HEIGHT = 16;
 	static final int ACTION_BUTTON_GAP = 2;
+	static final int ACTION_BUTTONS_HEIGHT = ACTION_BUTTON_HEIGHT * 2 + ACTION_BUTTON_GAP;
 	private static final long DOUBLE_CLICK_INTERVAL_MS = 250L;
 
 	private final ExplorersCompassScreen parentScreen;
@@ -154,6 +155,10 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	public void render(DrawContext context, int mouseX, int mouseY, float partialTicks) {
 		int rowsBottom = fullRowsBottom();
 		context.enableScissor(left, top, right, bottom);
+		if (getEntryCount() == 0) {
+			context.drawCenteredTextWithShadow(client.textRenderer, "No matching results",
+					left + width / 2, parentScreen.sortPriorityLabelY(), 0xffffff);
+		}
         // Render backgrounds
         for (int i = 0; i < getEntryCount(); ++i) {
             if (getRowBottom(i) >= top && getRowTop(i) < rowsBottom) {
@@ -162,7 +167,23 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 						? RenderUtils.LOCKED_ENTRY_BACKGROUND_OPACITY_PERCENT
 						: RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT;
                 int fillColor = RenderUtils.blackWithOpacity(opacity);
-                context.fill(getRowLeft(), getRowTop(i), right, displayedRowBottom(i), fillColor);
+                int rowLeft = getRowLeft();
+                int rowTop = getRowTop(i);
+                int rowBottom = displayedRowBottom(i);
+                if (parentScreen.isUnlockedThroughParty(entry.getStructureID())) {
+                    int labelX = entry.partyLabelX(rowActionX());
+                    int labelLeft = MathHelper.clamp(labelX, rowLeft, right);
+                    int labelRight = MathHelper.clamp(labelX + entry.partyLabelWidth(), rowLeft, right);
+                    int labelTop = rowTop + (rowBottom - rowTop - ACTION_BUTTONS_HEIGHT) / 2;
+                    int labelBottom = labelTop + ACTION_BUTTONS_HEIGHT;
+                    // Leave the panel area clear so its fill has the same opacity as a locked row.
+                    context.fill(rowLeft, rowTop, right, labelTop, fillColor);
+                    context.fill(rowLeft, labelBottom, right, rowBottom, fillColor);
+                    context.fill(rowLeft, labelTop, labelLeft, labelBottom, fillColor);
+                    context.fill(labelRight, labelTop, right, labelBottom, fillColor);
+                } else {
+                    context.fill(rowLeft, rowTop, right, rowBottom, fillColor);
+                }
             }
         }
         // Render entries
@@ -267,11 +288,29 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		return only;
 	}
 
-    ButtonPress buttonAt(double mouseX, double mouseY) {
-        if (mouseX >= getScrollbarPositionX() || mouseY < top || mouseY >= bottom) return null;
+    private StructureSearchEntry actionRowAt(double mouseX, double mouseY) {
+        if (!isMouseOver(mouseX, mouseY) || mouseX >= getScrollbarPositionX() || mouseY >= bottom) return null;
         double rowY = mouseY >= fullRowsBottom() ? fullRowsBottom() - 1 : mouseY;
-        StructureSearchEntry row = getEntryAtPosition(mouseX, rowY);
+        return getEntryAtPosition(mouseX, rowY);
+    }
+
+    boolean isPartyLabelHovered(double mouseX, double mouseY) {
+        return isPartyLabelAt(actionRowAt(mouseX, mouseY), mouseX, mouseY);
+    }
+
+    private boolean isPartyLabelAt(StructureSearchEntry row, double mouseX, double mouseY) {
+        if (row == null) return false;
+        int index = children().indexOf(row);
+        int top = getRowTop(index);
+        return row.isPartyLabelAt(mouseX, mouseY, rowActionX(), top, displayedRowBottom(index) - top);
+    }
+
+    ButtonPress buttonAt(double mouseX, double mouseY) {
+        StructureSearchEntry row = actionRowAt(mouseX, mouseY);
         if (row == null || !row.isEnabled()) return null;
+        if (isPartyLabelAt(row, mouseX, mouseY)) {
+            return new ButtonPress(row, "partyRequirements", () -> parentScreen.showPartyRequirements(row.getStructureID()));
+        }
         if (isFilterButtonClick(row, mouseX, mouseY)) {
             return new ButtonPress(row, "filters", () -> parentScreen.openEntryFilters(row.getStructureID()));
         }
@@ -289,12 +328,16 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		return isRowButtonClick(entry, mouseX, mouseY, true);
 	}
 
+	private int rowActionX() {
+		return getRowLeft() + getRowWidth() - parentScreen.rowActionButtonWidth() - 7;
+	}
+
 	private boolean isRowButtonClick(StructureSearchEntry entry, double mouseX, double mouseY, boolean filter) {
 		int index = children().indexOf(entry);
 		if (index < 0) return false;
-		int buttonX = getRowLeft() + getRowWidth() - parentScreen.rowActionButtonWidth() - 7;
+		int buttonX = rowActionX();
 		int rowHeight = displayedRowBottom(index) - getRowTop(index);
-		int buttonY = getRowTop(index) + (rowHeight - (ACTION_BUTTON_HEIGHT * 2 + ACTION_BUTTON_GAP)) / 2
+		int buttonY = getRowTop(index) + (rowHeight - ACTION_BUTTONS_HEIGHT) / 2
 				+ (filter ? 0 : ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP);
 		return mouseX >= buttonX && mouseX < buttonX + parentScreen.rowActionButtonWidth()
 				&& mouseY >= Math.max(buttonY, top) && mouseY < Math.min(buttonY + ACTION_BUTTON_HEIGHT, bottom);

@@ -37,6 +37,7 @@ public class ExplorersCompassConfig {
 	public static int maxSearchRadius = DEFAULT_SEARCH_RADIUS;
 	public static boolean relockOnReload = false;
 	public static boolean compassSharing = false;
+    private static final String OPAC_SHARING_COMMENT = "Temporarily share saved personal structure unlocks among current OPAC party members when Open Parties and Claims is installed. Requires a restart to change.";
     public static boolean opacPartySharing = true;
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
@@ -56,6 +57,7 @@ public class ExplorersCompassConfig {
 	public static boolean checkedFiltersFirst;
 	public static boolean adjustRowsToFitView;
 	public static boolean allowIdSearches;
+	public static boolean showOnlyMatchingFilterOptions;
 	public static int overlayLineOffset;
 	public static OverlaySide overlaySide;
 	public static List<String> sortOrder;
@@ -70,6 +72,7 @@ public class ExplorersCompassConfig {
 		CLEAR_FILTERS_ON_CLOSE(() -> clearFiltersOnClose = true),
 		CLEAR_SEARCH_BAR_ON_CLOSE(() -> clearSearchBarOnClose = true),
 		ALLOW_ID_SEARCHES(() -> allowIdSearches = false),
+		SHOW_ONLY_MATCHING_FILTER_OPTIONS(() -> showOnlyMatchingFilterOptions = false),
 		PAUSE_GAME_WHEN_OPEN(() -> pauseGameWhenOpen = false),
 		CREATIVE_UNLOCKS_ALL(() -> creativeUnlocksAll = false),
 		SHOW_TELEPORT_ONLY_IN_CREATIVE(() -> showTeleportOnlyInCreative = true),
@@ -112,7 +115,8 @@ public class ExplorersCompassConfig {
 			CommentedConfig common = readOrCreate(COMMON);
 			loadCommon(common);
 			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
-					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null) {
+					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
+                    || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 				common.remove("permissions.allowTeleport");
 				writeCommon(common);
 				write(directory().resolve(COMMON), common);
@@ -123,6 +127,7 @@ public class ExplorersCompassConfig {
 				boolean migrateClient = clientConfig.get("behavior.searchTechnicalNames") != null
 						|| clientConfig.get("view.showTechnicalNames") != null
 						|| clientConfig.get("behavior.allowIdSearches") == null
+						|| clientConfig.get("behavior.showOnlyMatchingFilterOptions") == null
 						|| !new ArrayList<>(clientConfig.valueMap().keySet()).get(clientConfig.valueMap().size() - 1).equals("sorting")
 						|| clientConfig.get("behavior.pauseGameWhenOpen") != null
 						|| clientConfig.get("singleplayerAndCreative.pauseGameWhenOpen") == null
@@ -238,6 +243,7 @@ public class ExplorersCompassConfig {
 		allowIdSearches = config.get("behavior.allowIdSearches") != null
 				? bool(config, "behavior.allowIdSearches", allowIdSearches)
 				: bool(config, "behavior.searchTechnicalNames", allowIdSearches);
+		showOnlyMatchingFilterOptions = bool(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions);
 		overlayLineOffset = number(config, "overlay.overlayLineOffset", overlayLineOffset, Integer.MIN_VALUE);
 		Object side = config.get("overlay.overlaySide");
 		if (side != null) {
@@ -260,7 +266,8 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeCommon(CommentedConfig config) {
-        put(config, "unlocking.opacPartySharing", opacPartySharing, "Permanently share saved unlocked structures among OPAC party members when Open Parties and Claims is installed. Requires a restart to change.");
+        config.set("unlocking.opacPartySharing", opacPartySharing);
+        config.setComment("unlocking.opacPartySharing", OPAC_SHARING_COMMENT);
 		put(config, "unlocking.compassSharing", compassSharing, "Preserve located targets and unlock structures that the previous compass holder had unlocked when a different player gets hold of the compass.");
 		put(config, "search.allowExcludeVisited", allowExcludeVisited, "Allow players to exclude visited structure instances from searches. Visits are always recorded.");
 		put(config, SEARCH_RADIUS, maxSearchRadius, "Maximum horizontal search radius in blocks (1 to 50000). Requires a restart to change.");
@@ -286,6 +293,8 @@ public class ExplorersCompassConfig {
 		config.remove("behavior.pauseGameWhenOpen");
 		config.remove("behavior.searchTechnicalNames");
 		put(config, "behavior.allowIdSearches", allowIdSearches, "Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.");
+		put(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions,
+				"Show only unchecked filter options with matching structures under the filters in the other columns.");
 		put(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen, "Pause singleplayer while the compass screen is open, except while locating a structure.");
 		put(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll, "Temporarily unlock all structures while in Creative mode without changing saved unlocks.");
 		put(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative, "Show the Teleport button only in Creative mode. Teleport permission is still required.");

@@ -31,10 +31,12 @@ final class LockedRequirementsView {
     private double scroll, grabOffset;
     private boolean dragging;
     private QuestPopup questPopup;
+    private final boolean partyUnlocked;
 
-    LockedRequirementsView(TextRenderer renderer, RequirementNode requirements, Runnable onQuestBookOpened) {
+    LockedRequirementsView(TextRenderer renderer, RequirementNode requirements, Runnable onQuestBookOpened, boolean partyUnlocked) {
         this.renderer = renderer;
         this.requirements = requirements;
+        this.partyUnlocked = partyUnlocked;
         this.onQuestBookOpened = onQuestBookOpened;
         this.lineHeight = renderer.fontHeight + 3;
     }
@@ -95,7 +97,8 @@ final class LockedRequirementsView {
         context.fill(0, 0, screenWidth, screenHeight, 0x88000000);
         context.fill(x - 1, y - 1, x + width + 1, backTop() + 26, 0xff909090);
         context.fill(x, y, x + width, backTop() + 25, 0xff000000);
-        context.drawCenteredTextWithShadow(renderer, Text.literal("Locked"), x + width / 2, y + 10, 0xffff5555);
+        context.drawCenteredTextWithShadow(renderer, Text.literal(partyUnlocked ? "Personal Requirements" : "Locked"),
+                x + width / 2, y + 10, partyUnlocked ? 0xffffffff : 0xffff5555);
         context.enableScissor(x + 10, bodyTop(), x + width - 18, bodyTop() + bodyHeight);
         int first = Math.max(0, (int) scroll / lineHeight);
         int last = Math.min(lines.size(), first + bodyHeight / lineHeight + 2);

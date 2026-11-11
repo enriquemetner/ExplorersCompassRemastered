@@ -34,6 +34,5 @@ public final class UnlockNotifications {
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
         if (!player.networkHandler.isConnectionOpen() || !state.notificationsEnabled(player.getUuid())) return;
         UnlockToastPacket.send(player, state.takePendingNotificationCount(player.getUuid()));
-        UnlockToastPacket.send(player, state.takePartyNotificationCount(player.getUuid()), true);
     }
 }

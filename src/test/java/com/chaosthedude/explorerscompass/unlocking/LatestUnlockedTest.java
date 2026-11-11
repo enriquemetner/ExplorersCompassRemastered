@@ -41,15 +41,4 @@ class LatestUnlockedTest {
         finally { state.finishUnlockEvent(player); }
         assertEquals(Set.of(c), state.latestUnlocked(player));
     }
-
-    @Test void partyImportsCountAsAnEventButDuplicateImportsDoNot() {
-        UnlockedStructures state = new UnlockedStructures();
-        state.add(player, Set.of(a));
-        state.addShared(player, Set.of(a, b));
-        assertEquals(Set.of(b), state.latestUnlocked(player));
-        state.addShared(player, Set.of(a, b));
-        assertEquals(Set.of(b), state.latestUnlocked(player));
-        state.remove(player, Set.of(b));
-        assertTrue(state.latestUnlocked(player).isEmpty());
-    }
 }

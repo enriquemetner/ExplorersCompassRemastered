@@ -1,7 +1,7 @@
 package com.chaosthedude.explorerscompass.network;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -18,7 +18,7 @@ public class SyncPacket extends PacketByteBuf {
 
 	public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "sync");
 
- public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, int defaultXpCost, boolean allowSearchWithoutEnoughXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, long noticeRevision, boolean noticeRelocked, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter) {
+ public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, int defaultXpCost, boolean allowSearchWithoutEnoughXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, Map<Identifier, RequirementNode> partyRequirements, long noticeRevision, boolean noticeRelocked, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter) {
 		super(Unpooled.buffer());
 		writeBoolean(canTeleport);
 		writeBoolean(canExcludeVisited);
@@ -44,15 +44,20 @@ public class SyncPacket extends PacketByteBuf {
         writeLong(noticeRevision);
         writeBoolean(noticeRelocked);
         // Source/set rules often share a tree across many structures; send each tree once.
-        List<RequirementNode> descriptions = new ArrayList<>(new java.util.LinkedHashSet<>(lockedRequirements.values()));
+        var uniqueDescriptions = new LinkedHashSet<>(lockedRequirements.values());
+        uniqueDescriptions.addAll(partyRequirements.values());
+        List<RequirementNode> descriptions = new ArrayList<>(uniqueDescriptions);
         writeInt(descriptions.size());
         for (RequirementNode node : descriptions) node.write(this);
-        writeInt(lockedRequirements.size());
-        for (Map.Entry<Identifier, RequirementNode> entry : lockedRequirements.entrySet()) {
+        writeRequirements(lockedRequirements, descriptions);
+        writeRequirements(partyRequirements, descriptions);
+    }
+
+    private void writeRequirements(Map<Identifier, RequirementNode> requirements, List<RequirementNode> descriptions) {
+        writeInt(requirements.size());
+        for (Map.Entry<Identifier, RequirementNode> entry : requirements.entrySet()) {
             writeIdentifier(entry.getKey());
             writeInt(descriptions.indexOf(entry.getValue()));
         }
-
-	}
-
+    }
 }

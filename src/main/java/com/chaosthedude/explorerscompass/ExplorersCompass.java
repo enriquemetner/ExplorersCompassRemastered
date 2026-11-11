@@ -104,7 +104,7 @@ public class ExplorersCompass implements ModInitializer {
         ServerTickEvents.START_SERVER_TICK.register(EXPLORERS_COMPASS_ITEM::tickSearchOwnership);
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			com.chaosthedude.explorerscompass.unlocking.UnlockReloads.tick(server);
-            com.chaosthedude.explorerscompass.unlocking.PartySharing.tick(server);
+            com.chaosthedude.explorerscompass.unlocking.PartySharing.synchronize(server);
 			if (server.getTicks() % 20 != 0 || server.getPlayerManager().getPlayerList().isEmpty()) return;
 			VisitedStructures history = VisitedStructures.get(server);
 			for (net.minecraft.server.network.ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {

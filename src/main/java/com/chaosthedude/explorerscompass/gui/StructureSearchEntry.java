@@ -19,6 +19,10 @@ import net.minecraft.util.Identifier;
 public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<StructureSearchEntry> {
 	private static final Identifier LOCK_TEXTURE = new Identifier(ExplorersCompass.MODID, "textures/gui/lock.png");
 
+	private static final String[] PARTY_LABEL = {"Unlocked", "through", "party"};
+	private static final int ACTION_BORDER = 0xff909090;
+	private static final int HELD_ACTION_BORDER = 0xff505050;
+
 	private final MinecraftClient client;
 	private final ExplorersCompassScreen parentScreen;
 	private final Identifier structureID;
@@ -39,8 +43,24 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int buttonWidth = parentScreen.rowActionButtonWidth();
         int buttonX = left + width - buttonWidth - 7;
         int buttonHeight = StructureSearchList.ACTION_BUTTON_HEIGHT;
-        int buttonY = top + (height - (buttonHeight * 2 + StructureSearchList.ACTION_BUTTON_GAP)) / 2;
-        int textWidth = Math.max(1, buttonX - left - 10);
+        int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
+        int buttonY = top + (height - actionsHeight) / 2;
+        boolean partyUnlocked = parentScreen.isUnlockedThroughParty(structureID);
+        int textRight = partyUnlocked ? partyLabelX(buttonX) : buttonX;
+        int textWidth = Math.max(1, textRight - left - 10);
+        if (partyUnlocked) {
+            int panelWidth = partyLabelWidth();
+            boolean held = parentScreen.isButtonHeld(this, "partyRequirements");
+            context.fill(textRight, buttonY, textRight + panelWidth, buttonY + actionsHeight,
+                    RenderUtils.blackWithOpacity(RenderUtils.LOCKED_ENTRY_BACKGROUND_OPACITY_PERCENT));
+            int x = textRight + panelWidth / 2;
+            int y = buttonY + (actionsHeight - PARTY_LABEL.length * client.textRenderer.fontHeight) / 2;
+            int color = held ? 0x808080 : 0xffffff;
+            for (String line : PARTY_LABEL) {
+                context.drawCenteredTextWithShadow(client.textRenderer, line, x, y, color);
+                y += client.textRenderer.fontHeight;
+            }
+        }
         String readableName = StructureUtils.getStructureName(structureID);
         int nameY = top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 2);
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(readableName, textWidth), left + 5, nameY, nameColor, true);
@@ -49,13 +69,13 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Dimension").getString() + ": " + StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)), textWidth), left + 5, top + (height / 2) + ((client.textRenderer.fontHeight + 2) * 1), infoColor, true);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
         boolean filterHeld = parentScreen.isButtonHeld(this, "filters");
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, filterHeld ? 0xff505050 : 0xff909090);
+        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, filterHeld ? HELD_ACTION_BORDER : ACTION_BORDER);
         context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, filterHovered && !filterHeld ? 0xff424242 : 0xff242424);
         context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("filters"), buttonX + buttonWidth / 2, buttonY + 4, filterHeld ? 0x808080 : 0xffffff);
         buttonY += buttonHeight + StructureSearchList.ACTION_BUTTON_GAP;
         boolean buttonHovered = structuresList.isActionButtonClick(this, mouseX, mouseY);
         boolean moreHeld = parentScreen.isButtonHeld(this, "more");
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, moreHeld ? 0xff505050 : 0xff909090);
+        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, moreHeld ? HELD_ACTION_BORDER : ACTION_BORDER);
         context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, buttonHovered && !moreHeld ? 0xff424242 : 0xff242424);
         context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("more"), buttonX + buttonWidth / 2, buttonY + 4, moreHeld ? 0x808080 : 0xffffff);
 		if (locked) {
@@ -69,6 +89,21 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         }
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 	}
+
+    int partyLabelWidth() {
+        return client.textRenderer.getWidth(PARTY_LABEL[0]) + 8;
+    }
+
+    int partyLabelX(int buttonX) {
+        return buttonX - 5 - partyLabelWidth();
+    }
+
+    boolean isPartyLabelAt(double mouseX, double mouseY, int buttonX, int top, int height) {
+        int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
+        return parentScreen.isUnlockedThroughParty(structureID)
+                && ButtonPress.contains(mouseX, mouseY, partyLabelX(buttonX), top + (height - actionsHeight) / 2,
+                        partyLabelWidth(), actionsHeight);
+    }
 
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -103,7 +138,8 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 	@Override
 	public Text getNarration() {
 		return Text.literal(StructureUtils.getStructureName(structureID)).append(parentScreen.isStructureLocked(structureID)
-                ? Text.literal(". ").append(Text.literal("Locked")) : Text.empty());
+                ? Text.literal(". Locked") : parentScreen.isUnlockedThroughParty(structureID)
+                ? Text.literal(". Unlocked through party") : Text.empty());
 	}
 
 }

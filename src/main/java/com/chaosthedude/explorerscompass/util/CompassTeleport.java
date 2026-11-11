@@ -6,6 +6,7 @@ import java.util.Set;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
+import com.chaosthedude.explorerscompass.unlocking.PartySharing;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import net.minecraft.nbt.NbtElement;
@@ -31,6 +32,8 @@ public final class CompassTeleport {
         var compass = ExplorersCompass.EXPLORERS_COMPASS_ITEM;
         var stack = ItemUtils.getHeldItem(player, compass);
         if (stack.isEmpty()) throw error("Hold an Explorer's Compass to teleport to its target");
+        compass.ensureHolder(player, stack);
+        PartySharing.synchronize(player.getServer());
         compass.validateTarget(player, stack);
         if (compass.getState(stack) != CompassState.FOUND) throw error("The compass has no located structure");
 

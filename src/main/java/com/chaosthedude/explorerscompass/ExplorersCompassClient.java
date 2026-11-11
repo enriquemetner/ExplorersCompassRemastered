@@ -38,6 +38,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
             needle.clear();
             ClientPacketHandlers.shownNoticeRevision = 0;
             ClientPacketHandlers.pendingNoticeRevision = 0;
+            ClientPacketHandlers.partyRequirements = java.util.Map.of();
             ClientPacketHandlers.latestUnlockedStructures = java.util.Set.of();
             ClientPacketHandlers.showNewlyUnlockedFilter = false;
             client.execute(ExplorersCompassScreen::clearWorldSearchState);

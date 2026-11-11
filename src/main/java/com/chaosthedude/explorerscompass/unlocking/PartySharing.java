@@ -1,82 +1,103 @@
 package com.chaosthedude.explorerscompass.unlocking;
 
+import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.network.PartyRefreshPacket;
 import com.chaosthedude.explorerscompass.network.UnlockToastPacket;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.Identifier;
 
-/** Optional party boundary and batched, nonrecursive propagation of saved unlocks. */
+/** The temporary unlocks supplied by current OPAC party members. */
 public final class PartySharing {
-    public interface Provider { List<Set<UUID>> parties(MinecraftServer server); }
+    public interface Provider { Map<UUID, Set<UUID>> parties(MinecraftServer server); }
+
     private static Provider provider;
     private static boolean dirty = true;
-    private static boolean merging;
+    private static Map<UUID, Set<UUID>> membership = Map.of();
+    private static Snapshot snapshot = new Snapshot(Map.of(), Map.of());
+
     private PartySharing() {}
+
     public static void register(Provider source) { provider = source; }
     public static boolean enabled() { return provider != null && ExplorersCompassConfig.opacPartySharing; }
     public static void changed() { dirty = true; }
-    public static void clear() { dirty = true; merging = false; }
 
-    public static Set<UUID> members(MinecraftServer server, UUID player) {
-        if (enabled()) for (Set<UUID> party : provider.parties(server)) if (party.contains(player)) return Set.copyOf(party);
-        return Set.of(player);
+    public static void clear() {
+        dirty = true;
+        membership = Map.of();
+        snapshot = new Snapshot(Map.of(), Map.of());
     }
 
-    static Map<UUID, Set<Identifier>> merge(UnlockedStructures state, Set<UUID> members, Predicate<Identifier> allowed) {
-        Set<Identifier> union = new HashSet<>();
-        members.forEach(member -> union.addAll(state.getStructures(member)));
-        union.removeIf(allowed.negate());
-        Map<UUID, Set<Identifier>> additions = new HashMap<>();
-        for (UUID member : members) {
-            Set<Identifier> added = new HashSet<>(union);
-            added.removeAll(state.getStructures(member));
-            if (!added.isEmpty()) {
-                state.addShared(member, added);
-                additions.put(member, added);
-            }
+    static boolean grants(UUID player, Identifier id) {
+        return enabled() && snapshot.forPlayer(player).contains(id);
+    }
+
+    record Snapshot(Map<UUID, Set<Identifier>> unlocksByParty, Map<UUID, UUID> partyByPlayer) {
+        Set<Identifier> forPlayer(UUID player) {
+            UUID party = partyByPlayer.get(player);
+            return party == null ? Set.of() : unlocksByParty.get(party);
         }
-        return additions;
+
+        Set<Identifier> changesSince(Snapshot before, UUID player, UnlockedStructures state) {
+            Set<Identifier> changes = new HashSet<>(forPlayer(player));
+            changes.removeAll(before.forPlayer(player));
+            Set<Identifier> lost = new HashSet<>(before.forPlayer(player));
+            lost.removeAll(forPlayer(player));
+            changes.addAll(lost);
+            changes.removeAll(state.getStructures(player));
+            return changes;
+        }
     }
 
-    public static void tick(MinecraftServer server) {
-        if (enabled() && (dirty || server.getTicks() % 20 == 0)) synchronize(server);
+    static Snapshot build(UnlockedStructures state, Map<UUID, Set<UUID>> parties, Predicate<Identifier> allowed) {
+        Map<UUID, Set<Identifier>> unlocksByParty = new HashMap<>();
+        Map<UUID, UUID> partyByPlayer = new HashMap<>();
+        parties.forEach((party, members) -> {
+            Set<Identifier> union = new HashSet<>();
+            for (UUID member : members) {
+                partyByPlayer.put(member, party);
+                if (!state.hasPendingRelock(member)) union.addAll(state.getStructures(member));
+            }
+            union.removeIf(allowed.negate());
+            unlocksByParty.put(party, Set.copyOf(union));
+        });
+        return new Snapshot(Map.copyOf(unlocksByParty), Map.copyOf(partyByPlayer));
     }
 
     public static void synchronize(MinecraftServer server) {
-        synchronize(server, true);
-    }
+        Map<UUID, Set<UUID>> parties = enabled() ? provider.parties(server) : Map.of();
+        if (parties.equals(membership) && (!dirty || parties.isEmpty())) return;
 
-    public static void synchronize(MinecraftServer server, boolean refresh) {
-        if (!enabled() || merging) return;
-        merging = true;
-        try {
-            dirty = false;
-            UnlockedStructures state = UnlockedStructures.get(server);
-            state.preparePartyRelocks();
-            var known = server.getRegistryManager().get(RegistryKeys.STRUCTURE);
-            for (Set<UUID> party : provider.parties(server)) {
-                Map<UUID, Set<Identifier>> additions = merge(state, party,
-                        id -> known.containsId(id) && !StructureUtils.structureIdIsBlacklisted(id));
-                additions.forEach((member, ids) -> {
-                    Set<Identifier> notify = new HashSet<>(ids);
-                    notify.removeAll(state.relockBaseline(member));
-                    var connected = server.getPlayerManager().getPlayer(member);
-                    var online = connected != null && connected.networkHandler.isConnectionOpen() ? connected : null;
-                    if (state.notificationsEnabled(member)) {
-                        if (online == null) state.queuePartyNotification(member, notify);
-                        else UnlockToastPacket.send(online, notify.size(), true);
-                    }
-                    if (refresh && online != null) PartyRefreshPacket.send(online);
-                });
+        UnlockedStructures state = UnlockedStructures.get(server);
+        var known = server.getRegistryManager().get(RegistryKeys.STRUCTURE);
+        Snapshot before = snapshot;
+        snapshot = build(state, parties, id -> known.containsId(id) && !StructureUtils.structureIdIsBlacklisted(id));
+        membership = parties;
+        dirty = false;
+        var compass = ExplorersCompass.EXPLORERS_COMPASS_ITEM;
+        for (var player : server.getPlayerManager().getPlayerList()) {
+            UUID id = player.getUuid();
+            if (!player.networkHandler.isConnectionOpen()) continue;
+            Set<Identifier> changes = snapshot.changesSince(before, id, state);
+            if (changes.isEmpty()) continue;
+
+            int gained = 0;
+            boolean lost = false;
+            for (Identifier structure : changes) {
+                if (snapshot.forPlayer(id).contains(structure)) gained++;
+                else lost = true;
             }
-            // Offline baselines survive until login so restored IDs cannot generate duplicate toasts.
-            for (var player : server.getPlayerManager().getPlayerList())
-                if (UnlockReloads.ready(player.getUuid())) state.finishPartyRelock(player.getUuid());
-        } finally { merging = false; }
+            if (lost) compass.revalidateAccess(player);
+            if (gained > 0 && state.notificationsEnabled(id)) UnlockToastPacket.send(player, gained, true);
+            PartyRefreshPacket.send(player);
+        }
     }
 }

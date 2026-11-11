@@ -8,12 +8,14 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class ClientSettingsDefaultsTest {
     @Test void resetsOneSettingIndependentlyAndBulkResetKeepsHiddenStructures() {
         var oldSide = ExplorersCompassConfig.overlaySide;
         int oldOffset = ExplorersCompassConfig.overlayLineOffset;
         boolean oldFittedRows = ExplorersCompassConfig.adjustRowsToFitView;
+        boolean oldMatchingOptions = ExplorersCompassConfig.showOnlyMatchingFilterOptions;
         var oldOrder = ExplorersCompassConfig.sortOrder;
         var oldHidden = ExplorersCompassConfig.hiddenStructures;
         try {
@@ -30,7 +32,14 @@ class ClientSettingsDefaultsTest {
             assertEquals(OverlaySide.RIGHT, ExplorersCompassConfig.overlaySide);
             assertEquals(customOrder, ExplorersCompassConfig.sortOrder);
 
+            ExplorersCompassConfig.showOnlyMatchingFilterOptions = true;
+            ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS.restoreDefault();
+            assertFalse(ExplorersCompassConfig.showOnlyMatchingFilterOptions);
+            assertEquals(customOrder, ExplorersCompassConfig.sortOrder);
+
+            ExplorersCompassConfig.showOnlyMatchingFilterOptions = true;
             ExplorersCompassConfig.restoreClientDefaults();
+            assertFalse(ExplorersCompassConfig.showOnlyMatchingFilterOptions);
             assertEquals(OverlaySide.LEFT, ExplorersCompassConfig.overlaySide);
             assertTrue(ExplorersCompassConfig.adjustRowsToFitView);
             assertEquals(List.of("NAME", "SOURCE", "DIMENSION", "SET"), ExplorersCompassConfig.sortOrder);
@@ -39,6 +48,7 @@ class ClientSettingsDefaultsTest {
             ExplorersCompassConfig.overlaySide = oldSide;
             ExplorersCompassConfig.overlayLineOffset = oldOffset;
             ExplorersCompassConfig.adjustRowsToFitView = oldFittedRows;
+            ExplorersCompassConfig.showOnlyMatchingFilterOptions = oldMatchingOptions;
             ExplorersCompassConfig.sortOrder = oldOrder;
             ExplorersCompassConfig.hiddenStructures = oldHidden;
         }

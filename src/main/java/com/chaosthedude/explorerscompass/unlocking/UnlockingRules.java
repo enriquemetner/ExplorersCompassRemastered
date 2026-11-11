@@ -116,6 +116,7 @@ public final class UnlockingRules {
             UnlockingRules loaded = parse(source, catalog(server));
             active = loaded;
             activeDefinition = JsonParser.parseString(source).toString();
+            PartySharing.changed();
             LOGGER.info("Loaded {} structure unlocking rules", active.rules.size());
             return active.rules.size();
         } catch (IOException | RuntimeException e) {
@@ -221,7 +222,7 @@ public final class UnlockingRules {
     }
 
     public static boolean isUnlocked(MinecraftServer server, UUID player, Identifier structure) {
-        return UnlockedStructures.get(server).contains(player, structure);
+        return UnlockedStructures.get(server).contains(player, structure) || PartySharing.grants(player, structure);
     }
 
     /** Called on compass open or when the compass advancement is earned. */
@@ -299,12 +300,13 @@ public final class UnlockingRules {
         return earned;
     }
 
-    public Map<Identifier, RequirementNode> lockedRequirements(ServerPlayerEntity player, List<Identifier> structures) {
+    public Map<Identifier, RequirementNode> personalRequirements(ServerPlayerEntity player, List<Identifier> structures) {
         Map<Identifier, RequirementNode> result = new LinkedHashMap<>();
+        UnlockedStructures saved = UnlockedStructures.get(player.getServer());
         Progress progress = progress(player);
         FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
         for (Identifier id : structures) {
-            if (isUnlocked(player.getServer(), player.getUuid(), id)) continue;
+            if (saved.contains(player.getUuid(), id)) continue;
             List<FtbStructureRewards.Quest> quests = rewards.quests().get(id);
             result.put(id, quests == null ? requirements(id, progress) : questNode(quests));
         }

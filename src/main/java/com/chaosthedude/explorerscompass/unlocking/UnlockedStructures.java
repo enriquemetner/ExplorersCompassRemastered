@@ -33,26 +33,6 @@ public final class UnlockedStructures extends PersistentState {
     public void beginUnlockEvent(UUID player, Set<Identifier> before) { unlockEventBaselines.put(player, before); }
     public void finishUnlockEvent(UUID player) { unlockEventBaselines.remove(player); }
 
-    private final Map<UUID, Set<Identifier>> pendingPartyNotifications = new HashMap<>();
-    private final Map<UUID, Set<Identifier>> partyRelockBaselines = new HashMap<>();
-
-    public Set<Identifier> pendingPartyIds(UUID player) { return Set.copyOf(pendingPartyNotifications.getOrDefault(player, Set.of())); }
-    public Set<Identifier> relockBaseline(UUID player) { return partyRelockBaselines.getOrDefault(player, Set.of()); }
-    public Set<Identifier> beforeRelock(UUID player) { return partyRelockBaselines.getOrDefault(player, getStructures(player)); }
-    public boolean hasPartyRelock(UUID player) { return partyRelockBaselines.containsKey(player); }
-    public void finishPartyRelock(UUID player) { if (partyRelockBaselines.remove(player) != null) markDirty(); }
-    public void queuePartyNotification(UUID player, Set<Identifier> ids) {
-        if (!ids.isEmpty() && pendingPartyNotifications.computeIfAbsent(player, ignored -> new HashSet<>()).addAll(ids)) markDirty();
-    }
-    public int takePartyNotificationCount(UUID player) {
-        Set<Identifier> ids = pendingPartyNotifications.remove(player);
-        if (ids == null) return 0;
-        ids.retainAll(getStructures(player));
-        markDirty();
-        return ids.size();
-    }
-    public int addShared(UUID player, Set<Identifier> ids) { return addSaved(player, ids); }
-
     private long noticeSequence;
     private final Map<UUID, Long> noticeRevisions = new HashMap<>();
     private final Set<UUID> noticeRelocked = new HashSet<>();
@@ -79,8 +59,7 @@ public final class UnlockedStructures extends PersistentState {
         Set<UUID> players = new HashSet<>(unlockedStructures.keySet());
         players.addAll(notificationsEnabled);
         players.addAll(pendingReloadNotice);
-        players.addAll(partyRelockBaselines.keySet());
-        players.addAll(pendingPartyNotifications.keySet());
+        players.addAll(pendingRelock);
         return players;
     }
 
@@ -97,10 +76,7 @@ public final class UnlockedStructures extends PersistentState {
     public void queueReload(Set<UUID> players, boolean relock, boolean notice) {
         if (relock) {
             pendingRelock.addAll(players);
-            if (PartySharing.enabled()) for (UUID player : players) {
-                partyRelockBaselines.putIfAbsent(player, getStructures(player));
-                unlockedStructures.remove(player);
-            }
+            PartySharing.changed();
         }
         if (notice) {
             pendingReloadNotice.addAll(players);
@@ -111,18 +87,13 @@ public final class UnlockedStructures extends PersistentState {
         if (relock || notice) markDirty();
     }
 
-    /** Apply deferred resets before any party union, including resets saved before OPAC was enabled. */
-    public void preparePartyRelocks() {
-        for (UUID player : pendingRelock) {
-            if (partyRelockBaselines.containsKey(player)) continue;
-            partyRelockBaselines.put(player, getStructures(player));
-            unlockedStructures.remove(player);
-            markDirty();
-        }
+    boolean hasPendingRelock(UUID player) {
+        return pendingRelock.contains(player);
     }
 
     public boolean takePendingRelock(UUID player) {
         if (!pendingRelock.remove(player)) return false;
+        PartySharing.changed();
         markDirty();
         return true;
     }
@@ -136,9 +107,11 @@ public final class UnlockedStructures extends PersistentState {
     }
 
     public void clearStructures(UUID player) {
-        if (unlockedStructures.remove(player) != null) markDirty();
+        if (unlockedStructures.remove(player) != null) {
+            PartySharing.changed();
+            markDirty();
+        }
         if (pendingNotifications.remove(player) != null) markDirty();
-        if (pendingPartyNotifications.remove(player) != null) markDirty();
     }
 
     public boolean notificationsEnabled(UUID player) {
@@ -149,7 +122,6 @@ public final class UnlockedStructures extends PersistentState {
     public boolean enableNotifications(UUID player) {
         if (!notificationsEnabled.add(player)) return false;
         pendingNotifications.remove(player);
-        pendingPartyNotifications.remove(player);
         markDirty();
         return true;
     }
@@ -169,35 +141,22 @@ public final class UnlockedStructures extends PersistentState {
     }
 
     public int add(UUID player, Set<Identifier> structures) {
-        int added = addSaved(player, structures);
-        if (added > 0) PartySharing.changed();
-        return added;
-    }
-
-    private int addSaved(UUID player, Set<Identifier> structures) {
         if (structures.isEmpty()) return 0;
         Set<Identifier> saved = unlockedStructures.computeIfAbsent(player, ignored -> new HashSet<>());
         int before = saved.size();
         Set<Identifier> newlyUnlocked = new HashSet<>(structures);
         newlyUnlocked.removeAll(saved);
-        newlyUnlocked.removeAll(relockBaseline(player));
         newlyUnlocked.removeAll(unlockEventBaselines.getOrDefault(player, Set.of()));
         if (!newlyUnlocked.isEmpty()) latestUnlockedStructures.put(player, Set.copyOf(newlyUnlocked));
         saved.addAll(structures);
-        if (saved.size() != before) markDirty();
+        if (saved.size() != before) {
+            PartySharing.changed();
+            markDirty();
+        }
         return saved.size() - before;
     }
 
     public int remove(UUID player, Set<Identifier> structures) {
-        Set<Identifier> partyPending = pendingPartyNotifications.get(player);
-        if (partyPending != null && partyPending.removeAll(structures)) markDirty();
-        Set<Identifier> baseline = partyRelockBaselines.get(player);
-        if (baseline != null) {
-            baseline = new HashSet<>(baseline);
-            baseline.removeAll(structures);
-            partyRelockBaselines.put(player, baseline);
-            markDirty();
-        }
         Set<Identifier> pending = pendingNotifications.get(player);
         if (pending != null && pending.removeAll(structures)) {
             if (pending.isEmpty()) pendingNotifications.remove(player);
@@ -209,7 +168,10 @@ public final class UnlockedStructures extends PersistentState {
         saved.removeAll(structures);
         int removed = before - saved.size();
         if (saved.isEmpty()) unlockedStructures.remove(player);
-        if (removed > 0) markDirty();
+        if (removed > 0) {
+            PartySharing.changed();
+            markDirty();
+        }
         return removed;
     }
 
@@ -250,22 +212,6 @@ public final class UnlockedStructures extends PersistentState {
                 if (id != null) pending.add(id);
             }
             if (!pending.isEmpty()) state.pendingNotifications.put(uuid, pending);
-            NbtList partyPending = player.getList("PendingPartyNotifications", NbtElement.STRING_TYPE);
-            Set<Identifier> partyIds = new HashSet<>();
-            for (int j = 0; j < partyPending.size(); j++) {
-                Identifier id = Identifier.tryParse(partyPending.getString(j));
-                if (id != null) partyIds.add(id);
-            }
-            if (!partyIds.isEmpty()) state.pendingPartyNotifications.put(uuid, partyIds);
-            if (player.contains("PartyRelockBaseline")) {
-                NbtList baseline = player.getList("PartyRelockBaseline", NbtElement.STRING_TYPE);
-                Set<Identifier> idsBefore = new HashSet<>();
-                for (int j = 0; j < baseline.size(); j++) {
-                    Identifier id = Identifier.tryParse(baseline.getString(j));
-                    if (id != null) idsBefore.add(id);
-                }
-                state.partyRelockBaselines.put(uuid, idsBefore);
-            }
         }
         return state;
     }
@@ -278,8 +224,6 @@ public final class UnlockedStructures extends PersistentState {
         uuids.addAll(pendingNotifications.keySet());
         uuids.addAll(pendingReloadNotice);
         uuids.addAll(pendingRelock);
-        uuids.addAll(pendingPartyNotifications.keySet());
-        uuids.addAll(partyRelockBaselines.keySet());
         uuids.addAll(latestUnlockedStructures.keySet());
         uuids.forEach(uuid -> {
             NbtCompound player = new NbtCompound();
@@ -298,14 +242,6 @@ public final class UnlockedStructures extends PersistentState {
             NbtList queued = new NbtList();
             pendingNotifications.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> queued.add(NbtString.of(id.toString())));
             player.put("PendingNotifications", queued);
-            NbtList shared = new NbtList();
-            pendingPartyNotifications.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> shared.add(NbtString.of(id.toString())));
-            player.put("PendingPartyNotifications", shared);
-            if (partyRelockBaselines.containsKey(uuid)) {
-                NbtList baseline = new NbtList();
-                partyRelockBaselines.get(uuid).stream().sorted().forEach(id -> baseline.add(NbtString.of(id.toString())));
-                player.put("PartyRelockBaseline", baseline);
-            }
             players.add(player);
         });
         nbt.put("Players", players);

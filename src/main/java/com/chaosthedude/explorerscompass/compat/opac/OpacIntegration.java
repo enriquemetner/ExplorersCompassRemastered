@@ -9,7 +9,8 @@ public final class OpacIntegration {
     private OpacIntegration() {}
     public static void register() {
         PartySharing.register(server -> OpenPACServerAPI.get(server).getPartyManager().getAllStream()
-                .map(party -> party.getMemberInfoStream().map(member -> member.getUUID())
-                        .collect(Collectors.toSet())).toList());
+                .collect(Collectors.toMap(party -> party.getId(),
+                        party -> party.getMemberInfoStream().map(member -> member.getUUID())
+                                .collect(Collectors.toUnmodifiableSet()))));
     }
 }

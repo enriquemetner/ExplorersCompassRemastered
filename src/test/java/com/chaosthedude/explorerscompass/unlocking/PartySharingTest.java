@@ -1,134 +1,103 @@
 package com.chaosthedude.explorerscompass.unlocking;
 
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
-import java.util.*;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.util.Identifier;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PartySharingTest {
-    private final UUID alice = UUID.randomUUID(), bob = UUID.randomUUID(), other = UUID.randomUUID();
-    private static final Identifier A = new Identifier("minecraft:fortress"), B = new Identifier("minecraft:ancient_city");
+    private final UUID alice = UUID.randomUUID();
+    private final UUID bob = UUID.randomUUID();
+    private final UUID carol = UUID.randomUUID();
+    private final UUID firstParty = UUID.randomUUID();
+    private final UUID secondParty = UUID.randomUUID();
+    private final Identifier fortress = new Identifier("minecraft:fortress");
+    private final Identifier stronghold = new Identifier("minecraft:stronghold");
+    private final Identifier village = new Identifier("minecraft:village_plains");
 
-    @Test void sharingRequiresBothTheOptionalAdapterAndEnabledSetting() {
+    @Test void sharingRequiresBothProviderAndSetting() {
         boolean previous = ExplorersCompassConfig.opacPartySharing;
         try {
             PartySharing.register(null);
             ExplorersCompassConfig.opacPartySharing = true;
             assertFalse(PartySharing.enabled());
-            PartySharing.register(server -> List.of());
+            assertFalse(PartySharing.grants(alice, fortress));
+            PartySharing.register(server -> Map.of());
             assertTrue(PartySharing.enabled());
             ExplorersCompassConfig.opacPartySharing = false;
             assertFalse(PartySharing.enabled());
+            assertFalse(PartySharing.grants(alice, fortress));
         } finally {
             PartySharing.register(null);
             ExplorersCompassConfig.opacPartySharing = previous;
         }
     }
 
-    @Test void mergesExistingProgressOnceWithoutTouchingOtherParties() {
-        UnlockedStructures state = new UnlockedStructures();
-        state.add(alice, Set.of(A));
-        state.add(bob, Set.of(B));
-        var additions = PartySharing.merge(state, Set.of(alice, bob), id -> true);
-        assertEquals(Set.of(B), additions.get(alice));
-        assertEquals(Set.of(A), additions.get(bob));
-        assertTrue(PartySharing.merge(state, Set.of(alice, bob), id -> true).isEmpty());
-        assertTrue(state.getStructures(other).isEmpty());
-        // Leaving does not remove imported progress; joining another party can share it.
-        PartySharing.merge(state, Set.of(bob, other), id -> true);
-        assertEquals(Set.of(A, B), state.getStructures(other));
+    @Test void switchingPartiesAndDisbandingUpdateBothSides() {
+        var state = new UnlockedStructures();
+        state.add(alice, Set.of(fortress));
+        state.add(bob, Set.of(stronghold));
+        state.add(carol, Set.of(village));
+        var before = PartySharing.build(state, Map.of(firstParty, Set.of(alice, bob), secondParty, Set.of(carol)), id -> true);
+        assertEquals(Set.of(fortress, stronghold), before.unlocksByParty().get(firstParty));
+        assertEquals(Set.of(stronghold), state.getStructures(bob));
+        assertEquals(Set.of(stronghold), state.latestUnlocked(bob));
+
+        var switched = PartySharing.build(state, Map.of(firstParty, Set.of(alice), secondParty, Set.of(bob, carol)), id -> true);
+        assertEquals(Set.of(fortress), switched.forPlayer(alice));
+        assertEquals(Set.of(stronghold, village), switched.forPlayer(bob));
+        assertEquals(Set.of(stronghold), switched.changesSince(before, alice, state));
+        assertEquals(Set.of(fortress, village), switched.changesSince(before, bob, state));
+        assertEquals(Set.of(stronghold), switched.changesSince(before, carol, state));
+
+        var disbanded = PartySharing.build(state, Map.of(firstParty, Set.of(alice)), id -> true);
+        assertTrue(disbanded.forPlayer(bob).isEmpty());
+        assertEquals(Set.of(village), disbanded.changesSince(switched, bob, state));
+        assertEquals(Set.of(stronghold), disbanded.changesSince(switched, carol, state));
     }
 
-    @Test void excludedIdsAreNotImported() {
-        UnlockedStructures state = new UnlockedStructures();
-        state.add(alice, Set.of(A, B));
-        PartySharing.merge(state, Set.of(alice, bob), id -> id.equals(A));
-        assertEquals(Set.of(A), state.getStructures(bob));
+    @Test void independentlyEarnedUnlockSurvivesDepartureAndOverlapSurvivesRemoval() {
+        var state = new UnlockedStructures();
+        state.add(alice, Set.of(fortress));
+        var members = Map.of(firstParty, Set.of(alice, bob, carol));
+        var borrowed = PartySharing.build(state, members, id -> true);
+        assertEquals(Set.of(fortress), borrowed.forPlayer(bob));
+        assertTrue(state.latestUnlocked(bob).isEmpty());
+
+        state.add(bob, Set.of(fortress));
+        var earned = PartySharing.build(state, members, id -> true);
+        assertTrue(earned.changesSince(borrowed, bob, state).isEmpty());
+        assertEquals(Set.of(fortress), state.latestUnlocked(bob));
+
+        state.remove(alice, Set.of(fortress));
+        var afterLock = PartySharing.build(state, members, id -> true);
+        assertEquals(Set.of(fortress), afterLock.forPlayer(alice));
+        var afterLeave = PartySharing.build(state, Map.of(firstParty, Set.of(alice, carol)), id -> true);
+        assertTrue(afterLeave.forPlayer(alice).isEmpty());
+        assertTrue(afterLeave.changesSince(afterLock, bob, state).isEmpty());
+        assertEquals(Set.of(fortress), afterLeave.changesSince(afterLock, carol, state));
+        assertEquals(Set.of(fortress), state.getStructures(bob));
     }
 
-    @Test void offlineNotificationsPersistAreDeduplicatedAndOnlyCountStillUnlocked() {
-        UnlockedStructures state = new UnlockedStructures();
-        state.add(bob, Set.of(A, B));
-        state.enableNotifications(bob);
-        state.queueNotification(bob, Set.of(B));
-        state.queuePartyNotification(bob, Set.of(A));
-        state.queuePartyNotification(bob, Set.of(A));
+    @Test void rebuildsFromOfflinePersonalSavesAndSkipsIneligibleOrPendingResetEntries() {
+        var state = new UnlockedStructures();
+        state.add(alice, Set.of(fortress, stronghold));
+        state.add(bob, Set.of(village));
+        var parties = Map.of(firstParty, Set.of(alice, bob));
+        PartySharing.build(state, parties, id -> true);
         state = UnlockedStructures.fromNbt(state.writeNbt(new NbtCompound()));
-        assertEquals(1, state.takePendingNotificationCount(bob));
-        assertEquals(1, state.takePartyNotificationCount(bob));
-        assertEquals(0, state.takePartyNotificationCount(bob));
-        state.queuePartyNotification(bob, Set.of(A));
-        state.remove(bob, Set.of(A));
-        assertEquals(0, state.takePartyNotificationCount(bob));
-    }
+        assertEquals(Set.of(village), state.getStructures(bob));
+        assertEquals(Set.of(fortress, village), PartySharing.build(state, parties, id -> !id.equals(stronghold)).forPlayer(bob));
 
-    @Test void firstCompassAbsorbsQueuedSharedNotifications() {
-        UnlockedStructures state = new UnlockedStructures();
-        state.add(bob, Set.of(A));
-        state.queuePartyNotification(bob, Set.of(A));
-        assertTrue(state.enableNotifications(bob));
-        assertEquals(0, state.takePartyNotificationCount(bob));
-        assertEquals(Set.of(A), state.getStructures(bob));
-    }
-
-    @Test void reloadClearsOfflineCopiesBeforeUnionAndRetainsNewAdditionsForLogin() {
-        boolean previous = ExplorersCompassConfig.opacPartySharing;
-        PartySharing.register(server -> List.of(Set.of(alice, bob)));
-        ExplorersCompassConfig.opacPartySharing = true;
-        try {
-            UnlockedStructures state = new UnlockedStructures();
-            state.add(alice, Set.of(A));
-            state.add(bob, Set.of(A));
-            state.queueReload(Set.of(alice, bob), true, true);
-            assertTrue(state.getStructures(bob).isEmpty());
-            state.add(alice, Set.of(B));
-            PartySharing.merge(state, Set.of(alice, bob), id -> true);
-            state = UnlockedStructures.fromNbt(state.writeNbt(new NbtCompound()));
-            assertEquals(Set.of(A), state.beforeRelock(bob));
-            assertTrue(state.takePendingRelock(bob));
-            assertTrue(state.hasPartyRelock(bob));
-            assertEquals(Set.of(B), state.getStructures(bob));
-            state.finishPartyRelock(bob);
-            assertFalse(state.hasPartyRelock(bob));
-            assertFalse(state.contains(alice, A));
-            assertFalse(state.contains(bob, A));
-        } finally {
-            ExplorersCompassConfig.opacPartySharing = previous;
-            PartySharing.register(null);
-        }
-    }
-
-    @Test void aSecondReloadInvalidatesImportsReceivedWhileOffline() {
-        boolean previous = ExplorersCompassConfig.opacPartySharing;
-        PartySharing.register(server -> List.of(Set.of(alice, bob)));
-        ExplorersCompassConfig.opacPartySharing = true;
-        try {
-            UnlockedStructures state = new UnlockedStructures();
-            state.add(alice, Set.of(A));
-            PartySharing.merge(state, Set.of(alice, bob), id -> true);
-            state.queueReload(Set.of(alice, bob), true, true);
-            state.add(alice, Set.of(B));
-            PartySharing.merge(state, Set.of(alice, bob), id -> true);
-            state.queueReload(Set.of(alice, bob), true, true);
-            state.preparePartyRelocks();
-            PartySharing.merge(state, Set.of(alice, bob), id -> true);
-            assertTrue(state.getStructures(alice).isEmpty());
-            assertTrue(state.getStructures(bob).isEmpty());
-        } finally {
-            PartySharing.register(null);
-            ExplorersCompassConfig.opacPartySharing = previous;
-        }
-    }
-
-    @Test void partyWideLockDoesNotLeaveAnotherCopyToRestoreTheTarget() {
-        UnlockedStructures state = new UnlockedStructures();
-        state.add(alice, Set.of(A, B));
-        PartySharing.merge(state, Set.of(alice, bob), id -> true);
-        for (UUID member : Set.of(alice, bob)) state.remove(member, Set.of(A));
-        PartySharing.merge(state, Set.of(alice, bob), id -> true);
-        assertEquals(Set.of(B), state.getStructures(alice));
-        assertEquals(Set.of(B), state.getStructures(bob));
+        state.queueReload(Set.of(alice), true, false);
+        assertEquals(Set.of(village), PartySharing.build(state, parties, id -> true).forPlayer(bob));
+        assertTrue(state.takePendingRelock(alice));
+        state.clearStructures(alice);
+        state.add(alice, Set.of(fortress));
+        assertEquals(Set.of(fortress, village), PartySharing.build(state, parties, id -> true).forPlayer(bob));
     }
 }

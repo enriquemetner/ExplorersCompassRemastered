@@ -2,9 +2,13 @@ package com.chaosthedude.explorerscompass.gui;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
+import com.google.common.collect.ListMultimap;
 
 import net.minecraft.util.Identifier;
 
@@ -73,19 +77,59 @@ public final class FilterSelections {
 		}
 	}
 
+	record AvailableOptions(Set<String> sources, Set<Identifier> dimensions, Set<Identifier> sets) {
+	}
+
+	static AvailableOptions availableOptions(List<Identifier> structures, Map<Identifier, Identifier> setsByStructure,
+			ListMultimap<Identifier, Identifier> dimensionsByStructure, Predicate<Identifier> isEligible) {
+		AvailableOptions available = new AvailableOptions(new HashSet<>(), new HashSet<>(), new HashSet<>());
+		for (Identifier id : structures) {
+			if (!isEligible.test(id) || !matchesNewlyUnlocked(id)) {
+				continue;
+			}
+			String source = id.getNamespace();
+			Identifier set = setsByStructure.get(id);
+			List<Identifier> structureDimensions = dimensionsByStructure.get(id);
+			boolean sourceMatches = matchesSource(source);
+			boolean setMatches = matchesSet(set);
+			boolean dimensionMatches = matchesDimensions(structureDimensions);
+			// Each option replaces the restriction from its own column for this check.
+			if (setMatches && dimensionMatches) {
+				available.sources().add(source);
+			}
+			if (sourceMatches && setMatches) {
+				available.dimensions().addAll(structureDimensions);
+			}
+			if (sourceMatches && dimensionMatches && set != null) {
+				available.sets().add(set);
+			}
+		}
+		return available;
+	}
+
 	public static boolean matches(Identifier structureId) {
-        if (newlyUnlocked && !com.chaosthedude.explorerscompass.network.ClientPacketHandlers.latestUnlockedStructures.contains(structureId)) return false;
-		if (!sources.isEmpty() && !sources.contains(structureId.getNamespace())) {
-			return false;
-		}
-		Identifier set = ExplorersCompass.structureIDsToSetIDs.get(structureId);
-		if (!sets.isEmpty() && !sets.contains(set)) {
-			return false;
-		}
+		return matchesNewlyUnlocked(structureId)
+				&& matchesSource(structureId.getNamespace())
+				&& matchesSet(ExplorersCompass.structureIDsToSetIDs.get(structureId))
+				&& matchesDimensions(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureId));
+	}
+
+	private static boolean matchesNewlyUnlocked(Identifier id) {
+		return !newlyUnlocked || ClientPacketHandlers.latestUnlockedStructures.contains(id);
+	}
+
+	private static boolean matchesSource(String source) {
+		return sources.isEmpty() || sources.contains(source);
+	}
+
+	private static boolean matchesSet(Identifier set) {
+		return sets.isEmpty() || sets.contains(set);
+	}
+
+	private static boolean matchesDimensions(List<Identifier> structureDimensions) {
 		if (dimensions.isEmpty() && !currentSelected) {
 			return true;
 		}
-		List<Identifier> structureDimensions = ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureId);
 		for (Identifier dimension : structureDimensions) {
 			if (dimensions.contains(dimension) || (currentSelected && dimension.equals(currentDimension))) {
 				return true;

@@ -40,7 +40,11 @@ public class TransparentButton extends ButtonWidget {
 		if (renderer.getWidth(label) > availableWidth) {
 			label = renderer.trimToWidth(label, Math.max(1, availableWidth - renderer.getWidth("..."))) + "...";
 		}
-		context.drawCenteredTextWithShadow(renderer, label, getX() + (getWidth() - rightInset) / 2, getY() + (getHeight() - 8) / 2, 0xffffff);
+		context.drawCenteredTextWithShadow(renderer, label, getX() + (getWidth() - rightInset) / 2, labelY(), 0xffffff);
+	}
+
+	int labelY() {
+		return getY() + (getHeight() - 8) / 2;
 	}
 
 }

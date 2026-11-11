@@ -130,42 +130,19 @@ public final class UnlockingCommands {
             added.addAll(targets);
             added.removeAll(state.getStructures(player));
         }
-        Set<UUID> affected = unlock ? Set.of(player) : PartySharing.members(server, player);
-        if (!unlock && selector.equals("all")) {
-            Set<Identifier> all = new HashSet<>(targets);
-            affected.forEach(member -> all.addAll(state.getStructures(member)));
-            targets = commandStructures(all);
-        }
-        int changed = 0;
-        for (UUID member : affected) {
-            changed += unlock ? state.add(member, targets) : state.remove(member, targets);
-            if (!unlock) {
-                ServerPlayerEntity partyPlayer = server.getPlayerManager().getPlayer(member);
-                if (partyPlayer != null) {
-                    ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(partyPlayer, -1);
-                    for (int slot = 0; slot < partyPlayer.getInventory().size(); slot++)
-                        ExplorersCompass.EXPLORERS_COMPASS_ITEM.validateTarget(partyPlayer, partyPlayer.getInventory().getStack(slot));
-                }
-            }
-        }
+        int changed = unlock ? state.add(player, targets) : state.remove(player, targets);
         ServerPlayerEntity online = server.getPlayerManager().getPlayer(player);
         if (unlock && changed > 0) {
             if (online != null) UnlockNotifications.newlyAdded(online, changed);
             else state.queueNotification(player, added);
         }
-        if (!unlock && changed > 0) {
-            if (online != null) ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(online, -1);
+        PartySharing.synchronize(server);
+        if (!unlock && changed > 0 && online != null && online.networkHandler.isConnectionOpen()) {
+            ExplorersCompass.EXPLORERS_COMPASS_ITEM.revalidateAccess(online);
+            com.chaosthedude.explorerscompass.network.PartyRefreshPacket.send(online);
         }
-        if (unlock) PartySharing.synchronize(server, false);
-        for (UUID member : PartySharing.members(server, player)) {
-            ServerPlayerEntity recipient = server.getPlayerManager().getPlayer(member);
-            if (recipient != null && recipient.networkHandler.isConnectionOpen())
-                com.chaosthedude.explorerscompass.network.PartyRefreshPacket.send(recipient);
-        }
-        int totalChanged = changed;
-        context.getSource().sendFeedback(() -> Text.literal((unlock ? "Unlocked " : "Locked ") + totalChanged
-                + " saved structure entries for " + (affected.size() > 1 ? "the OPAC party (" + affected.size() + " members)" : player)
-                + "."), true);
+        context.getSource().sendFeedback(() -> Text.literal((unlock ? "Unlocked " : "Locked ") + changed
+                + " saved structure entries for " + player + "."), true);
         return changed;
     }
 

@@ -28,6 +28,7 @@ public final class ClientPacketHandlers {
     public static long shownNoticeRevision;
     public static Identifier trackedStructureId;
     public static boolean showNewlyUnlockedFilter;
+    public static Map<Identifier, RequirementNode> partyRequirements = Map.of();
     public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
     public static boolean pendingNoticeRelocked;
 
@@ -138,12 +139,13 @@ public final class ClientPacketHandlers {
         List<RequirementNode> descriptions = new ArrayList<>();
         int descriptionCount = buf.readInt();
         for (int i = 0; i < descriptionCount; i++) descriptions.add(RequirementNode.read(buf));
-        Map<Identifier, RequirementNode> lockedRequirements = new HashMap<>();
-        int lockedCount = buf.readInt();
-        for (int i = 0; i < lockedCount; i++) lockedRequirements.put(buf.readIdentifier(), descriptions.get(buf.readInt()));
+        Map<Identifier, RequirementNode> lockedRequirements = readRequirements(buf, descriptions, numStructures);
+        Map<Identifier, RequirementNode> shared = buf.isReadable()
+                ? readRequirements(buf, descriptions, numStructures) : Map.of();
 
         client.execute(() -> {
-            ExplorersCompass.lockedRequirements = Map.copyOf(lockedRequirements);
+            ExplorersCompass.lockedRequirements = lockedRequirements;
+            partyRequirements = shared;
             ExplorersCompass.synced = true;
             trackedStructureId = tracked;
             latestUnlockedStructures = java.util.Set.copyOf(latest);
@@ -163,5 +165,12 @@ public final class ClientPacketHandlers {
             ExplorersCompass.allowedStructureIDsToDimensionIDs = allowedStructureIDsToDimensionIDs;
             ExplorersCompass.structureIDsToSetIDs = structureIDsToSetIDs;
         });
+    }
+    private static Map<Identifier, RequirementNode> readRequirements(PacketByteBuf buf, List<RequirementNode> descriptions, int maxEntries) {
+        int count = buf.readInt();
+        if (count < 0 || count > maxEntries) throw new IllegalArgumentException("Invalid requirements count");
+        Map<Identifier, RequirementNode> requirements = new HashMap<>();
+        for (int i = 0; i < count; i++) requirements.put(buf.readIdentifier(), descriptions.get(buf.readInt()));
+        return Map.copyOf(requirements);
     }
 }

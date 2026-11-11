@@ -83,11 +83,12 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SETTINGS_RESET_LABEL_GAP = 4;
 	private static final String SETTINGS_RESET_ALL_LABEL = "All";
 	private static final int SETTINGS_OFFSET_ROW = 2;
-	private static final int SETTINGS_HIDDEN_ROW = 17;
+	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 12;
+	private static final int SETTINGS_HIDDEN_ROW = 18;
 	private static final String HIDDEN_STRUCTURES_TITLE = "Hidden Structures";
-	private static final int SETTINGS_PAUSE_ROW = 13;
-	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 14;
-	private static final int SETTINGS_TELEPORT_ROW = 15;
+	private static final int SETTINGS_PAUSE_ROW = 14;
+	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 15;
+	private static final int SETTINGS_TELEPORT_ROW = 16;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
 	private static final int SEARCH_DIALOG_WIDTH = 245;
@@ -109,6 +110,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Clear Filters on Close",
 		"Clear Search Bar on Close",
 		"Allow ID Searches",
+		"Show Only Matching Filter Options",
 		"Singleplayer & Creative",
 		"Pause Game When Open",
 		"Unlock All Structures in Creative",
@@ -129,6 +131,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Clear selected structure filters when you close the compass screen.",
 		"Clears the search bar when you close the compass screen.",
 		"Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.",
+		"Show unchecked sources, dimensions, and structure sets only when they match at least one structure with the filters in the other columns. Checked options stay available so you can uncheck them.",
 		null,
 		"Pauses singleplayer while the compass screen is open, except while locating a structure. Searches need the game to keep ticking to make progress.",
 		"Temporarily unlock all structures while in Creative mode. Changing the mode back relocks previously locked structures.",
@@ -151,13 +154,14 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget searchButton;
 	private ButtonWidget selectionToggleButton;
 	private boolean selectedOnly;
-	private ButtonWidget sortOrderButton;
+	private TransparentButton sortOrderButton;
 	private ButtonWidget filtersButton;
 	private ButtonWidget settingsButton;
 	private ButtonWidget restoreDefaultsButton;
 	private final Map<Integer, ButtonWidget> settingResetButtons = new HashMap<>();
 	private ButtonWidget chatOverlayButton;
 	private ButtonWidget allowIdSearchesButton;
+	private ButtonWidget showOnlyMatchingFilterOptionsButton;
 	private ButtonWidget overlaySideButton;
 	private ButtonWidget clearOnCloseButton;
 	private ButtonWidget clearSearchBarOnCloseButton;
@@ -256,6 +260,7 @@ public class ExplorersCompassScreen extends Screen {
 	private boolean draggingStructureScrollbar;
 	private double scrollbarGrabOffset;
 	private final List<List<FilterOption>> filterOptions = List.of(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
+	private FilterSelections.AvailableOptions availableFilterOptions;
 	private boolean showSourceColumn = true;
 	private final List<SortCriterion> sortOrder = new ArrayList<SortCriterion>();
 	private boolean sortMenuOpen;
@@ -402,7 +407,7 @@ public class ExplorersCompassScreen extends Screen {
 		hiddenSearchTextField.tick();
 		if (lastCreativeBypass != creativeBypassActive()) {
 			lastCreativeBypass = creativeBypassActive();
-			if (lastCreativeBypass && dialog == Dialog.LOCKED) {
+			if (lastCreativeBypass && dialog == Dialog.LOCKED && !isUnlockedThroughParty(lockedRequirementsId)) {
 				dialog = Dialog.NONE;
 				lockedRequirementsView = null;
 				lockedRequirementsId = null;
@@ -419,14 +424,15 @@ public class ExplorersCompassScreen extends Screen {
 		// Check if the allowed structure list has synced
 		if (ExplorersCompass.synced) {
 			if (dialog == Dialog.LOCKED && lockedRequirementsId != null) {
-				var updated = ExplorersCompass.lockedRequirements.get(lockedRequirementsId);
+				var partyRequirements = ClientPacketHandlers.partyRequirements.get(lockedRequirementsId);
+				var updated = partyRequirements != null ? partyRequirements : ExplorersCompass.lockedRequirements.get(lockedRequirementsId);
 				if (updated == null) {
 					dialog = Dialog.NONE;
 					lockedRequirementsView = null;
 					lockedRequirementsId = null;
 				} else {
 					lockedRequirementsView = new LockedRequirementsView(textRenderer, updated,
-							this::rememberQuestBookReturn);
+							this::rememberQuestBookReturn, partyRequirements != null);
 				}
 			}
 			entryFiltersId = null;
@@ -524,6 +530,10 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		if (settingsOpen) {
 			renderSettingsTooltip(context, mouseX, mouseY);
+		}
+		if (isStructureView() && selectionList.isPartyLabelHovered(mouseX, mouseY)) {
+			drawQuestionTooltip(context, "This structure is unlocked only while you’re in this party.\n"
+					+ "You haven’t met its personal unlock requirements.\nClick to show requirements", mouseX, mouseY);
 		}
 		if (selectionToggleButton.visible && selectionToggleButton.isMouseOver(mouseX, mouseY)) {
 			drawQuestionTooltip(context, SELECTION_TOGGLE_TOOLTIP, mouseX, mouseY);
@@ -721,11 +731,25 @@ public class ExplorersCompassScreen extends Screen {
 
 	private List<FilterOption> visibleFilterOptions(int column) {
 		String query = filterSearchTextField.getText().toLowerCase(Locale.ROOT);
-		List<FilterOption> visible = query.isEmpty() ? filterOptions.get(column) : filterOptions.get(column).stream()
-				.filter(option -> option.label.toLowerCase(Locale.ROOT).contains(query)
-                        || (ExplorersCompassConfig.allowIdSearches
-                            && (option.source != null ? option.source : option.id == null ? "" : option.id.toString())
-                                .toLowerCase(Locale.ROOT).contains(query))).collect(Collectors.toList());
+		List<FilterOption> visible = filterOptions.get(column);
+		if (ExplorersCompassConfig.showOnlyMatchingFilterOptions) {
+			if (availableFilterOptions == null) {
+				availableFilterOptions = FilterSelections.availableOptions(allowedStructureIDs,
+						ExplorersCompass.structureIDsToSetIDs, ExplorersCompass.allowedStructureIDsToDimensionIDs,
+						this::passesStructureVisibility);
+			}
+			visible = visible.stream().filter(option -> filterChecked(column, option) || switch (column) {
+				case 0 -> availableFilterOptions.sources().contains(option.source);
+				case 1 -> availableFilterOptions.dimensions().contains(option.id);
+				default -> availableFilterOptions.sets().contains(option.id);
+			}).toList();
+		}
+		if (!query.isEmpty()) {
+			visible = visible.stream().filter(option -> option.label.toLowerCase(Locale.ROOT).contains(query)
+					|| (ExplorersCompassConfig.allowIdSearches
+						&& (option.source != null ? option.source : option.id.toString()).toLowerCase(Locale.ROOT).contains(query)))
+					.toList();
+		}
 		if (!ExplorersCompassConfig.checkedFiltersFirst) {
 			return visible;
 		}
@@ -812,6 +836,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void rebuildFilterOptions() {
+		availableFilterOptions = null;
 		for (List<FilterOption> options : filterOptions) {
 			options.clear();
 		}
@@ -1168,6 +1193,7 @@ public class ExplorersCompassScreen extends Screen {
 	private void updateSettingsButtonLabels() {
 		chatOverlayButton.setMessage(onOff(ExplorersCompassConfig.displayWithChatOpen));
 		allowIdSearchesButton.setMessage(onOff(ExplorersCompassConfig.allowIdSearches));
+		showOnlyMatchingFilterOptionsButton.setMessage(onOff(ExplorersCompassConfig.showOnlyMatchingFilterOptions));
 		clearOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearFiltersOnClose));
 		clearSearchBarOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearSearchBarOnClose));
 		pauseGameWhenOpenButton.setMessage(onOff(ExplorersCompassConfig.pauseGameWhenOpen));
@@ -1717,6 +1743,7 @@ public class ExplorersCompassScreen extends Screen {
 		filtersOpen = open;
 		if (open) {
 			pendingHiddenStructures.clear();
+			availableFilterOptions = null;
 		}
 		draggedScrollbar = null;
 		searchTextField.setVisible(isStructureView());
@@ -2035,6 +2062,15 @@ public class ExplorersCompassScreen extends Screen {
         context.drawTooltip(textRenderer, lines, mouseX, mouseY);
     }
 
+    boolean isUnlockedThroughParty(Identifier id) {
+        return id != null && ClientPacketHandlers.partyRequirements.containsKey(id);
+    }
+
+    void showPartyRequirements(Identifier id) {
+        RequirementNode requirements = ClientPacketHandlers.partyRequirements.get(id);
+        if (requirements != null) showLockedRequirements(id, requirements);
+    }
+
     public boolean isStructureLocked(Identifier id) {
 		return !creativeBypassActive() && ExplorersCompass.lockedRequirements.containsKey(id);
     }
@@ -2064,7 +2100,7 @@ public class ExplorersCompassScreen extends Screen {
 
     private void showLockedRequirements(Identifier id, RequirementNode requirements) {
         lockedRequirementsId = id;
-        lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements, this::rememberQuestBookReturn);
+        lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements, this::rememberQuestBookReturn, isUnlockedThroughParty(id));
         dialog = Dialog.LOCKED;
     }
 
@@ -2294,7 +2330,13 @@ public class ExplorersCompassScreen extends Screen {
 		client.setScreen(null);
 	}
 
+	private boolean passesStructureVisibility(Identifier id) {
+		return (!isStructureHidden(id) || pendingHiddenStructures.contains(id))
+				&& (!FilterSelections.excludeLocked() || !isStructureLocked(id));
+	}
+
 	public void processSearchTerm() {
+		availableFilterOptions = null;
 		structureSelection.retain(id -> !isStructureHidden(id) || pendingHiddenStructures.contains(id));
 		if (structureSelection.isEmpty()) showNormalResults();
 		if (selectedOnly) {
@@ -2308,8 +2350,7 @@ public class ExplorersCompassScreen extends Screen {
             if (id.equals(navigationTarget) && searchTerm.equals(StructureUtils.getStructureName(id).toLowerCase(Locale.ROOT))) {
                 structureIDsMatchingSearch.add(id);continue;
             }
-			if ((isStructureHidden(id) && !pendingHiddenStructures.contains(id)) || !FilterSelections.matches(id)
-					|| (FilterSelections.excludeLocked() && isStructureLocked(id))) {
+			if (!passesStructureVisibility(id) || !FilterSelections.matches(id)) {
 				continue;
 			}
 			if (searchTerm.startsWith("@")) {
@@ -2343,6 +2384,10 @@ public class ExplorersCompassScreen extends Screen {
 
 	private Collator englishCollator() {
 		return Collator.getInstance(Locale.US);
+	}
+
+	int sortPriorityLabelY() {
+		return sortOrderButton.labelY();
 	}
 
 	private void setupButtons() {
@@ -2432,6 +2477,13 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 			processSearchTerm();
 		}));
+		showOnlyMatchingFilterOptionsButton = addDrawableChild(new TransparentButton(controlX,
+				settingsRowY(SETTINGS_MATCHING_FILTER_OPTIONS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+			ExplorersCompassConfig.showOnlyMatchingFilterOptions = !ExplorersCompassConfig.showOnlyMatchingFilterOptions;
+			ExplorersCompassConfig.saveClient();
+			updateSettingsButtonLabels();
+			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
+		}));
 		adjustRowsToFitViewButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(6), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
 			ExplorersCompassConfig.adjustRowsToFitView = !ExplorersCompassConfig.adjustRowsToFitView;
 			ExplorersCompassConfig.saveClient();
@@ -2479,6 +2531,7 @@ public class ExplorersCompassScreen extends Screen {
 		addSettingResetButton(9, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
 		addSettingResetButton(10, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
 		addSettingResetButton(11, ClientSetting.ALLOW_ID_SEARCHES);
+		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
 		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
 		addSettingResetButton(SETTINGS_CREATIVE_UNLOCK_ROW, ClientSetting.CREATIVE_UNLOCKS_ALL);
 		addSettingResetButton(SETTINGS_TELEPORT_ROW, ClientSetting.SHOW_TELEPORT_ONLY_IN_CREATIVE);
@@ -2709,6 +2762,7 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(checkedFiltersFirstButton, 5);
 		placeSetting(adjustRowsToFitViewButton, 6);
 		placeSetting(allowIdSearchesButton, 11);
+		placeSetting(showOnlyMatchingFilterOptionsButton, SETTINGS_MATCHING_FILTER_OPTIONS_ROW);
 		placeSetting(closeOnFoundButton, 8);
 		placeSetting(clearOnCloseButton, 9);
 		placeSetting(clearSearchBarOnCloseButton, 10);

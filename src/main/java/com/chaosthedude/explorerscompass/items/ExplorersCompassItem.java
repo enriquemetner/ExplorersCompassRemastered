@@ -15,6 +15,7 @@ import com.chaosthedude.explorerscompass.availability.AvailabilitySelection;
 import com.chaosthedude.explorerscompass.availability.StructureAvailability;
 import com.chaosthedude.explorerscompass.unlocking.RequirementNode;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
+import com.chaosthedude.explorerscompass.unlocking.PartySharing;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.gui.GuiWrapper;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
@@ -115,6 +116,17 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
+    public void revalidateAccess(ServerPlayerEntity player) {
+        SearchSession session = searches.get(player.getUuid());
+        if (session != null && !(session.creativeBypass && player.getAbilities().creativeMode)
+                && session.eligibleIds.stream().noneMatch(id -> UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), id))) {
+            stopDetachedSearch(player.getUuid(), session);
+        }
+        for (int slot = 0; slot < player.getInventory().size(); slot++) {
+            validateTarget(player, player.getInventory().getStack(slot));
+        }
+    }
+
     private void stopDetachedSearch(UUID owner, SearchSession session) {
         stopSearch(owner, session);
         ServerPlayerEntity player = session.world.getServer().getPlayerManager().getPlayer(owner);
@@ -140,23 +152,23 @@ public class ExplorersCompassItem extends Item {
         final UUID token = UUID.randomUUID();
         final int requestId;
         final ServerWorld world;
-        final Identifier searchId;
+        final List<Identifier> eligibleIds;
 		final boolean creativeBypass;
         final int radiusLimit = ExplorersCompassConfig.maxSearchRadius;
-        SearchSession(ServerWorld world, ItemStack stack, int requestId, Identifier searchId, boolean creativeBypass) {
+        SearchSession(ServerWorld world, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass) {
             this.world = world;
             this.stack = stack;
             this.previousNbt = CompassSearchData.snapshot(stack.getOrCreateNbt());
             this.requestId = requestId;
-            this.searchId = searchId;
+            this.eligibleIds = List.copyOf(eligibleIds);
 			this.creativeBypass = creativeBypass;
         }
     }
 
-    private SearchSession beginSearch(ServerWorld world, PlayerEntity player, ItemStack stack, int requestId, Identifier searchId, boolean creativeBypass) {
+    private SearchSession beginSearch(ServerWorld world, PlayerEntity player, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass) {
         cancelSearch(player, -1);
         ensureHolder((ServerPlayerEntity) player, stack);
-        SearchSession session = new SearchSession(world, stack, requestId, searchId, creativeBypass);
+        SearchSession session = new SearchSession(world, stack, requestId, eligibleIds, creativeBypass);
         CompassSearchData.begin(stack.getOrCreateNbt(), session.token, session.previousNbt);
         searches.put(player.getUuid(), session);
         return session;
@@ -209,7 +221,7 @@ public class ExplorersCompassItem extends Item {
         if (selection.eligible().isEmpty() && selection.locked() > 0) {
             RequirementNode requirements = listed
                     ? new RequirementNode(Text.literal("No unlocked structures in the list are available in this dimension."), false, List.of())
-                    : UnlockingRules.get().lockedRequirements(player, ids).get(ids.get(0));
+                    : UnlockingRules.get().personalRequirements(player, ids).get(ids.get(0));
             SearchResultPacket.sendLocked(player, requestId, requirements);
             return List.of();
         }
@@ -268,24 +280,30 @@ public class ExplorersCompassItem extends Item {
         syncScreen(player, true);
     }
 
-    /** Push saved state without reevaluation when only refreshing a command or shared addition. */
+    /** Push saved state without reevaluation when only refreshing a command or a party access change. */
     public void syncScreen(ServerPlayerEntity player, boolean reevaluate) {
         ItemStack held = ItemUtils.getHeldItem(player, this);
+        if (!held.isEmpty()) ensureHolder(player, held);
+        if (reevaluate) UnlockingRules.get().evaluateOnOpen(player);
+        PartySharing.synchronize(player.getServer());
         if (!held.isEmpty()) validateTarget(player, held);
 		ServerWorld world = player.getServerWorld();
-        if (reevaluate) {
-            UnlockingRules.get().evaluateOnOpen(player);
-            com.chaosthedude.explorerscompass.unlocking.PartySharing.synchronize(player.getServer());
-        }
 		boolean canTeleport = PlayerUtils.canTeleport(player);
 		boolean hasInfiniteXp = player.getAbilities().creativeMode;
 		List<Identifier> allowedStructures = StructureUtils.getAllowedStructureIDs(world);
 		ListMultimap<Identifier, Identifier> dimensionsForAllowedStructures = StructureUtils.getGeneratingDimensionIDsForAllowedStructures(world, allowedStructures);
 		Map<Identifier, Identifier> structureIDsToSetIDs = StructureUtils.getStructureIDsToSetIDs(world);
+        Map<Identifier, RequirementNode> locked = UnlockingRules.get().personalRequirements(player, allowedStructures);
+        Map<Identifier, RequirementNode> party = new HashMap<>();
+        locked.entrySet().removeIf(entry -> {
+            if (!UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), entry.getKey())) return false;
+            party.put(entry.getKey(), entry.getValue());
+            return true;
+        });
 		ServerPlayNetworking.send(player, SyncPacket.ID, new SyncPacket(canTeleport, ExplorersCompassConfig.allowExcludeVisited,
 				hasInfiniteXp, ExplorersCompassConfig.defaultXpCost, ExplorersCompassConfig.allowSearchWithoutEnoughXp,
 				allowedStructures, dimensionsForAllowedStructures, structureIDsToSetIDs,
-				UnlockingRules.get().lockedRequirements(player, allowedStructures),
+				locked, party,
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRevision(player.getUuid()),
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRelocked(player.getUuid()),
                 getTrackedStructure(player),
@@ -343,13 +361,14 @@ public class ExplorersCompassItem extends Item {
     private void startValidatedSearch(ServerWorld world, ServerPlayerEntity player, BlockPos pos, List<Identifier> ids,
                                       boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, boolean listed, int requestId) {
         ensureHolder(player, stack);
+        PartySharing.synchronize(world.getServer());
         boolean creativeBypass = creativeUnlocksAll && player.getAbilities().creativeMode;
         List<Identifier> searchable = availableForSearch(world, player, ids, creativeBypass, listed, requestId);
         if (searchable.isEmpty()) return;
         List<Structure> structures = new ArrayList<>();
         for (Identifier id : searchable) structures.add(StructureUtils.getStructureForID(world, id));
         Identifier firstId = searchable.get(0);
-        SearchSession session = beginSearch(world, player, stack, requestId, firstId, creativeBypass);
+        SearchSession session = beginSearch(world, player, stack, requestId, searchable, creativeBypass);
         setSearching(stack, firstId);
         session.workers.createWorkers(world, player, stack, structures, firstId, excludeVisited, creativeBypass, pos);
         session.workers.setRadiusLimit(session.radiusLimit);
@@ -368,6 +387,7 @@ public class ExplorersCompassItem extends Item {
     }
 
 	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, ChunkPos startChunk, int x, int z, int samples, boolean displayCoordinates, boolean displayDistance) {
+        PartySharing.synchronize(player.getServer());
 		SearchSession session = searches.get(player.getUuid());
 		if (session == null || session.stack != stack || structureID == null) return;
         if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }

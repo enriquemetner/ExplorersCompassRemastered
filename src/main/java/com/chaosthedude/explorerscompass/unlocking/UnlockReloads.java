@@ -71,8 +71,16 @@ public final class UnlockReloads {
             recentEditors.clear();
         }
         if (observedDefinition == null) return;
+        var reconciled = new java.util.ArrayList<ServerPlayerEntity>();
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            if (joined.add(player.getUuid())) reconcile(player);
+            if (joined.add(player.getUuid())) {
+                reconcile(player);
+                reconciled.add(player);
+            }
+        }
+        if (!reconciled.isEmpty()) {
+            PartySharing.synchronize(server);
+            reconciled.forEach(com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM::revalidateAccess);
         }
     }
 
@@ -103,8 +111,12 @@ public final class UnlockReloads {
                         notice && !editors.contains(player.getUuid()));
             if (editors.contains(player.getUuid())) state.takePendingReloadNotice(player.getUuid());
             reconcile(player);
-            RulesChangedPacket.send(player);
             joined.add(player.getUuid());
+        }
+        PartySharing.synchronize(server);
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.revalidateAccess(player);
+            RulesChangedPacket.send(player);
         }
     }
 
@@ -112,20 +124,16 @@ public final class UnlockReloads {
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
         UUID id = player.getUuid();
         com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(player, -1);
-        Set<net.minecraft.util.Identifier> before = state.beforeRelock(id);
+        Set<net.minecraft.util.Identifier> before = state.getStructures(id);
         boolean relocked = state.takePendingRelock(id);
         state.beginUnlockEvent(id, before);
         try {
-            if (relocked && !state.hasPartyRelock(id)) state.clearStructures(id);
+            if (relocked) state.clearStructures(id);
             UnlockingRules.get().evaluateSilently(player);
         } finally { state.finishUnlockEvent(id); }
         Set<net.minecraft.util.Identifier> added = new HashSet<>(state.getStructures(id));
         added.removeAll(before);
-        added.removeAll(state.pendingPartyIds(id));
         UnlockNotifications.newlyAdded(player, added.size());
         if (!state.notificationsEnabled(id)) state.takePendingReloadNotice(id);
-        if (!PartySharing.enabled()) state.finishPartyRelock(id);
-        for (int slot = 0; slot < player.getInventory().size(); slot++)
-            com.chaosthedude.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.validateTarget(player, player.getInventory().getStack(slot));
     }
 }
