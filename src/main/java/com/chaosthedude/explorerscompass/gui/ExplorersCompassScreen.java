@@ -509,6 +509,12 @@ public class ExplorersCompassScreen extends Screen {
 		renderExcludeButton(context, excludeVisitedButton, "Exclude Visited", FilterSelections.excludeVisited(), mouseX, mouseY);
 		renderExcludeButton(context, excludeLockedButton, "Exclude Locked", FilterSelections.excludeLocked(), mouseX, mouseY);
         renderExcludeButton(context, newlyUnlockedButton, "Newly Unlocked", FilterSelections.newlyUnlocked(), mouseX, mouseY);
+		if (excludeVisitedButton.visible && excludeVisitedButton.isMouseOver(mouseX, mouseY)) {
+			drawQuestionTooltip(context, "Skip locations you’ve already visited when locating a structure.", mouseX, mouseY);
+		}
+		if (excludeLockedButton.visible && excludeLockedButton.isMouseOver(mouseX, mouseY)) {
+			drawQuestionTooltip(context, "Hide structures you haven’t unlocked from the structure list.", mouseX, mouseY);
+		}
         if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY))
             drawQuestionTooltip(context, "Shows only structures unlocked in your most recent unlocking event.", mouseX, mouseY);
 		renderCrossIcon(context, cancelButton);
