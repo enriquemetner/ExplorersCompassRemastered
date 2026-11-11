@@ -53,7 +53,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
 
     static void register() {
         type = TaskTypes.register(new Identifier(ExplorersCompass.MODID, "visit_structures"),
-                FtbVisitStructuresTask::new, () -> Icon.getIcon(FtbQuestIntegration.REWARD_ICON));
+                FtbVisitStructuresTask::new, () -> Icon.getIcon(ExplorersCompass.STILL_COMPASS_ICON));
         type.setDisplayName(Text.translatable("ftb_task.explorerscompass.visit_structures"));
     }
 

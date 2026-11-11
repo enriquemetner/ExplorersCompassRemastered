@@ -40,6 +40,8 @@ import net.minecraft.util.Identifier;
 public class ExplorersCompass implements ModInitializer {
 
 	public static final String MODID = "explorerscompass";
+	/** Shared texture for compass icons that should stay still. */
+	public static final Identifier STILL_COMPASS_ICON = new Identifier(MODID, "textures/gui/ftb_reward_compass.png");
 
 	public static final Logger LOGGER = LogManager.getLogger(MODID);
 

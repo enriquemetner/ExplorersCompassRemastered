@@ -36,14 +36,13 @@ import org.lwjgl.glfw.GLFW;
 /** Loaded only when FTB Quests is installed. */
 public final class FtbQuestIntegration {
     public static final Identifier PREVIEW_PACKET_ID = new Identifier(ExplorersCompass.MODID, "ftb_reward_preview");
-    static final Identifier REWARD_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/ftb_reward_compass.png");
     private static RewardType type;
 
     private FtbQuestIntegration() {}
 
     public static void register() {
         type = RewardTypes.register(new Identifier(ExplorersCompass.MODID, "unlock_structures"),
-                UnlockStructuresReward::new, () -> Icon.getIcon(REWARD_ICON));
+                UnlockStructuresReward::new, () -> Icon.getIcon(ExplorersCompass.STILL_COMPASS_ICON));
         type.setDisplayName(Text.translatable("ftb_reward.explorerscompass.unlock_structures"));
         FtbVisitStructuresTask.register();
         FtbStructureRewards.register(FtbQuestIntegration::snapshot);

@@ -27,7 +27,7 @@ public final class UnlockToast implements Toast {
         var renderer = manager.getClient().textRenderer;
         drawLine(context, renderer, title, 7, 0xFFFFFF00);
         drawLine(context, renderer, subtitle, 18, 0xFFFFFFFF);
-        context.drawItemWithoutEntity(ExplorersCompass.EXPLORERS_COMPASS_ITEM.getDefaultStack(), 8, 8);
+        context.drawTexture(ExplorersCompass.STILL_COMPASS_ICON, 8, 8, 16, 16, 0, 0, 256, 256, 256, 256);
         return startTime >= 5000.0 * manager.getNotificationDisplayTimeMultiplier() ? Visibility.HIDE : Visibility.SHOW;
     }
 
