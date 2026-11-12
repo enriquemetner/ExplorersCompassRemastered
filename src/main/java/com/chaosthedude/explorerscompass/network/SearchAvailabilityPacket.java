@@ -14,6 +14,11 @@ public final class SearchAvailabilityPacket {
     public record Response(int requestId, List<Identifier> eligibleIds, int wrongDimension, List<AvailabilitySelection.Disabled> disabled) {
         public Response { eligibleIds = List.copyOf(eligibleIds); disabled = List.copyOf(disabled); }
         public int eligible() { return eligibleIds.size(); }
+        public boolean isInvalidSelection(int selectedCount) {
+            int disabledCount = disabled.size();
+            return selectedCount > 1 && eligibleIds.isEmpty()
+                    && (disabledCount > 1 || (disabledCount == 1 && wrongDimension == selectedCount - 1));
+        }
         public boolean appliesTo(int activeRequest, boolean searching) { return searching && requestId == activeRequest; }
     }
     private SearchAvailabilityPacket() {}

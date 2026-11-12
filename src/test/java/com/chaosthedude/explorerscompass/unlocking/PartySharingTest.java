@@ -1,6 +1,9 @@
 package com.chaosthedude.explorerscompass.unlocking;
 
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
+import com.chaosthedude.explorerscompass.util.VisitedStructures;
+import com.chaosthedude.explorerscompass.util.VisitedStructures.Visit;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -21,19 +24,28 @@ class PartySharingTest {
 
     @Test void sharingRequiresBothProviderAndSetting() {
         boolean previous = ExplorersCompassConfig.opacPartySharing;
+        boolean previousVisits = ExplorersCompassConfig.visitsSharing;
         try {
             PartySharing.register(null);
+            ExplorersCompassConfig.visitsSharing = true;
             ExplorersCompassConfig.opacPartySharing = true;
             assertFalse(PartySharing.enabled());
+            assertFalse(PartySharing.visitsEnabled());
             assertFalse(PartySharing.grants(alice, fortress));
             PartySharing.register(server -> Map.of());
             assertTrue(PartySharing.enabled());
+            assertTrue(PartySharing.visitsEnabled());
+            ExplorersCompassConfig.visitsSharing = false;
+            assertFalse(PartySharing.visitsEnabled());
+            ExplorersCompassConfig.visitsSharing = true;
             ExplorersCompassConfig.opacPartySharing = false;
             assertFalse(PartySharing.enabled());
+            assertFalse(PartySharing.visitsEnabled());
             assertFalse(PartySharing.grants(alice, fortress));
         } finally {
             PartySharing.register(null);
             ExplorersCompassConfig.opacPartySharing = previous;
+            ExplorersCompassConfig.visitsSharing = previousVisits;
         }
     }
 
@@ -99,5 +111,49 @@ class PartySharingTest {
         state.clearStructures(alice);
         state.add(alice, Set.of(fortress));
         assertEquals(Set.of(fortress, village), PartySharing.build(state, parties, id -> true).forPlayer(bob));
+    }
+    @Test void visitUnionsDeduplicateAndFollowMembershipWithoutChangingPersonalHistory() {
+        var state = new VisitedStructures();
+        var nether = new Identifier("minecraft:the_nether");
+        var overworld = new Identifier("minecraft:overworld");
+        var shared = new Visit(nether, fortress, 2, -3);
+        var otherDimension = new Visit(overworld, fortress, 2, -3);
+        var otherChunk = new Visit(nether, fortress, 3, -3);
+        var otherStructure = new Visit(nether, stronghold, 2, -3);
+        state.addVisits(alice, List.of(shared, otherDimension, otherStructure));
+        state.addVisits(bob, List.of(otherChunk, shared));
+        var parties = Map.of(firstParty, Set.of(alice, bob), secondParty, Set.of(carol));
+
+        assertEquals(Set.of(shared, otherDimension, otherChunk, otherStructure),
+                PartySharing.buildVisitUnions(state, parties).get(firstParty));
+        assertFalse(state.hasVisitedType(bob, stronghold));
+        assertTrue(state.list(bob, Set.of(stronghold)).isEmpty());
+        assertTrue(PartySharing.buildVisitUnions(state, parties).get(secondParty).isEmpty());
+
+        state.remove(alice, List.of(shared, otherDimension));
+        assertEquals(Set.of(shared, otherChunk, otherStructure), PartySharing.buildVisitUnions(state, parties).get(firstParty));
+        var switched = Map.of(firstParty, Set.of(alice), secondParty, Set.of(bob, carol));
+        assertEquals(Map.of(firstParty, Set.of(otherStructure), secondParty, Set.of(shared, otherChunk)),
+                PartySharing.buildVisitUnions(state, switched));
+        assertEquals(Map.of(), PartySharing.buildVisitUnions(state, Map.of()));
+    }
+
+    @Test void copyingSavedVisitsAppendsNewEntriesAndKeepsTheirOrderAfterRestart() {
+        var state = new VisitedStructures();
+        var dimension = new Identifier("minecraft:the_nether");
+        var first = new Visit(dimension, fortress, 0, 0);
+        var duplicate = new Visit(dimension, fortress, -2, 3);
+        var newFirst = new Visit(dimension, fortress, 20, -2);
+        var newSecond = new Visit(dimension, fortress, 3, 8);
+        state.addVisits(alice, List.of(newFirst, duplicate, newSecond));
+        state.addVisits(bob, List.of(first, duplicate));
+
+        assertEquals(2, state.addVisits(bob, state.savedVisits(alice)));
+        assertEquals(0, state.addVisits(bob, state.savedVisits(alice)));
+        state.clear(alice, null);
+        var reloaded = VisitedStructures.fromNbt(state.writeNbt(new NbtCompound()));
+        assertEquals(List.of(first, duplicate, newFirst, newSecond), reloaded.list(bob, Set.of(fortress)));
+        assertTrue(reloaded.hasVisitedType(bob, fortress));
+        assertTrue(reloaded.savedVisits(alice).isEmpty());
     }
 }

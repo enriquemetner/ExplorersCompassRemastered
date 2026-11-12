@@ -23,6 +23,20 @@ class AvailabilityPacketTest {
         assertFalse(response.appliesTo(38,true));
         assertFalse(response.appliesTo(37,false));
     }
+
+    @Test void summarizesOnlyTheRequestedMultiStructureFailures() {
+        var first = new AvailabilitySelection.Disabled(new Identifier("test:first"), Availability.generic());
+        var second = new AvailabilitySelection.Disabled(new Identifier("test:second"), Availability.generic());
+
+        assertTrue(new SearchAvailabilityPacket.Response(1, List.of(), 2, List.of(first)).isInvalidSelection(3));
+        assertTrue(new SearchAvailabilityPacket.Response(1, List.of(), 0, List.of(first, second)).isInvalidSelection(2));
+        assertTrue(new SearchAvailabilityPacket.Response(1, List.of(), 0, List.of(first, second)).isInvalidSelection(3));
+        assertFalse(new SearchAvailabilityPacket.Response(1, List.of(), 1, List.of(first)).isInvalidSelection(3));
+        assertFalse(new SearchAvailabilityPacket.Response(1, List.of(), 0, List.of(first)).isInvalidSelection(1));
+        assertFalse(new SearchAvailabilityPacket.Response(1, List.of(), 3, List.of()).isInvalidSelection(3));
+        assertFalse(new SearchAvailabilityPacket.Response(1, List.of(new Identifier("test:working")), 0,
+                List.of(first, second)).isInvalidSelection(3));
+    }
     @Test void invalidCountsAreRejectedBeforeAllocating() {
         var buffer=new PacketByteBuf(Unpooled.buffer());
         try { buffer.writeInt(1);buffer.writeVarInt(-1);assertThrows(IllegalArgumentException.class,()->SearchAvailabilityPacket.read(buffer)); }

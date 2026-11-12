@@ -12,17 +12,17 @@ import net.minecraft.util.Identifier;
 public final class CompassTransfer {
     public static final String HOLDER = "LastCompassHolder";
     public static final String INHERITED = "InheritedCompassTarget";
-    public record Result(boolean resetTarget, Set<Identifier> unlocks) {}
+    public record Result(boolean resetTarget, Set<Identifier> unlocks, UUID sharingSource) {}
     private CompassTransfer() {}
 
     public static Result acquire(NbtCompound data, UUID player, boolean sharing, boolean found,
             Function<UUID, Set<Identifier>> savedUnlocks, Predicate<Identifier> allowed) {
         UUID previous = data.containsUuid(HOLDER) ? data.getUuid(HOLDER) : null;
-        if (player.equals(previous)) return new Result(false, Set.of());
+        if (player.equals(previous)) return new Result(false, Set.of(), null);
         data.putUuid(HOLDER, player);
-        if (previous == null) return new Result(false, Set.of());
-        if (!sharing) return new Result(true, Set.of());
+        if (previous == null) return new Result(false, Set.of(), null);
+        if (!sharing) return new Result(true, Set.of(), null);
         if (found) data.putBoolean(INHERITED, true);
-        return new Result(false, savedUnlocks.apply(previous).stream().filter(allowed).collect(Collectors.toSet()));
+        return new Result(false, savedUnlocks.apply(previous).stream().filter(allowed).collect(Collectors.toSet()), previous);
     }
 }

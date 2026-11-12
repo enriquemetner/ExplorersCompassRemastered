@@ -5,6 +5,8 @@ import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.network.PartyRefreshPacket;
 import com.chaosthedude.explorerscompass.network.UnlockToastPacket;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
+import com.chaosthedude.explorerscompass.util.VisitedStructures;
+import com.chaosthedude.explorerscompass.util.VisitedStructures.Visit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -15,12 +17,14 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.Identifier;
 
-/** The temporary unlocks supplied by current OPAC party members. */
+/** Temporary unlocks and visits supplied by current OPAC party members. */
 public final class PartySharing {
     public interface Provider { Map<UUID, Set<UUID>> parties(MinecraftServer server); }
 
     private static Provider provider;
     private static boolean dirty = true;
+    private static boolean visitsDirty = true;
+    private static Map<UUID, Set<Visit>> visitsByParty = Map.of();
     private static Map<UUID, Set<UUID>> membership = Map.of();
     private static Snapshot snapshot = new Snapshot(Map.of(), Map.of());
 
@@ -29,9 +33,16 @@ public final class PartySharing {
     public static void register(Provider source) { provider = source; }
     public static boolean enabled() { return provider != null && ExplorersCompassConfig.opacPartySharing; }
     public static void changed() { dirty = true; }
+    public static void visitsChanged() { visitsDirty = true; }
+
+    static boolean visitsEnabled() {
+        return enabled() && ExplorersCompassConfig.visitsSharing;
+    }
 
     public static void clear() {
         dirty = true;
+        visitsDirty = true;
+        visitsByParty = Map.of();
         membership = Map.of();
         snapshot = new Snapshot(Map.of(), Map.of());
     }
@@ -72,9 +83,39 @@ public final class PartySharing {
         return new Snapshot(Map.copyOf(unlocksByParty), Map.copyOf(partyByPlayer));
     }
 
+    static Map<UUID, Set<Visit>> buildVisitUnions(VisitedStructures state, Map<UUID, Set<UUID>> parties) {
+        Map<UUID, Set<Visit>> unions = new HashMap<>();
+        parties.forEach((party, members) -> {
+            Set<Visit> union = new HashSet<>();
+            for (UUID member : members) union.addAll(state.savedVisits(member));
+            unions.put(party, Set.copyOf(union));
+        });
+        return Map.copyOf(unions);
+    }
+
+    public static boolean hasVisit(MinecraftServer server, UUID player, Visit visit) {
+        if (!visitsEnabled()) return false;
+        UUID party = snapshot.partyByPlayer().get(player);
+        if (party == null) return false;
+        refreshVisitUnions(server, membership, false);
+        return visitsByParty.getOrDefault(party, Set.of()).contains(visit);
+    }
+
+    private static void refreshVisitUnions(MinecraftServer server, Map<UUID, Set<UUID>> parties, boolean membershipChanged) {
+        if (!visitsEnabled() || parties.isEmpty()) {
+            visitsByParty = Map.of();
+            visitsDirty = true;
+        } else if (visitsDirty || membershipChanged) {
+            visitsByParty = buildVisitUnions(VisitedStructures.get(server), parties);
+            visitsDirty = false;
+        }
+    }
+
     public static void synchronize(MinecraftServer server) {
         Map<UUID, Set<UUID>> parties = enabled() ? provider.parties(server) : Map.of();
-        if (parties.equals(membership) && (!dirty || parties.isEmpty())) return;
+        boolean membershipChanged = !parties.equals(membership);
+        refreshVisitUnions(server, parties, membershipChanged);
+        if (!membershipChanged && (!dirty || parties.isEmpty())) return;
 
         UnlockedStructures state = UnlockedStructures.get(server);
         var known = server.getRegistryManager().get(RegistryKeys.STRUCTURE);

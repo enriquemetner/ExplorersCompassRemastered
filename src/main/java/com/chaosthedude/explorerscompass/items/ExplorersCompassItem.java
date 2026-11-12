@@ -89,10 +89,17 @@ public class ExplorersCompassItem extends Item {
                         .get(net.minecraft.registry.RegistryKeys.STRUCTURE).containsId(id)
                         && !StructureUtils.structureIdIsBlacklisted(id));
         if (transfer.resetTarget()) clearCompassTarget(stack);
-        if (!transfer.unlocks().isEmpty()) {
-            int added = state.add(player.getUuid(), transfer.unlocks());
+        boolean copiedVisits = false;
+        if (ExplorersCompassConfig.visitsSharing && transfer.sharingSource() != null) {
+            VisitedStructures visits = VisitedStructures.get(player.getServer());
+            copiedVisits = visits.addVisits(player.getUuid(), visits.savedVisits(transfer.sharingSource())) > 0;
+        }
+        int added = copiedVisits
+                ? UnlockingRules.get().evaluateSilently(player, transfer.unlocks())
+                : state.add(player.getUuid(), transfer.unlocks());
+        if (added > 0) {
             UnlockNotifications.newlyAdded(player, added);
-            if (added > 0) com.chaosthedude.explorerscompass.network.RulesChangedPacket.send(player);
+            com.chaosthedude.explorerscompass.network.RulesChangedPacket.send(player);
         }
     }
 
@@ -434,7 +441,7 @@ public class ExplorersCompassItem extends Item {
             }
         }
         Boolean visited = ExplorersCompassConfig.allowExcludeVisited
-                ? VisitedStructures.get(session.world.getServer()).hasVisited(player.getUuid(),
+                ? VisitedStructures.hasEffectiveVisit(session.world.getServer(), player.getUuid(),
                         session.world.getRegistryKey().getValue(), structureID, startChunk)
                 : null;
 		finishSearch(player, SearchResultPacket.FOUND, 0, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);

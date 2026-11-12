@@ -232,8 +232,13 @@ public final class UnlockingRules {
     }
 
     public int evaluateSilently(ServerPlayerEntity player) {
+        return evaluateSilently(player, Set.of());
+    }
+
+    public int evaluateSilently(ServerPlayerEntity player, Set<Identifier> importedUnlocks) {
         FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
         Set<Identifier> earned = earnedOnOpen(catalog(player.getServer()).structures(), progress(player), rewards);
+        earned.addAll(importedUnlocks);
         return UnlockedStructures.get(player.getServer()).add(player.getUuid(), earned);
     }
 

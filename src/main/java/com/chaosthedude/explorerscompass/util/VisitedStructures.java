@@ -1,6 +1,8 @@
 package com.chaosthedude.explorerscompass.util;
 
+import com.chaosthedude.explorerscompass.unlocking.PartySharing;
 import java.util.HashMap;
+import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -93,8 +95,7 @@ public final class VisitedStructures extends PersistentState {
 			if (structureId == null) continue;
 			ChunkPos startChunk = start.getPos();
 			Visit visit = new Visit(dimension, structureId, startChunk.x, startChunk.z);
-			if (visits.computeIfAbsent(player.getUuid(), ignored -> new LinkedHashSet<>()).add(visit)) {
-                markDirty();
+			if (addVisits(player.getUuid(), List.of(visit)) > 0) {
                 com.chaosthedude.explorerscompass.unlocking.UnlockingRules.get().onProgress(player, structureId, null);
             }
 		}
@@ -103,6 +104,32 @@ public final class VisitedStructures extends PersistentState {
 	public void forgetPosition(UUID playerId) {
 		lastChecked.remove(playerId);
 	}
+
+    public List<Visit> savedVisits(UUID player) {
+        return List.copyOf(visits.getOrDefault(player, Set.of()));
+    }
+
+    public int addVisits(UUID player, List<Visit> additions) {
+        if (additions.isEmpty()) return 0;
+        Set<Visit> saved = visits.computeIfAbsent(player, ignored -> new LinkedHashSet<>());
+        int before = saved.size();
+        saved.addAll(additions);
+        int added = saved.size() - before;
+        if (added > 0) visitHistoryChanged();
+        return added;
+    }
+
+    private void visitHistoryChanged() {
+        markDirty();
+        PartySharing.visitsChanged();
+    }
+
+    public static boolean hasEffectiveVisit(MinecraftServer server, UUID player, Identifier dimension,
+                                            Identifier structure, ChunkPos startChunk) {
+        Visit visit = new Visit(dimension, structure, startChunk.x, startChunk.z);
+        return get(server).visits.getOrDefault(player, Set.of()).contains(visit)
+                || PartySharing.hasVisit(server, player, visit);
+    }
 
     public boolean hasVisitedType(UUID player, Identifier structure) {
         return visits.getOrDefault(player, Set.of()).stream().anyMatch(visit -> visit.structure.equals(structure));
@@ -121,7 +148,7 @@ public final class VisitedStructures extends PersistentState {
         saved.removeAll(selected);
         if (saved.isEmpty()) visits.remove(player);
         forgetPosition(player);
-        if (before != saved.size()) markDirty();
+        if (before != saved.size()) visitHistoryChanged();
         return before - saved.size();
     }
 
@@ -138,7 +165,7 @@ public final class VisitedStructures extends PersistentState {
         int removed = before - saved.size();
         if (saved.isEmpty()) visits.remove(player);
         forgetPosition(player);
-        if (removed > 0) markDirty();
+        if (removed > 0) visitHistoryChanged();
         return removed;
     }
 

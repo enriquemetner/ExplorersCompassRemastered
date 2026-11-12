@@ -130,7 +130,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 	private boolean wasVisited(Structure structure, ChunkPos startChunk) {
 		if (!excludeVisited) return false;
 		Identifier structureId = StructureUtils.getIDForStructure(level, structure);
-		return structureId != null && VisitedStructures.get(level.getServer()).hasVisited(player.getUuid(),
+		return structureId != null && VisitedStructures.hasEffectiveVisit(level.getServer(), player.getUuid(),
 			level.getRegistryKey().getValue(), structureId, startChunk);
 	}
 

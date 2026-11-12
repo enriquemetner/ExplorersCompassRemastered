@@ -208,7 +208,7 @@ public class ExplorersCompassScreen extends Screen {
         questReturnScroll = selectionList.getScrollAmount();
         restoreQuestListAfterSync = true;
         activeRequestId = -1;
-        if (draggedScrollbar == ScrollPanel.NOT_FOUND || draggedScrollbar == ScrollPanel.FOUND) draggedScrollbar = null;
+        if (draggedScrollbar == ScrollPanel.SEARCH_FAILURE || draggedScrollbar == ScrollPanel.FOUND) draggedScrollbar = null;
         dialog = Dialog.NONE;
         entryFiltersId = null;
         sortMenuOpen = false;
@@ -223,7 +223,7 @@ public class ExplorersCompassScreen extends Screen {
     private DisabledStructureView disabledView;
     private int listedDisabledCount;
     private Identifier navigationTarget;
-    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, REJECTED }
+    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, REJECTED }
     private Dialog dialog = Dialog.NONE;
     private LockedRequirementsView lockedRequirementsView;
     private Identifier lockedRequirementsId;
@@ -246,10 +246,10 @@ public class ExplorersCompassScreen extends Screen {
     private List<Text> foundBiomes = List.of();
     private Boolean foundVisited;
     private double foundScroll;
-    private double notFoundScroll;
-    private int notFoundWrapWidth;
-    private List<NotFoundLine> notFoundLines = List.of();
-    private record NotFoundLine(OrderedText text, boolean centered) {}
+    private double searchFailureScroll;
+    private int searchFailureWrapWidth;
+    private List<SearchFailureLine> searchFailureLines = List.of();
+    private record SearchFailureLine(OrderedText text, boolean centered) {}
     private Identifier searchedId;
     private boolean searchedListed;
     private int listedSelectedCount;
@@ -263,7 +263,7 @@ public class ExplorersCompassScreen extends Screen {
 	private int settingsFirstRow;
 	private List<Integer> settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, "");
 	private boolean lastCreativeBypass;
-	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN, FOUND, NOT_FOUND }
+	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN, FOUND, SEARCH_FAILURE }
 	private ScrollPanel draggedScrollbar;
 	private boolean draggingStructureScrollbar;
 	private double scrollbarGrabOffset;
@@ -358,7 +358,7 @@ public class ExplorersCompassScreen extends Screen {
             foundScroll = Scrollbar.scrollPixels(foundScroll, scroll3, FOUND_LINE_STEP, foundMaxScroll());
             return true;
         }
-        if (dialog == Dialog.NOT_FOUND) { scrollNotFound(scroll3); return true; }
+        if (isSearchFailureDialog()) { scrollSearchFailure(scroll3); return true; }
         if (dialog != Dialog.NONE) return true;
         if (hiddenStructuresOpen) {
             hiddenScroll = Scrollbar.scrollRows(hiddenScroll, scroll3, 2, hiddenMaxScroll());
@@ -847,7 +847,7 @@ public class ExplorersCompassScreen extends Screen {
 			case HIDDEN -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
 					Scrollbar.rowThumbHeight(trackHeight, hiddenVisibleRows(), filteredHiddenStructures().size()), hiddenScroll, hiddenMaxScroll());
 			case FOUND -> foundScrollbar();
-			case NOT_FOUND -> notFoundScrollbar();
+			case SEARCH_FAILURE -> searchFailureScrollbar();
 		};
 	}
 
@@ -1426,13 +1426,13 @@ public class ExplorersCompassScreen extends Screen {
 			}
 			return ButtonPress.at(mouseX, mouseY, foundBackX(), actionY, foundActionWidth(), 20, dialog, "back", this::dismissDialog);
 		}
-		if (dialog == Dialog.NOT_FOUND) {
-			int actionY = notFoundActionsY();
-			int buttonWidth = notFoundButtonWidth();
-			if (showNotFoundHide() && ButtonPress.contains(mouseX, mouseY, notFoundFirstButtonX(), actionY, buttonWidth, 20)) {
+		if (isSearchFailureDialog()) {
+			int actionY = searchFailureActionsY();
+			int buttonWidth = searchFailureButtonWidth();
+			if (showNotFoundHide() && ButtonPress.contains(mouseX, mouseY, searchFailureFirstButtonX(), actionY, buttonWidth, 20)) {
 				return new ButtonPress(dialog, "hide", () -> toggleStructureHidden(searchedId));
 			}
-			return ButtonPress.at(mouseX, mouseY, notFoundBackX(), actionY, buttonWidth, 20, dialog, "back", this::dismissDialog);
+			return ButtonPress.at(mouseX, mouseY, searchFailureBackX(), actionY, buttonWidth, 20, dialog, "back", this::dismissDialog);
 		}
 		int backY = switch (dialog) {
 			case INFO -> y + dialogHeight() - 30;
@@ -1502,7 +1502,7 @@ public class ExplorersCompassScreen extends Screen {
         if (dialog == Dialog.SEARCHING && !searchConfirmed) return true;
         if (dialog != Dialog.NONE) {
             if (dialog == Dialog.FOUND && button == 0 && beginScrollbarDrag(ScrollPanel.FOUND, mouseX, mouseY)) return true;
-            if (dialog == Dialog.NOT_FOUND && button == 0 && beginScrollbarDrag(ScrollPanel.NOT_FOUND, mouseX, mouseY)) return true;
+            if (isSearchFailureDialog() && button == 0 && beginScrollbarDrag(ScrollPanel.SEARCH_FAILURE, mouseX, mouseY)) return true;
             if (mouseX < dialogX() - 1 || mouseX >= dialogX() + dialogWidth() + 1
                     || mouseY < dialogY() - 1 || mouseY >= dialogY() + dialogHeight() + 1) {
                 dismissDialog();
@@ -1670,8 +1670,8 @@ public class ExplorersCompassScreen extends Screen {
             else if (dialog == Dialog.LOCKED) lockedRequirementsView.keyPressed(par1);
             else if (dialog == Dialog.DISABLED && (par1 == 264 || par1 == 265 || par1 == 266 || par1 == 267))
                 disabledView.scroll(par1 == 264 || par1 == 267 ? -1 : 1);
-            else if (dialog == Dialog.NOT_FOUND && (par1 == 264 || par1 == 265 || par1 == 266 || par1 == 267))
-                scrollNotFound(par1 == 264 || par1 == 267 ? -1 : 1);
+            else if (isSearchFailureDialog() && (par1 == 264 || par1 == 265 || par1 == 266 || par1 == 267))
+                scrollSearchFailure(par1 == 264 || par1 == 267 ? -1 : 1);
             return true;
         }
 		if (isStructureView()) {
@@ -1746,7 +1746,7 @@ public class ExplorersCompassScreen extends Screen {
 			}
 			case HIDDEN -> hiddenScroll = (int)Math.round(offset);
 			case FOUND -> foundScroll = offset;
-			case NOT_FOUND -> notFoundScroll = offset;
+			case SEARCH_FAILURE -> searchFailureScroll = offset;
 		}
 	}
 
@@ -1854,7 +1854,11 @@ public class ExplorersCompassScreen extends Screen {
         if (!response.appliesTo(activeRequestId,dialog == Dialog.SEARCHING)) return;
         listedSkippedCount = response.wrongDimension();
         listedDisabledCount = response.disabled().size();
-        if (response.eligible() == 0 && !response.disabled().isEmpty()) {
+        if (searchedListed && response.isInvalidSelection(listedSelectedCount)) {
+            searchFailureScroll = 0;
+            searchFailureWrapWidth = 0;
+            dialog = Dialog.INVALID_SEARCH;
+        } else if (response.eligible() == 0 && !response.disabled().isEmpty()) {
             dialog = Dialog.DISABLED;
             disabledView = new DisabledStructureView(textRenderer,response.disabled(),!searchedListed,
                     this::dismissDialog,() -> toggleStructureHidden(response.disabled().get(0).structure()),
@@ -1901,8 +1905,8 @@ public class ExplorersCompassScreen extends Screen {
             }
         } else if (result == SearchResultPacket.NOT_FOUND) {
             failedRadius = radius;
-            notFoundScroll = 0;
-            notFoundWrapWidth = 0;
+            searchFailureScroll = 0;
+            searchFailureWrapWidth = 0;
             notFoundCompassUpdated = System.nanoTime();
             notFoundCompassAngle = 0.0D;
             notFoundCompassSpeed = 0.0D;
@@ -1934,7 +1938,7 @@ public class ExplorersCompassScreen extends Screen {
             finalizePendingHides();
             disabledView = null;
         }
-        if (draggedScrollbar == ScrollPanel.NOT_FOUND || draggedScrollbar == ScrollPanel.FOUND) draggedScrollbar = null;
+        if (draggedScrollbar == ScrollPanel.SEARCH_FAILURE || draggedScrollbar == ScrollPanel.FOUND) draggedScrollbar = null;
         if (dialog == Dialog.SEARCHING && client.getNetworkHandler() != null) {
             ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(activeRequestId));
         }
@@ -1951,7 +1955,7 @@ public class ExplorersCompassScreen extends Screen {
         if (dialog == Dialog.INSUFFICIENT_XP) {
             return Math.min(width - 20, Math.max(textRenderer.getWidth(Text.literal("Not enough experience")), xpCostLineWidth()) + 12);
         }
-        if (dialog == Dialog.NOT_FOUND) return Math.min(width - 20, 340);
+        if (isSearchFailureDialog()) return Math.min(width - 20, 340);
         if (dialog == Dialog.FOUND || dialog == Dialog.SEARCHING) {
             int locationWidth = Math.max(textRenderer.getWidth("Coordinates:"), textRenderer.getWidth("Distance: 99999"));
             int detailsWidth = 36 + textRenderer.getWidth("Source: Repurposed Structures")
@@ -1960,65 +1964,81 @@ public class ExplorersCompassScreen extends Screen {
         }
         return Math.min(width - 20, SEARCH_DIALOG_WIDTH);
     }
-    private boolean showNotFoundHide() { return !searchedListed && searchedId != null; }
-    private int notFoundButtonWidth() {
+    private boolean isSearchFailureDialog() {
+        return dialog == Dialog.NOT_FOUND || dialog == Dialog.INVALID_SEARCH;
+    }
+
+    private boolean showNotFoundHide() { return dialog == Dialog.NOT_FOUND && !searchedListed && searchedId != null; }
+    private int searchFailureButtonWidth() {
         int available = dialogWidth() - 24;
         return Math.max(1, Math.min(70, showNotFoundHide() ? (available - NOT_FOUND_BUTTON_GAP) / 2 : available));
     }
-    private int notFoundFirstButtonX() {
-        int total = showNotFoundHide() ? 2 * notFoundButtonWidth() + NOT_FOUND_BUTTON_GAP : notFoundButtonWidth();
+    private int searchFailureFirstButtonX() {
+        int total = showNotFoundHide() ? 2 * searchFailureButtonWidth() + NOT_FOUND_BUTTON_GAP : searchFailureButtonWidth();
         return dialogX() + (dialogWidth() - total) / 2;
     }
-    private int notFoundBackX() {
-        return notFoundFirstButtonX() + (showNotFoundHide() ? notFoundButtonWidth() + NOT_FOUND_BUTTON_GAP : 0);
+    private int searchFailureBackX() {
+        return searchFailureFirstButtonX() + (showNotFoundHide() ? searchFailureButtonWidth() + NOT_FOUND_BUTTON_GAP : 0);
     }
-    private int notFoundActionsY() { return dialogY() + dialogHeight() - 25; }
-    private int notFoundTextOffset() { return height >= 90 ? 32 : 6; }
-    private int notFoundTextHeight() { return Math.max(0, dialogHeight() - notFoundTextOffset() - 30); }
-    private int notFoundContentHeight() { return notFoundLines().size() * textRenderer.fontHeight; }
-    private int notFoundMaxScroll() { return Math.max(0, notFoundContentHeight() - notFoundTextHeight()); }
+    private int searchFailureActionsY() { return dialogY() + dialogHeight() - 25; }
+    private int searchFailureTextOffset() {
+        if (dialog == Dialog.INVALID_SEARCH) return 12 + textRenderer.fontHeight;
+        return height >= 90 ? 32 : 6;
+    }
+    private int searchFailureTextHeight() { return Math.max(0, dialogHeight() - searchFailureTextOffset() - 30); }
+    private int searchFailureContentHeight() { return searchFailureLines().size() * textRenderer.fontHeight; }
+    private int searchFailureMaxScroll() { return Math.max(0, searchFailureContentHeight() - searchFailureTextHeight()); }
 
-    private List<NotFoundLine> notFoundLines() {
+    private List<SearchFailureLine> searchFailureLines() {
         int wrapWidth = Math.max(1, dialogWidth() - 24 - SCROLLBAR_WIDTH);
-        if (wrapWidth != notFoundWrapWidth) {
-            List<NotFoundLine> lines = new ArrayList<>();
-            addNotFoundLines(lines, Text.literal("Couldn't locate structure within " + failedRadius + " blocks"), wrapWidth, true);
-            lines.add(new NotFoundLine(OrderedText.EMPTY, false));
-            addNotFoundLines(lines, Text.literal("Possible reasons:"), wrapWidth, false);
-            if (searchedExcludeVisited) {
-                addNotFoundLines(lines, Text.literal("• ").append(Text.literal("Exclude Visited").formatted(Formatting.ITALIC))
-                        .append(" is on, and every match within the search radius has already been visited"), wrapWidth, false);
-            }
-            addNotFoundLines(lines, Text.literal("• Matching structures are very rare"), wrapWidth, false);
-            addNotFoundLines(lines, Text.literal("• The configured search radius may be too small to reach a match"), wrapWidth, false);
-            addNotFoundLines(lines, Text.literal("• Structure generation is disabled in a way the compass can't detect"), wrapWidth, false);
-            if (searchedListed) {
-                lines.add(new NotFoundLine(OrderedText.EMPTY, false));
-                addNotFoundLines(lines, Text.literal(listedSelectedCount + " structures selected"), wrapWidth, true);
-                if (listedSkippedCount > 0 || listedDisabledCount > 0) {
-                    addNotFoundLines(lines, wrongDimensionCountText(), wrapWidth, true);
+        if (wrapWidth != searchFailureWrapWidth) {
+            List<SearchFailureLine> lines = new ArrayList<>();
+            if (dialog == Dialog.INVALID_SEARCH) {
+                addSearchFailureLines(lines, Text.literal("None of your selected structures are valid for searching."), wrapWidth, false);
+                lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
+                addSearchFailureLines(lines, Text.literal("Make sure at least one valid structure is selected by:"), wrapWidth, false);
+                addSearchFailureLines(lines, Text.literal("• going to the correct dimension of the selected structures"), wrapWidth, false);
+                addSearchFailureLines(lines, Text.literal("• selecting structures for the dimension you're currently in"), wrapWidth, false);
+                addSearchFailureLines(lines, Text.literal("• selecting structures which aren't disabled"), wrapWidth, false);
+            } else {
+                addSearchFailureLines(lines, Text.literal("Couldn't locate structure within " + failedRadius + " blocks"), wrapWidth, true);
+                lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
+                addSearchFailureLines(lines, Text.literal("Possible reasons:"), wrapWidth, false);
+                if (searchedExcludeVisited) {
+                    addSearchFailureLines(lines, Text.literal("• ").append(Text.literal("Exclude Visited").formatted(Formatting.ITALIC))
+                            .append(" is on, and every match within the search radius has already been visited"), wrapWidth, false);
+                }
+                addSearchFailureLines(lines, Text.literal("• Matching structures are very rare"), wrapWidth, false);
+                addSearchFailureLines(lines, Text.literal("• The configured search radius may be too small to reach a match"), wrapWidth, false);
+                addSearchFailureLines(lines, Text.literal("• Structure generation is disabled in a way the compass can't detect"), wrapWidth, false);
+                if (searchedListed) {
+                    lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
+                    addSearchFailureLines(lines, Text.literal(listedSelectedCount + " structures selected"), wrapWidth, true);
+                    if (listedSkippedCount > 0 || listedDisabledCount > 0) {
+                        addSearchFailureLines(lines, wrongDimensionCountText(), wrapWidth, true);
+                    }
                 }
             }
-            notFoundLines = lines;
-            notFoundWrapWidth = wrapWidth;
+            searchFailureLines = lines;
+            searchFailureWrapWidth = wrapWidth;
         }
-        return notFoundLines;
+        return searchFailureLines;
     }
 
-    private void addNotFoundLines(List<NotFoundLine> lines, Text text, int wrapWidth, boolean centered) {
-        for (OrderedText line : textRenderer.wrapLines(text, wrapWidth)) lines.add(new NotFoundLine(line, centered));
+    private void addSearchFailureLines(List<SearchFailureLine> lines, Text text, int wrapWidth, boolean centered) {
+        for (OrderedText line : textRenderer.wrapLines(text, wrapWidth)) lines.add(new SearchFailureLine(line, centered));
     }
 
-    private void scrollNotFound(double amount) {
-        notFoundScroll = Scrollbar.scrollPixels(notFoundScroll, amount, textRenderer.fontHeight, notFoundMaxScroll());
+    private void scrollSearchFailure(double amount) {
+        searchFailureScroll = Scrollbar.scrollPixels(searchFailureScroll, amount, textRenderer.fontHeight, searchFailureMaxScroll());
     }
 
-    private Scrollbar notFoundScrollbar() {
-        int top = dialogY() + notFoundTextOffset();
-        int textHeight = notFoundTextHeight();
-        int maxScroll = textHeight > 0 ? notFoundMaxScroll() : 0;
+    private Scrollbar searchFailureScrollbar() {
+        int top = dialogY() + searchFailureTextOffset();
+        int textHeight = searchFailureTextHeight();
+        int maxScroll = textHeight > 0 ? searchFailureMaxScroll() : 0;
         return new Scrollbar(dialogX() + dialogWidth() - 12 - SCROLLBAR_WIDTH, top, top + textHeight,
-                Scrollbar.pixelThumbHeight(textHeight, maxScroll, 12, 0), notFoundScroll, maxScroll);
+                Scrollbar.pixelThumbHeight(textHeight, maxScroll, 12, 0), searchFailureScroll, maxScroll);
     }
 
     private int foundActionWidth() {
@@ -2071,7 +2091,7 @@ public class ExplorersCompassScreen extends Screen {
     }
     private int dialogHeight() {
         return switch (dialog) {
-            case NOT_FOUND -> Math.min(height - 10, notFoundTextOffset() + notFoundContentHeight() + 30);
+            case NOT_FOUND, INVALID_SEARCH -> Math.min(height - 10, searchFailureTextOffset() + searchFailureContentHeight() + 30);
             case INFO -> textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68;
             case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
             case INSUFFICIENT_XP -> textRenderer.fontHeight * 2 + 16;
@@ -2333,8 +2353,8 @@ public class ExplorersCompassScreen extends Screen {
             Identifier orbTexture = new Identifier(ExplorersCompass.MODID, String.format(Locale.ROOT, "textures/gui/experience_orb_%02d.png", orbFrame));
             context.drawTexture(orbTexture, orbX, lineY + (textRenderer.fontHeight - orbSize) / 2, orbSize, orbSize, 0, 0, 16, 16, 16, 16);
             context.drawTextWithShadow(textRenderer, Integer.toString(insufficientXpCost), orbX + orbSize + 3, lineY, 0x80ff20);
-        } else if (dialog == Dialog.NOT_FOUND) {
-            renderNotFoundDialog(context, x, y, w, mouseX, mouseY);
+        } else if (isSearchFailureDialog()) {
+            renderSearchFailureDialog(context, x, y, w, mouseX, mouseY);
         } else {
             boolean wrongDimension = dialog == Dialog.WRONG_DIMENSION;
             String message = wrongDimension ? "You're in the wrong dimension" : "Search could not start";
@@ -2347,8 +2367,10 @@ public class ExplorersCompassScreen extends Screen {
         context.getMatrices().pop();
     }
 
-    private void renderNotFoundDialog(DrawContext context, int x, int y, int w, int mouseX, int mouseY) {
-        if (height >= 90) {
+    private void renderSearchFailureDialog(DrawContext context, int x, int y, int w, int mouseX, int mouseY) {
+        if (dialog == Dialog.INVALID_SEARCH) {
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Invalid Search"), x + w / 2, y + 6, 0xffffff);
+        } else if (height >= 90) {
             long now = System.nanoTime();
             long elapsed = now - notFoundCompassUpdated;
             int ticks = (int)Math.min(5L, elapsed / 50_000_000L);
@@ -2365,25 +2387,25 @@ public class ExplorersCompassScreen extends Screen {
             context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
         }
 
-        int textTop = y + notFoundTextOffset();
-        int textHeight = notFoundTextHeight();
+        int textTop = y + searchFailureTextOffset();
+        int textHeight = searchFailureTextHeight();
         if (textHeight > 0) {
-            int lineY = textTop - (int) MathHelper.clamp(notFoundScroll, 0, notFoundMaxScroll());
+            int lineY = textTop - (int) MathHelper.clamp(searchFailureScroll, 0, searchFailureMaxScroll());
             context.enableScissor(x + 8, textTop, x + w - 8, textTop + textHeight);
-            for (NotFoundLine line : notFoundLines()) {
+            for (SearchFailureLine line : searchFailureLines()) {
                 int lineX = line.centered() ? x + (w - textRenderer.getWidth(line.text())) / 2 : x + 12;
                 context.drawTextWithShadow(textRenderer, line.text(), lineX, lineY, 0xffffff);
                 lineY += textRenderer.fontHeight;
             }
             context.disableScissor();
-            notFoundScrollbar().render(context, 0xff242424, 0xff909090);
+            searchFailureScrollbar().render(context, 0xff242424, 0xff909090);
         }
 
-        int actionY = notFoundActionsY();
-        int buttonWidth = notFoundButtonWidth();
-        drawDialogButton(context, "Back", notFoundBackX(), actionY, buttonWidth, mouseX, mouseY);
+        int actionY = searchFailureActionsY();
+        int buttonWidth = searchFailureButtonWidth();
+        drawDialogButton(context, "Back", searchFailureBackX(), actionY, buttonWidth, mouseX, mouseY);
         if (showNotFoundHide()) {
-            int hideX = notFoundFirstButtonX();
+            int hideX = searchFailureFirstButtonX();
             boolean hidden = isStructureHidden(searchedId);
             drawDialogButton(context, hidden ? "Undo" : "Hide", hideX, actionY, buttonWidth, mouseX, mouseY);
             if (!hidden && ButtonPress.contains(mouseX, mouseY, hideX, actionY, buttonWidth, 20)) {

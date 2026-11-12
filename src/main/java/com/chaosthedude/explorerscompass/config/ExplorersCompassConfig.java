@@ -37,6 +37,7 @@ public class ExplorersCompassConfig {
 	public static int maxSearchRadius = DEFAULT_SEARCH_RADIUS;
 	public static boolean relockOnReload = false;
 	public static boolean compassSharing = false;
+	public static boolean visitsSharing = false;
     private static final String OPAC_SHARING_COMMENT = "Temporarily share saved personal structure unlocks among current OPAC party members when Open Parties and Claims is installed. Requires a restart to change.";
     public static boolean opacPartySharing = true;
 	public static boolean displayCoordinates = true;
@@ -115,6 +116,8 @@ public class ExplorersCompassConfig {
 			CommentedConfig common = readOrCreate(COMMON);
 			loadCommon(common);
 			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
+					|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
+					|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
 					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
                     || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 				common.remove("permissions.allowTeleport");
@@ -218,6 +221,7 @@ public class ExplorersCompassConfig {
 		if (radius > MAX_SEARCH_RADIUS) throw bad(SEARCH_RADIUS, "integer between 1 and " + MAX_SEARCH_RADIUS);
 		maxSearchRadius = radius;
 		compassSharing = bool(config, "unlocking.compassSharing", compassSharing);
+		visitsSharing = bool(config, "unlocking.visitsSharing", visitsSharing);
         opacPartySharing = bool(config, "unlocking.opacPartySharing", opacPartySharing);
 		allowExcludeVisited = bool(config, "search.allowExcludeVisited", allowExcludeVisited);
 		relockOnReload = bool(config, "unlocking.relockOnReload", relockOnReload);
@@ -265,10 +269,26 @@ public class ExplorersCompassConfig {
 		if (config.getComment(key) == null) config.setComment(key, comment);
 	}
 
+	private static boolean isAtPosition(CommentedConfig config, String key, int index) {
+		return config != null && config.valueMap().keySet().stream().skip(index).findFirst().filter(key::equals).isPresent();
+	}
+
+	private static void moveToPosition(CommentedConfig config, String key, int index) {
+		if (isAtPosition(config, key, index)) return;
+		var values = config.valueMap();
+		Object value = values.remove(key);
+		var laterKeys = values.keySet().stream().skip(index).toList();
+		var laterValues = new LinkedHashMap<String, Object>();
+		for (String laterKey : laterKeys) laterValues.put(laterKey, values.remove(laterKey));
+		values.put(key, value);
+		values.putAll(laterValues);
+	}
+
 	private static void writeCommon(CommentedConfig config) {
         config.set("unlocking.opacPartySharing", opacPartySharing);
         config.setComment("unlocking.opacPartySharing", OPAC_SHARING_COMMENT);
 		put(config, "unlocking.compassSharing", compassSharing, "Preserve located targets and unlock structures that the previous compass holder had unlocked when a different player gets hold of the compass.");
+		put(config, "unlocking.visitsSharing", visitsSharing, "Share temporary visit history in OPAC parties and copy saved visits on compass transfer when the respective sharing option is enabled.");
 		put(config, "search.allowExcludeVisited", allowExcludeVisited, "Allow players to exclude visited structure instances from searches. Visits are always recorded.");
 		put(config, SEARCH_RADIUS, maxSearchRadius, "Maximum horizontal search radius in blocks (1 to 50000). Requires a restart to change.");
 		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
@@ -278,6 +298,10 @@ public class ExplorersCompassConfig {
 		put(config, "compass.compassDurability", compassDurability, "Successful searches before the compass breaks; 0 disables durability.");
 		put(config, "search.defaultXpCost", defaultXpCost, "XP levels consumed after a successful search.");
 		put(config, "search.allowSearchWithoutEnoughXp", allowSearchWithoutEnoughXp, "Permit searching with insufficient XP; a successful search drains remaining XP.");
+		// Keep the established order of all other sections and settings.
+		moveToPosition(config, "compass", 0);
+		moveToPosition(config, "unlocking", 2);
+		moveToPosition(config.get("unlocking"), "visitsSharing", 2);
 	}
 
 	private static void writeClient(CommentedConfig config) {

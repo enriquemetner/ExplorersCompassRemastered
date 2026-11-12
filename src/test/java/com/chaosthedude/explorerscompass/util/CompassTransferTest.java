@@ -20,6 +20,7 @@ class CompassTransferTest {
         var first = CompassTransfer.acquire(data, player, false, true,
                 ignored -> { fail("No previous holder"); return Set.of(); }, ignored -> true);
         assertFalse(first.resetTarget());
+        assertNull(first.sharingSource());
         assertEquals(player, data.getUuid(CompassTransfer.HOLDER));
         data = data.copy(); // Frames, containers, and dropped entities may copy stacks.
         assertFalse(CompassTransfer.acquire(data, player, false, true,
@@ -35,6 +36,7 @@ class CompassTransferTest {
         var result = CompassTransfer.acquire(data, next, false, true,
                 ignored -> { fail("Sharing disabled"); return Set.of(); }, ignored -> true);
         assertTrue(result.resetTarget());
+        assertNull(result.sharingSource());
         CompassSearchData.clear(data);
         assertEquals(next, data.getUuid(CompassTransfer.HOLDER));
         assertEquals(12, data.getInt("CompassDamage"));
@@ -59,7 +61,9 @@ class CompassTransferTest {
                 ignored -> { fail("Repeated inventory tick"); return Set.of(); }, ignored -> true).unlocks().isEmpty());
         NbtCompound empty = new NbtCompound();
         empty.putUuid(CompassTransfer.HOLDER, previous);
-        CompassTransfer.acquire(empty, next, true, false, ignored -> Set.of(), ignored -> true);
+        var emptyTransfer = CompassTransfer.acquire(empty, next, true, false, ignored -> Set.of(), ignored -> true);
+        assertEquals(previous, emptyTransfer.sharingSource());
+        assertNull(CompassTransfer.acquire(empty, next, true, false, ignored -> Set.of(), ignored -> true).sharingSource());
         assertFalse(empty.getBoolean(CompassTransfer.INHERITED));
     }
 
