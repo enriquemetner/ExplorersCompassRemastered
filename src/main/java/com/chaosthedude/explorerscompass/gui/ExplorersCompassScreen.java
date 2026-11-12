@@ -71,6 +71,8 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int FILTER_TITLE_X = 16;
 	private static final int FILTER_TITLE_GAP = 16;
 	private static final int BUTTON_CROSS_SIZE = 7;
+	private static final Identifier CLEAR_FILTERS_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/clear_filters.png");
+	private static final int CLEAR_FILTERS_ICON_SIZE = 11;
 	private static final int HEADER_BUTTON_TEXT_PADDING = 20;
 	private static final int EXCLUDE_BUTTON_CONTENT_PADDING = HEADER_BUTTON_TEXT_PADDING / 2;
 	private static final int EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP = 5;
@@ -518,9 +520,6 @@ public class ExplorersCompassScreen extends Screen {
         if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY))
             drawQuestionTooltip(context, "Shows only structures unlocked in your most recent unlocking event.", mouseX, mouseY);
 		renderCrossIcon(context, cancelButton);
-		if (clearFiltersButton.visible) {
-			renderCrossIcon(context, clearFiltersButton);
-		}
 		if (filtersOpen) {
 			renderFilterTooltip(context, mouseX, mouseY);
 		}
@@ -2396,6 +2395,22 @@ public class ExplorersCompassScreen extends Screen {
 		return sortOrderButton.labelY();
 	}
 
+	private TransparentButton createClearFiltersButton(int x, int y) {
+		return new TransparentButton(x, y, SMALL_BUTTON_SIZE, SMALL_BUTTON_SIZE,
+				Text.literal("Clear Filters"), button -> clearFilters()) {
+			@Override
+			protected void renderLabel(DrawContext context, net.minecraft.client.font.TextRenderer renderer) {
+				int size = CLEAR_FILTERS_ICON_SIZE;
+				int iconX = getX() + (getWidth() - size) / 2;
+				int iconY = getY() + (getHeight() - size) / 2;
+				float brightness = active && !isButtonHeld(this, "widget") ? 1.0f : 144 / 255.0f;
+				context.setShaderColor(brightness, brightness, brightness, 1.0f);
+				context.drawTexture(CLEAR_FILTERS_ICON, iconX, iconY, 0, 0, size, size, size, size);
+				context.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+			}
+		};
+	}
+
 	private void setupButtons() {
 		searchButton = addDrawableChild(new TransparentButton(10, 40, SEARCH_BUTTON_WIDTH, 20, Text.literal("Search"), button -> searchSelected()));
 		selectionToggleButton = addDrawableChild(new TransparentButton(
@@ -2432,8 +2447,7 @@ public class ExplorersCompassScreen extends Screen {
 		filtersButton = addDrawableChild(new TransparentButton(10, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP, 85, 20, Text.literal("Filters"), (onPress) -> {
 			setFiltersOpen(!filtersOpen);
 		}));
-		clearFiltersButton = addDrawableChild(new TransparentButton(100, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP,
-				SMALL_BUTTON_SIZE, SMALL_BUTTON_SIZE, Text.empty(), button -> clearFilters()));
+		clearFiltersButton = addDrawableChild(createClearFiltersButton(100, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP));
 		settingsButton = addDrawableChild(new TransparentButton(10, height - 30, 110, 20, Text.literal("Settings"), (onPress) -> {
 			setSettingsOpen(true);
 		}));
@@ -2550,8 +2564,7 @@ public class ExplorersCompassScreen extends Screen {
 			teleport();
 		}));
 		teleportButton.active = false;
-		clearFiltersTopButton = addDrawableChild(new TransparentButton(10, 10, buttonWidthForLabel("Clear Filters"), 20,
-				Text.literal("Clear Filters"), button -> clearFilters()));
+		clearFiltersTopButton = addDrawableChild(createClearFiltersButton(10, 10));
 		TransparentButton excludeButton = addDrawableChild(new TransparentButton(10, 10,
 				excludeButtonWidth("Exclude Visited"), 20, Text.literal("Exclude Visited"), button -> {
 			FilterSelections.toggleExcludeVisited();
