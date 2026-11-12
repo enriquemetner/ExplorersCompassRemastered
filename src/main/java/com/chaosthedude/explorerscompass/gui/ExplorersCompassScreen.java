@@ -2126,11 +2126,11 @@ public class ExplorersCompassScreen extends Screen {
         record BiomeName(Identifier id, Text name) {}
         Collator collator = Collator.getInstance(Locale.forLanguageTag(client.getLanguageManager().getLanguage().replace('_', '-')));
         return biomes.stream()
+                .filter(validBiomes::contains)
                 .map(id -> new BiomeName(id, Text.translatableWithFallback(
                         "biome." + id.getNamespace() + "." + id.getPath().replace('/', '.'),
                         StructureUtils.getStructureName(id)).formatted(Formatting.GRAY)))
-                .sorted(Comparator.comparing((BiomeName biome) -> !validBiomes.contains(biome.id()))
-                        .thenComparing(biome -> biome.name().getString(), collator)
+                .sorted(Comparator.comparing((BiomeName biome) -> biome.name().getString(), collator)
                         .thenComparing(BiomeName::id))
                 .map(BiomeName::name)
                 .toList();
