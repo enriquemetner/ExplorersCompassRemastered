@@ -16,6 +16,7 @@
     "ChatInputSuggestorMixin",
     "HeldItemRendererMixin",
     "InGameHudMixin",
+    "JesCompassRegistrationMixin",
     "DroppedCompassRenderMixin",
     "CompassGuiRenderMixin"
   ],

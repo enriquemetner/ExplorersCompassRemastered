@@ -28,6 +28,7 @@ public final class ClientPacketHandlers {
     public static long shownNoticeRevision;
     public static Identifier trackedStructureId;
     public static boolean showNewlyUnlockedFilter;
+    public static java.util.Set<Identifier> blacklistedStructures = java.util.Set.of();
     public static Map<Identifier, RequirementNode> partyRequirements = Map.of();
     public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
     public static boolean pendingNoticeRelocked;
@@ -99,7 +100,7 @@ public final class ClientPacketHandlers {
         }
         Boolean visited = result == SearchResultPacket.FOUND && buf.isReadable() ? buf.readBoolean() : null;
         RequirementNode requirements = result == SearchResultPacket.LOCKED ? RequirementNode.read(buf) : null;
-        final Identifier resultId = foundId;
+        final Identifier resultId = result == SearchResultPacket.BLACKLISTED ? buf.readIdentifier() : foundId;
         final int resultX = foundX, resultZ = foundZ;
         final boolean showCoordinates = displayCoordinates;
         final boolean showDistance = displayDistance;
@@ -156,10 +157,17 @@ public final class ClientPacketHandlers {
         Map<Identifier, RequirementNode> lockedRequirements = readRequirements(buf, descriptions, numStructures);
         Map<Identifier, RequirementNode> shared = buf.isReadable()
                 ? readRequirements(buf, descriptions, numStructures) : Map.of();
+        java.util.Set<Identifier> blacklisted = new java.util.HashSet<>();
+        if (buf.isReadable()) {
+            int count = buf.readVarInt();
+            if (count < 0 || count > 100000) throw new IllegalArgumentException("Invalid blacklisted structure count");
+            for (int i = 0; i < count; i++) blacklisted.add(buf.readIdentifier());
+        }
 
         client.execute(() -> {
             ExplorersCompass.lockedRequirements = lockedRequirements;
             partyRequirements = shared;
+            blacklistedStructures = java.util.Set.copyOf(blacklisted);
             ExplorersCompass.synced = true;
             trackedStructureId = tracked;
             latestUnlockedStructures = java.util.Set.copyOf(latest);

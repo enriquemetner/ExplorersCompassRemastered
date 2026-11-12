@@ -18,7 +18,7 @@ public class SyncPacket extends PacketByteBuf {
 
 	public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "sync");
 
- public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, int defaultXpCost, boolean allowSearchWithoutEnoughXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, Map<Identifier, RequirementNode> partyRequirements, long noticeRevision, boolean noticeRelocked, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter) {
+ public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, int defaultXpCost, boolean allowSearchWithoutEnoughXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, Map<Identifier, RequirementNode> partyRequirements, long noticeRevision, boolean noticeRelocked, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter, List<Identifier> blacklistedIds) {
 		super(Unpooled.buffer());
 		writeBoolean(canTeleport);
 		writeBoolean(canExcludeVisited);
@@ -51,6 +51,7 @@ public class SyncPacket extends PacketByteBuf {
         for (RequirementNode node : descriptions) node.write(this);
         writeRequirements(lockedRequirements, descriptions);
         writeRequirements(partyRequirements, descriptions);
+        writeCollection(blacklistedIds, PacketByteBuf::writeIdentifier);
     }
 
     private void writeRequirements(Map<Identifier, RequirementNode> requirements, List<RequirementNode> descriptions) {

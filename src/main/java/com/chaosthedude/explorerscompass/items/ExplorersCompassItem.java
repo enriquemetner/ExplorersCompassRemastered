@@ -318,7 +318,9 @@ public class ExplorersCompassItem extends Item {
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRelocked(player.getUuid()),
                 getTrackedStructure(player),
                 UnlockedStructures.get(player.getServer()).latestUnlocked(player.getUuid()),
-                UnlockingRules.get().hasUnlockingRequirements(player)));
+                UnlockingRules.get().hasUnlockingRequirements(player),
+                world.getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).getIds().stream()
+                        .filter(StructureUtils::structureIdIsBlacklisted).sorted().toList()));
 	}
 
 	@Override
@@ -351,7 +353,16 @@ public class ExplorersCompassItem extends Item {
 
     public void searchForStructure(ServerWorld world, PlayerEntity player, BlockPos pos, Identifier structureOrSetId, boolean isSet, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
         ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-        if (isSet || isBroken(stack) || !StructureUtils.getAllowedStructureIDs(world).contains(structureOrSetId)) {
+        if (isSet || isBroken(stack)) {
+            SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
+            return;
+        }
+        if (StructureUtils.structureIdIsBlacklisted(structureOrSetId)
+                && StructureUtils.getStructureForID(world, structureOrSetId) != null) {
+            SearchResultPacket.sendBlacklisted(serverPlayer, requestId, structureOrSetId);
+            return;
+        }
+        if (!StructureUtils.getAllowedStructureIDs(world).contains(structureOrSetId)) {
             SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
             return;
         }

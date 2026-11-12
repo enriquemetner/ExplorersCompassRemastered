@@ -223,7 +223,9 @@ public class ExplorersCompassScreen extends Screen {
     private DisabledStructureView disabledView;
     private int listedDisabledCount;
     private Identifier navigationTarget;
-    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, REJECTED }
+    private Identifier selectionAfterSync;
+    private Identifier blacklistedStructure;
+    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, BLACKLISTED, REJECTED }
     private Dialog dialog = Dialog.NONE;
     private LockedRequirementsView lockedRequirementsView;
     private Identifier lockedRequirementsId;
@@ -249,7 +251,11 @@ public class ExplorersCompassScreen extends Screen {
     private double searchFailureScroll;
     private int searchFailureWrapWidth;
     private List<SearchFailureLine> searchFailureLines = List.of();
-    private record SearchFailureLine(OrderedText text, boolean centered) {}
+    private record SearchFailureLine(OrderedText text, boolean centered, int indent, boolean bullet) {
+        SearchFailureLine(OrderedText text, boolean centered) {
+            this(text, centered, 0, false);
+        }
+    }
     private Identifier searchedId;
     private boolean searchedListed;
     private int listedSelectedCount;
@@ -469,12 +475,17 @@ public class ExplorersCompassScreen extends Screen {
 			rebuildFilterOptions();
 			processSearchTerm();
 			selectionList.setScrollAmount(scroll);
-			if (focusTrackedStructure) selectionList.focusStructure(foundStructureId);
+            if (selectionAfterSync != null) {
+                selectSyncedStructure(selectionAfterSync);
+                selectionAfterSync = null;
+            } else if (focusTrackedStructure) {
+                selectionList.focusStructure(foundStructureId);
+            }
 			restoreQuestListAfterSync = false;
 			focusActiveSearchField();
 
             long revision = com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRevision;
-            if (revision > com.chaosthedude.explorerscompass.network.ClientPacketHandlers.shownNoticeRevision) {
+            if (dialog != Dialog.BLACKLISTED && revision > com.chaosthedude.explorerscompass.network.ClientPacketHandlers.shownNoticeRevision) {
                 infoRevision = revision;
                 infoRelocked = com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRelocked;
                 dialog = Dialog.INFO;
@@ -1865,8 +1876,36 @@ public class ExplorersCompassScreen extends Screen {
                     () -> isStructureHidden(response.disabled().get(0).structure()),this::navigateToReplacement);
         }
     }
+    public void selectStructureAfterSync(Identifier id) {
+        selectionAfterSync = id;
+        structureSelection.clear();
+        updateSearchButtons();
+    }
+
+    private void selectSyncedStructure(Identifier id) {
+        if (ClientPacketHandlers.blacklistedStructures.contains(id)) {
+            showBlacklisted(id);
+            return;
+        }
+        if (isStructureHidden(id)) {
+            openHiddenStructures(id);
+            return;
+        }
+        if (!allowedStructureIDs.contains(id)) {
+            client.getToastManager().add(net.minecraft.client.toast.SystemToast.create(client,
+                    net.minecraft.client.toast.SystemToast.Type.PERIODIC_NOTIFICATION,
+                    Text.literal("Open in Compass"), Text.literal("This structure is unavailable in the compass")));
+            return;
+        }
+        focusNavigationTarget(id);
+    }
+
     private void navigateToReplacement(Identifier id) {
         dismissDialog();
+        focusNavigationTarget(id);
+    }
+
+    private void focusNavigationTarget(Identifier id) {
         navigationTarget = id;
         showNormalResults();
         searchTextField.setText(StructureUtils.getStructureName(id));
@@ -1911,6 +1950,8 @@ public class ExplorersCompassScreen extends Screen {
             notFoundCompassAngle = 0.0D;
             notFoundCompassSpeed = 0.0D;
             dialog = Dialog.NOT_FOUND;
+        } else if (result == SearchResultPacket.BLACKLISTED) {
+            showBlacklisted(resultId);
         } else if (result == SearchResultPacket.LOCKED) {
             showLockedRequirements(searchedId, requirements);
         } else if (result == SearchResultPacket.WRONG_DIMENSION) {
@@ -1964,8 +2005,15 @@ public class ExplorersCompassScreen extends Screen {
         }
         return Math.min(width - 20, SEARCH_DIALOG_WIDTH);
     }
+    private void showBlacklisted(Identifier id) {
+        blacklistedStructure = id;
+        searchFailureScroll = 0;
+        searchFailureWrapWidth = 0;
+        dialog = Dialog.BLACKLISTED;
+    }
+
     private boolean isSearchFailureDialog() {
-        return dialog == Dialog.NOT_FOUND || dialog == Dialog.INVALID_SEARCH;
+        return dialog == Dialog.NOT_FOUND || dialog == Dialog.INVALID_SEARCH || dialog == Dialog.BLACKLISTED;
     }
 
     private boolean showNotFoundHide() { return dialog == Dialog.NOT_FOUND && !searchedListed && searchedId != null; }
@@ -1982,7 +2030,7 @@ public class ExplorersCompassScreen extends Screen {
     }
     private int searchFailureActionsY() { return dialogY() + dialogHeight() - 25; }
     private int searchFailureTextOffset() {
-        if (dialog == Dialog.INVALID_SEARCH) return 12 + textRenderer.fontHeight;
+        if (dialog == Dialog.INVALID_SEARCH || dialog == Dialog.BLACKLISTED) return 12 + textRenderer.fontHeight;
         return height >= 90 ? 32 : 6;
     }
     private int searchFailureTextHeight() { return Math.max(0, dialogHeight() - searchFailureTextOffset() - 30); }
@@ -1993,7 +2041,18 @@ public class ExplorersCompassScreen extends Screen {
         int wrapWidth = Math.max(1, dialogWidth() - 24 - SCROLLBAR_WIDTH);
         if (wrapWidth != searchFailureWrapWidth) {
             List<SearchFailureLine> lines = new ArrayList<>();
-            if (dialog == Dialog.INVALID_SEARCH) {
+            if (dialog == Dialog.BLACKLISTED) {
+                addSearchFailureLines(lines, Text.literal(StructureUtils.getStructureName(blacklistedStructure)), wrapWidth, false);
+                addSearchFailureLines(lines, Text.literal(blacklistedStructure.toString()).formatted(Formatting.GRAY), wrapWidth, false);
+                lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
+                addSearchFailureLines(lines, Text.literal("The server has blacklisted this structure, so it doesn’t appear in the compass list and can’t be searched"), wrapWidth, false);
+                lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
+                addSearchFailureLines(lines, Text.literal("Possible reasons:"), wrapWidth, false);
+                addSearchFailureBullet(lines, "The structure is disabled", wrapWidth);
+                addSearchFailureBullet(lines, "The server or modpack creator left it out to keep the list focused on useful destinations", wrapWidth);
+                addSearchFailureBullet(lines, "The creator intended players to find it another way", wrapWidth);
+                addSearchFailureBullet(lines, "The creator may have another reason for excluding it", wrapWidth);
+            } else if (dialog == Dialog.INVALID_SEARCH) {
                 addSearchFailureLines(lines, Text.literal("None of your selected structures are valid for searching."), wrapWidth, false);
                 lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
                 addSearchFailureLines(lines, Text.literal("Make sure at least one valid structure is selected by:"), wrapWidth, false);
@@ -2027,6 +2086,14 @@ public class ExplorersCompassScreen extends Screen {
 
     private void addSearchFailureLines(List<SearchFailureLine> lines, Text text, int wrapWidth, boolean centered) {
         for (OrderedText line : textRenderer.wrapLines(text, wrapWidth)) lines.add(new SearchFailureLine(line, centered));
+    }
+
+    private void addSearchFailureBullet(List<SearchFailureLine> lines, String text, int wrapWidth) {
+        int indent = textRenderer.getWidth("• ");
+        var wrapped = textRenderer.wrapLines(Text.literal(text), Math.max(1, wrapWidth - indent));
+        for (int i = 0; i < wrapped.size(); i++) {
+            lines.add(new SearchFailureLine(wrapped.get(i), false, indent, i == 0));
+        }
     }
 
     private void scrollSearchFailure(double amount) {
@@ -2091,7 +2158,7 @@ public class ExplorersCompassScreen extends Screen {
     }
     private int dialogHeight() {
         return switch (dialog) {
-            case NOT_FOUND, INVALID_SEARCH -> Math.min(height - 10, searchFailureTextOffset() + searchFailureContentHeight() + 30);
+            case NOT_FOUND, INVALID_SEARCH, BLACKLISTED -> Math.min(height - 10, searchFailureTextOffset() + searchFailureContentHeight() + 30);
             case INFO -> textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68;
             case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
             case INSUFFICIENT_XP -> textRenderer.fontHeight * 2 + 16;
@@ -2368,7 +2435,9 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private void renderSearchFailureDialog(DrawContext context, int x, int y, int w, int mouseX, int mouseY) {
-        if (dialog == Dialog.INVALID_SEARCH) {
+        if (dialog == Dialog.BLACKLISTED) {
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Blacklisted"), x + w / 2, y + 6, 0xffff5555);
+        } else if (dialog == Dialog.INVALID_SEARCH) {
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Invalid Search"), x + w / 2, y + 6, 0xffffff);
         } else if (height >= 90) {
             long now = System.nanoTime();
@@ -2393,7 +2462,8 @@ public class ExplorersCompassScreen extends Screen {
             int lineY = textTop - (int) MathHelper.clamp(searchFailureScroll, 0, searchFailureMaxScroll());
             context.enableScissor(x + 8, textTop, x + w - 8, textTop + textHeight);
             for (SearchFailureLine line : searchFailureLines()) {
-                int lineX = line.centered() ? x + (w - textRenderer.getWidth(line.text())) / 2 : x + 12;
+                int lineX = line.centered() ? x + (w - textRenderer.getWidth(line.text())) / 2 : x + 12 + line.indent();
+                if (line.bullet()) context.drawTextWithShadow(textRenderer, "•", x + 12, lineY, 0xffffff);
                 context.drawTextWithShadow(textRenderer, line.text(), lineX, lineY, 0xffffff);
                 lineY += textRenderer.fontHeight;
             }
@@ -2685,13 +2755,8 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 		}));
 		updateSettingsButtonLabels();
-        hiddenStructuresButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_HIDDEN_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.literal("Open"), button -> {
-            settingsOpen = false;
-            hiddenStructuresOpen = true;
-            hiddenScroll = 0;
-            updateViewButtons();
-			focusActiveSearchField();
-        }));
+        hiddenStructuresButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_HIDDEN_ROW),
+                SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.literal("Open"), button -> openHiddenStructures(null)));
 
 		settingResetButtons.clear();
 		addSettingResetButton(1, ClientSetting.OVERLAY_SIDE);
@@ -2816,14 +2881,30 @@ public class ExplorersCompassScreen extends Screen {
 		hiddenSearchTextField.setVisible(hiddenStructuresOpen);
 	}
 
+	private boolean returnToSettingsFromHidden;
+
+	private void openHiddenStructures(Identifier target) {
+		returnToSettingsFromHidden = settingsOpen;
+		if (isStructureView()) remove(selectionList);
+		settingsOpen = false;
+		hiddenStructuresOpen = true;
+		searchTextField.setVisible(false);
+		if (target != null) hiddenSearchTextField.setText(target.toString());
+		hiddenScroll = 0;
+		updateViewButtons();
+		focusActiveSearchField();
+	}
+
 	private void leaveHiddenStructures() {
 		hiddenStructuresOpen = false;
 		draggedScrollbar = null;
-		settingsOpen = true;
+		settingsOpen = returnToSettingsFromHidden;
 		hiddenSearchText = "";
 		hiddenSearchTextField.setText("");
 		hiddenSearchTextField.setFocused(false);
 		hiddenScroll = 0;
+		if (isStructureView()) addDrawableChild(selectionList);
+		searchTextField.setVisible(isStructureView());
 		updateViewButtons();
 		focusActiveSearchField();
 	}
