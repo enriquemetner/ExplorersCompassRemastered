@@ -97,6 +97,7 @@ public final class ClientPacketHandlers {
                 if ((validBiomeMask & (1 << i)) != 0) validBiomes.add(biomes.get(i));
             }
         }
+        Boolean visited = result == SearchResultPacket.FOUND && buf.isReadable() ? buf.readBoolean() : null;
         RequirementNode requirements = result == SearchResultPacket.LOCKED ? RequirementNode.read(buf) : null;
         final Identifier resultId = foundId;
         final int resultX = foundX, resultZ = foundZ;
@@ -104,7 +105,7 @@ public final class ClientPacketHandlers {
         final boolean showDistance = displayDistance;
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, List.copyOf(biomes), java.util.Set.copyOf(validBiomes), requirements);
+                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, List.copyOf(biomes), java.util.Set.copyOf(validBiomes), visited, requirements);
             }
         });
     }

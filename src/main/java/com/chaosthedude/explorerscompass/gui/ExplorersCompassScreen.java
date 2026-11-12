@@ -244,6 +244,7 @@ public class ExplorersCompassScreen extends Screen {
     private static final int FOUND_LINE_STEP = 12;
     private static final String FOUND_BIOMES_LABEL = "Biomes: ";
     private List<Text> foundBiomes = List.of();
+    private Boolean foundVisited;
     private double foundScroll;
     private double notFoundScroll;
     private int notFoundWrapWidth;
@@ -1878,7 +1879,7 @@ public class ExplorersCompassScreen extends Screen {
         searchRadius = Math.max(searchRadius, radius);
     }
 
-    public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, Set<Identifier> validBiomes, RequirementNode requirements) {
+    public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, Set<Identifier> validBiomes, Boolean visited, RequirementNode requirements) {
         if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
         if (result == SearchResultPacket.FOUND) {
             if (ExplorersCompassConfig.closeOnFound) {
@@ -1891,6 +1892,7 @@ public class ExplorersCompassScreen extends Screen {
                 showFoundCoordinates = displayCoordinates;
                 showFoundDistance = displayDistance;
                 foundBiomes = sortedBiomeNames(biomes, validBiomes);
+                foundVisited = visited;
                 foundScroll = 0;
 				double scrollAmount = selectionList.getScrollAmount();
 				selectionList.refreshList();
@@ -1950,6 +1952,12 @@ public class ExplorersCompassScreen extends Screen {
             return Math.min(width - 20, Math.max(textRenderer.getWidth(Text.literal("Not enough experience")), xpCostLineWidth()) + 12);
         }
         if (dialog == Dialog.NOT_FOUND) return Math.min(width - 20, 340);
+        if (dialog == Dialog.FOUND || dialog == Dialog.SEARCHING) {
+            int locationWidth = Math.max(textRenderer.getWidth("Coordinates:"), textRenderer.getWidth("Distance: 99999"));
+            int detailsWidth = 36 + textRenderer.getWidth("Source: Repurposed Structures")
+                    + locationWidth;
+            return Math.min(width - 20, Math.max(SEARCH_DIALOG_WIDTH, detailsWidth));
+        }
         return Math.min(width - 20, SEARCH_DIALOG_WIDTH);
     }
     private boolean showNotFoundHide() { return !searchedListed && searchedId != null; }
@@ -2029,7 +2037,17 @@ public class ExplorersCompassScreen extends Screen {
     private int searchActionsY() { return dialogY() + dialogHeight() - 25; }
 
     private int foundContentHeight() {
-        return (2 + foundBiomes.size()) * FOUND_LINE_STEP + textRenderer.fontHeight;
+        int locationRows = (showFoundDistance ? 1 : 0) + (showFoundCoordinates ? 2 : 0) + (foundVisited != null ? 1 : 0);
+        int rows = Math.max(3 + foundBiomes.size(), locationRows);
+        return foundRowsHeight(rows);
+    }
+
+    private int foundRowsHeight(int rows) {
+        return (rows - 1) * FOUND_LINE_STEP + textRenderer.fontHeight;
+    }
+
+    private int searchDialogHeight(int contentHeight) {
+        return Math.min(Math.max(0, height - 10), Math.max(SEARCH_DIALOG_HEIGHT, FOUND_DETAILS_TOP + contentHeight + 30));
     }
 
     private int foundViewportHeight() {
@@ -2044,7 +2062,7 @@ public class ExplorersCompassScreen extends Screen {
         int top = dialogY() + FOUND_DETAILS_TOP;
         int viewport = foundViewportHeight();
         int maxScroll = viewport > 0 ? foundMaxScroll() : 0;
-        return new Scrollbar(dialogX() + dialogWidth() - 12 - SCROLLBAR_WIDTH, top, top + viewport,
+        return new Scrollbar(dialogX() + dialogWidth() - 1 - SCROLLBAR_WIDTH, top, top + viewport,
                 Scrollbar.pixelThumbHeight(viewport, maxScroll, 12, 0), foundScroll, maxScroll);
     }
 
@@ -2057,9 +2075,8 @@ public class ExplorersCompassScreen extends Screen {
             case INFO -> textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68;
             case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
             case INSUFFICIENT_XP -> textRenderer.fontHeight * 2 + 16;
-            case SEARCHING -> SEARCH_DIALOG_HEIGHT;
-            case FOUND -> Math.min(Math.max(0, height - 10),
-                    Math.max(SEARCH_DIALOG_HEIGHT, FOUND_DETAILS_TOP + foundContentHeight() + 30));
+            case SEARCHING -> searchDialogHeight(foundRowsHeight(4));
+            case FOUND -> searchDialogHeight(foundContentHeight());
             default -> 80;
         };
     }
@@ -2071,26 +2088,38 @@ public class ExplorersCompassScreen extends Screen {
                 + 5 + 3 + textRenderer.getWidth(Integer.toString(insufficientXpCost));
     }
 
-    private Text[] foundInfoLines() {
+    private record FoundLine(String label, Text value) {}
+
+    private List<FoundLine> foundInfoLines() {
         Identifier setId = foundStructureId == null ? null : ExplorersCompass.structureIDsToSetIDs.get(foundStructureId);
-        return new Text[] {
-            Text.literal("Name").append(": ").append(Text.literal(StructureUtils.getStructureName(foundStructureId)).formatted(Formatting.GRAY)),
-            Text.literal("Source").append(": ").append(Text.literal(StructureUtils.getStructureSource(foundStructureId)).formatted(Formatting.GRAY)),
-            Text.literal("Set").append(": ").append(Text.literal(StructureUtils.getStructureName(setId)).formatted(Formatting.GRAY))
-        };
+        return List.of(
+                new FoundLine("Name: ", Text.literal(StructureUtils.getStructureName(foundStructureId))),
+                new FoundLine("Source: ", Text.literal(StructureUtils.getStructureSource(foundStructureId))),
+                new FoundLine("Set: ", Text.literal(StructureUtils.getStructureName(setId))));
     }
 
-    private Text[] foundLocationLines() {
-        List<Text> lines = new ArrayList<>();
+    private List<FoundLine> foundLocationLines() {
+        List<FoundLine> lines = new ArrayList<>();
         if (showFoundDistance) {
             int distance = client.player == null ? 0 : StructureUtils.getHorizontalDistanceToLocation(client.player, foundX, foundZ);
-            lines.add(Text.literal("Distance").append(": ").append(Text.literal(Integer.toString(distance)).formatted(Formatting.GRAY)));
+            lines.add(new FoundLine("Distance: ", Text.literal(Integer.toString(distance))));
         }
         if (showFoundCoordinates) {
-            lines.add(Text.literal("Coordinates:"));
-            lines.add(Text.literal(foundX + ", " + foundZ).formatted(Formatting.GRAY));
+            lines.add(new FoundLine("Coordinates:", Text.empty()));
+            lines.add(new FoundLine("", Text.literal(foundX + ", " + foundZ)));
         }
-        return lines.toArray(Text[]::new);
+        if (foundVisited != null) {
+            lines.add(new FoundLine("Visited: ", Text.literal(foundVisited ? "Yes" : "No")));
+        }
+        return lines;
+    }
+
+    private int widestFoundLine(List<FoundLine> lines) {
+        int width = 0;
+        for (FoundLine line : lines) {
+            width = Math.max(width, textRenderer.getWidth(line.label()) + textRenderer.getWidth(line.value()));
+        }
+        return width;
     }
 
     private List<Text> sortedBiomeNames(List<Identifier> biomes, Set<Identifier> validBiomes) {
@@ -2110,46 +2139,62 @@ public class ExplorersCompassScreen extends Screen {
     private void renderFoundDetails(DrawContext context, int x, int y, int width) {
         int viewport = foundViewportHeight();
         if (viewport <= 0) return;
-        Text[] lines = foundInfoLines();
-        Text[] locationLines = foundLocationLines();
+        List<FoundLine> lines = foundInfoLines();
+        List<FoundLine> locationLines = foundLocationLines();
         int indent = textRenderer.getWidth(FOUND_BIOMES_LABEL);
-        int scrollbarSpace = foundMaxScroll() > 0 ? SCROLLBAR_WIDTH + 4 : 0;
-        int leftWidth = width - 24 - scrollbarSpace;
-        int rightWidth = 0;
-        for (Text line : locationLines) rightWidth = Math.max(rightWidth, textRenderer.getWidth(line));
-        if (locationLines.length > 0) {
-            int leftWanted = 0;
-            for (Text line : lines) leftWanted = Math.max(leftWanted, textRenderer.getWidth(line));
+        int leftWidth = width - 24;
+        int rightWidth = widestFoundLine(locationLines);
+        if (!locationLines.isEmpty()) {
+            int leftWanted = widestFoundLine(lines);
             for (Text name : foundBiomes) leftWanted = Math.max(leftWanted, indent + textRenderer.getWidth(name));
             int available = Math.max(2, leftWidth - 12);
-            leftWidth = Math.min(leftWanted, Math.max(1, available - Math.min(rightWidth, available / 2)));
-            rightWidth = Math.min(rightWidth, Math.max(1, available - leftWidth));
+            int rightLabelWidth = 0;
+            for (FoundLine line : locationLines) rightLabelWidth = Math.max(rightLabelWidth, textRenderer.getWidth(line.label()));
+            int preferredLeftWidth = textRenderer.getWidth("Source: Repurposed Structures");
+            int reservedLeftWidth = Math.min(preferredLeftWidth, Math.max(available / 2, available - rightLabelWidth));
+            rightWidth = Math.min(rightWidth, Math.max(rightLabelWidth, available - reservedLeftWidth));
+            leftWidth = Math.min(leftWanted, Math.max(1, available - rightWidth));
         }
 
         int top = y + FOUND_DETAILS_TOP;
         int leftX = x + 12;
-        int rightX = x + width - 12 - scrollbarSpace - rightWidth;
+        int rightX = x + width - 12 - rightWidth;
         int lineY = top - (int) MathHelper.clamp(foundScroll, 0, foundMaxScroll());
-        context.enableScissor(leftX, top, x + width - 12 - scrollbarSpace, top + viewport);
-        for (int i = 0; i < lines.length; i++) {
-            drawFoundDetail(context, lines[i], leftX, lineY + i * FOUND_LINE_STEP, leftWidth);
+        context.enableScissor(leftX, top, x + width - 12, top + viewport);
+        for (int i = 0; i < lines.size(); i++) {
+            drawFoundDetail(context, lines.get(i), leftX, lineY + i * FOUND_LINE_STEP, leftWidth);
         }
         for (int i = 0; i < foundBiomes.size(); i++) {
-            int biomeY = lineY + (lines.length + i) * FOUND_LINE_STEP;
-            if (i == 0) drawFoundDetail(context, Text.literal(FOUND_BIOMES_LABEL), leftX, biomeY, leftWidth);
-            drawFoundDetail(context, foundBiomes.get(i), leftX + indent, biomeY, leftWidth - indent);
+            int biomeY = lineY + (lines.size() + i) * FOUND_LINE_STEP;
+            if (i == 0) context.drawTextWithShadow(textRenderer, FOUND_BIOMES_LABEL, leftX, biomeY, 0xffffff);
+            drawFoundValue(context, foundBiomes.get(i), leftX + indent, biomeY, leftWidth - indent);
         }
-        for (int i = 0; i < locationLines.length; i++) {
-            drawFoundDetail(context, locationLines[i], rightX, lineY + i * FOUND_LINE_STEP, rightWidth);
+        for (int i = 0; i < locationLines.size(); i++) {
+            drawFoundDetail(context, locationLines.get(i), rightX, lineY + i * FOUND_LINE_STEP, rightWidth);
         }
         context.disableScissor();
         foundScrollbar().render(context, 0xff242424, 0xff909090);
     }
 
-    private void drawFoundDetail(DrawContext context, Text text, int x, int y, int width) {
-        if (width <= 0) return;
-        context.drawTextWithShadow(textRenderer, Language.getInstance().reorder(textRenderer.trimToWidth(text, width)),
-                x, y, 0xffffff);
+    private void drawFoundDetail(DrawContext context, FoundLine line, int x, int y, int width) {
+        int labelWidth = textRenderer.getWidth(line.label());
+        if (labelWidth > 0) context.drawTextWithShadow(textRenderer, line.label(), x, y, 0xffffff);
+        drawFoundValue(context, line.value(), x + labelWidth, y, width - labelWidth);
+    }
+
+    private void drawFoundValue(DrawContext context, Text text, int x, int y, int width) {
+        int textWidth = textRenderer.getWidth(text);
+        if (width <= 0 || textWidth == 0) return;
+        if (textWidth <= width) {
+            context.drawTextWithShadow(textRenderer, text, x, y, 0xaaaaaa);
+            return;
+        }
+        float scale = (float) width / textWidth;
+        context.getMatrices().push();
+        context.getMatrices().translate(x, y + (1 - scale) * textRenderer.fontHeight / 2, 0);
+        context.getMatrices().scale(scale, scale, 1);
+        context.drawTextWithShadow(textRenderer, text, 0, 0, 0xaaaaaa);
+        context.getMatrices().pop();
     }
 
     private void drawDialogButton(DrawContext context, String label, int x, int y, int w, int mouseX, int mouseY) {

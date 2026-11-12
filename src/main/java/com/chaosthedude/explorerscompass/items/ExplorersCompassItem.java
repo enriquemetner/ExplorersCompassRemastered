@@ -27,6 +27,7 @@ import com.chaosthedude.explorerscompass.util.ItemUtils;
 import com.chaosthedude.explorerscompass.util.PlayerUtils;
 import com.chaosthedude.explorerscompass.util.StructureDestination;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
+import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.chaosthedude.explorerscompass.workers.SearchWorkerManager;
 import com.google.common.collect.ListMultimap;
 
@@ -193,16 +194,16 @@ public class ExplorersCompassItem extends Item {
 	}
 
     private void finishSearch(PlayerEntity player, int result, int radius) {
-        finishSearch(player, result, radius, null, 0, 0, false, false, List.of(), 0);
+        finishSearch(player, result, radius, null, 0, 0, false, false, List.of(), 0, null);
     }
 
-    private void finishSearch(PlayerEntity player, int result, int radius, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, int validBiomeMask) {
+    private void finishSearch(PlayerEntity player, int result, int radius, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, int validBiomeMask, Boolean visited) {
         SearchSession session = searches.remove(player.getUuid());
         if (session != null) {
             session.workers.stop();
             session.workers.clear();
             if (player instanceof ServerPlayerEntity serverPlayer) {
-                SearchResultPacket.send(serverPlayer, session.requestId, result, radius, foundId, foundX, foundZ, displayCoordinates, displayDistance, biomes, validBiomeMask);
+                SearchResultPacket.send(serverPlayer, session.requestId, result, radius, foundId, foundX, foundZ, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
             }
         }
     }
@@ -432,7 +433,11 @@ public class ExplorersCompassItem extends Item {
                 }
             }
         }
-		finishSearch(player, SearchResultPacket.FOUND, 0, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask);
+        Boolean visited = ExplorersCompassConfig.allowExcludeVisited
+                ? VisitedStructures.get(session.world.getServer()).hasVisited(player.getUuid(),
+                        session.world.getRegistryKey().getValue(), structureID, startChunk)
+                : null;
+		finishSearch(player, SearchResultPacket.FOUND, 0, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
 	}
 
 	public void fail(PlayerEntity player, ItemStack stack, Identifier structureId, int radius, int samples) {
