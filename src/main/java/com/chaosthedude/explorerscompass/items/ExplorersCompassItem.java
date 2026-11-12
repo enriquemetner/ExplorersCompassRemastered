@@ -25,6 +25,7 @@ import com.chaosthedude.explorerscompass.network.SearchProgressPacket;
 import com.chaosthedude.explorerscompass.util.CompassState;
 import com.chaosthedude.explorerscompass.util.ItemUtils;
 import com.chaosthedude.explorerscompass.util.PlayerUtils;
+import com.chaosthedude.explorerscompass.util.StructureDestination;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.chaosthedude.explorerscompass.workers.SearchWorkerManager;
 import com.google.common.collect.ListMultimap;
@@ -41,6 +42,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.TypedActionResult;
+import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.MathHelper;
@@ -191,16 +193,16 @@ public class ExplorersCompassItem extends Item {
 	}
 
     private void finishSearch(PlayerEntity player, int result, int radius) {
-        finishSearch(player, result, radius, null, 0, 0, false, false);
+        finishSearch(player, result, radius, null, 0, 0, false, false, List.of(), 0);
     }
 
-    private void finishSearch(PlayerEntity player, int result, int radius, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance) {
+    private void finishSearch(PlayerEntity player, int result, int radius, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, int validBiomeMask) {
         SearchSession session = searches.remove(player.getUuid());
         if (session != null) {
             session.workers.stop();
             session.workers.clear();
             if (player instanceof ServerPlayerEntity serverPlayer) {
-                SearchResultPacket.send(serverPlayer, session.requestId, result, radius, foundId, foundX, foundZ, displayCoordinates, displayDistance);
+                SearchResultPacket.send(serverPlayer, session.requestId, result, radius, foundId, foundX, foundZ, displayCoordinates, displayDistance, biomes, validBiomeMask);
             }
         }
     }
@@ -386,7 +388,7 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
-	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, ChunkPos startChunk, int x, int z, int samples, boolean displayCoordinates, boolean displayDistance) {
+	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, ChunkPos startChunk, int x, int z, BlockBox bounds, int samples, boolean displayCoordinates, boolean displayDistance) {
         PartySharing.synchronize(player.getServer());
 		SearchSession session = searches.get(player.getUuid());
 		if (session == null || session.stack != stack || structureID == null) return;
@@ -418,7 +420,19 @@ public class ExplorersCompassItem extends Item {
 			stack.getNbt().putBoolean("DisplayDistance", displayDistance);
 		}
 		damageCompass(stack);
-		finishSearch(player, SearchResultPacket.FOUND, 0, structureID, x, z, displayCoordinates, displayDistance);
+        List<Identifier> biomes = StructureDestination.sampleBiomes(session.world, bounds);
+        var structure = StructureUtils.getStructureForID(session.world, structureID);
+        int validBiomeMask = 0;
+        if (structure != null) {
+            var biomeRegistry = session.world.getRegistryManager().get(net.minecraft.registry.RegistryKeys.BIOME);
+            for (int i = 0; i < biomes.size(); i++) {
+                var key = net.minecraft.registry.RegistryKey.of(net.minecraft.registry.RegistryKeys.BIOME, biomes.get(i));
+                if (biomeRegistry.getEntry(key).filter(structure.getValidBiomes()::contains).isPresent()) {
+                    validBiomeMask |= 1 << i;
+                }
+            }
+        }
+		finishSearch(player, SearchResultPacket.FOUND, 0, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask);
 	}
 
 	public void fail(PlayerEntity player, ItemStack stack, Identifier structureId, int radius, int samples) {

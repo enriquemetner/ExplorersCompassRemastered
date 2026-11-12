@@ -84,6 +84,19 @@ public final class ClientPacketHandlers {
             displayCoordinates = buf.readBoolean();
             displayDistance = buf.readBoolean();
         }
+        List<Identifier> biomes = new ArrayList<>();
+        java.util.Set<Identifier> validBiomes = new java.util.HashSet<>();
+        if (result == SearchResultPacket.FOUND && buf.isReadable()) {
+            int count = buf.readVarInt();
+            if (count < 0 || count > com.chaosthedude.explorerscompass.util.StructureDestination.MAX_BIOME_SAMPLES) {
+                throw new IllegalArgumentException("Invalid found biome count");
+            }
+            for (int i = 0; i < count; i++) biomes.add(buf.readIdentifier());
+            int validBiomeMask = buf.isReadable() ? buf.readVarInt() : 0;
+            for (int i = 0; i < count; i++) {
+                if ((validBiomeMask & (1 << i)) != 0) validBiomes.add(biomes.get(i));
+            }
+        }
         RequirementNode requirements = result == SearchResultPacket.LOCKED ? RequirementNode.read(buf) : null;
         final Identifier resultId = foundId;
         final int resultX = foundX, resultZ = foundZ;
@@ -91,7 +104,7 @@ public final class ClientPacketHandlers {
         final boolean showDistance = displayDistance;
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, requirements);
+                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, List.copyOf(biomes), java.util.Set.copyOf(validBiomes), requirements);
             }
         });
     }

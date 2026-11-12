@@ -5,6 +5,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.mixins.StructureChunkStorageAccessor;
@@ -15,6 +16,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.structure.StructureContext;
 import net.minecraft.structure.StructurePiece;
 import net.minecraft.structure.StructureStart;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
@@ -23,6 +25,7 @@ import net.minecraft.world.chunk.ChunkStatus;
 import net.minecraft.world.gen.structure.Structure;
 
 public final class StructureDestination {
+    public static final int MAX_BIOME_SAMPLES = 9;
     public record Target(BlockPos pos, BlockBox piece) {}
 
     private StructureDestination() {}
@@ -130,6 +133,29 @@ public final class StructureDestination {
         int x = (int) clamp(Math.floorDiv(centerX, 2), nearest.getMinX() + insetX, nearest.getMaxX() - insetX);
         int z = (int) clamp(Math.floorDiv(centerZ, 2), nearest.getMinZ() + insetZ, nearest.getMaxZ() - insetZ);
         return new Target(new BlockPos(x, nearest.getCenter().getY(), z), nearest);
+    }
+
+    public static List<Identifier> sampleBiomes(ServerWorld world, BlockBox bounds) {
+        return sampleBiomes(bounds, pos -> world.getBiome(pos).getKey().map(key -> key.getValue()).orElse(null));
+    }
+
+    static List<Identifier> sampleBiomes(BlockBox bounds, Function<BlockPos, Identifier> lookup) {
+        if (bounds == null) return List.of();
+        Set<BlockPos> samples = new LinkedHashSet<>();
+        samples.add(bounds.getCenter());
+        for (int x : new int[] {bounds.getMinX(), bounds.getMaxX()}) {
+            for (int y : new int[] {bounds.getMinY(), bounds.getMaxY()}) {
+                for (int z : new int[] {bounds.getMinZ(), bounds.getMaxZ()}) {
+                    samples.add(new BlockPos(x, y, z));
+                }
+            }
+        }
+        Set<Identifier> biomes = new LinkedHashSet<>();
+        for (BlockPos sample : samples) {
+            Identifier biome = lookup.apply(sample);
+            if (biome != null) biomes.add(biome);
+        }
+        return List.copyOf(biomes);
     }
 
     private static long clamp(long value, long min, long max) {

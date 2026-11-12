@@ -15,6 +15,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
@@ -139,9 +140,10 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
             StructureStart start = match.start() != null ? match.start()
                     : StructureDestination.readStart(level, match.startChunk(), match.structure());
-            BlockPos pos = StructureDestination.refine(StructureDestination.pieces(start), placement.getLocatePos(match.startChunk())).pos();
+            var pieces = StructureDestination.pieces(start);
+            BlockPos pos = StructureDestination.refine(pieces, placement.getLocatePos(match.startChunk())).pos();
 			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, match.structure()),
-                    match.startChunk(), pos.getX(), pos.getZ(), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
+                    match.startChunk(), pos.getX(), pos.getZ(), BlockBox.encompass(pieces).orElse(null), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
 		} else {
 			ExplorersCompass.LOGGER.error("SearchWorkerManager " + managerId + ": " + getName() + " found invalid compass after successful search");
 		}

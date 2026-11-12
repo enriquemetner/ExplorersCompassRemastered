@@ -208,7 +208,7 @@ public class ExplorersCompassScreen extends Screen {
         questReturnScroll = selectionList.getScrollAmount();
         restoreQuestListAfterSync = true;
         activeRequestId = -1;
-        if (draggedScrollbar == ScrollPanel.NOT_FOUND) draggedScrollbar = null;
+        if (draggedScrollbar == ScrollPanel.NOT_FOUND || draggedScrollbar == ScrollPanel.FOUND) draggedScrollbar = null;
         dialog = Dialog.NONE;
         entryFiltersId = null;
         sortMenuOpen = false;
@@ -240,6 +240,11 @@ public class ExplorersCompassScreen extends Screen {
     private int searchRadius;
     private int failedRadius;
     private boolean searchedExcludeVisited;
+    private static final int FOUND_DETAILS_TOP = 50;
+    private static final int FOUND_LINE_STEP = 12;
+    private static final String FOUND_BIOMES_LABEL = "Biomes: ";
+    private List<Text> foundBiomes = List.of();
+    private double foundScroll;
     private double notFoundScroll;
     private int notFoundWrapWidth;
     private List<NotFoundLine> notFoundLines = List.of();
@@ -257,7 +262,7 @@ public class ExplorersCompassScreen extends Screen {
 	private int settingsFirstRow;
 	private List<Integer> settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, "");
 	private boolean lastCreativeBypass;
-	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN, NOT_FOUND }
+	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN, FOUND, NOT_FOUND }
 	private ScrollPanel draggedScrollbar;
 	private boolean draggingStructureScrollbar;
 	private double scrollbarGrabOffset;
@@ -348,6 +353,10 @@ public class ExplorersCompassScreen extends Screen {
 			return true;
 		}
         if (dialog == Dialog.LOCKED) { lockedRequirementsView.scroll(scroll3); return true; }
+        if (dialog == Dialog.FOUND) {
+            foundScroll = Scrollbar.scrollPixels(foundScroll, scroll3, FOUND_LINE_STEP, foundMaxScroll());
+            return true;
+        }
         if (dialog == Dialog.NOT_FOUND) { scrollNotFound(scroll3); return true; }
         if (dialog != Dialog.NONE) return true;
         if (hiddenStructuresOpen) {
@@ -836,6 +845,7 @@ public class ExplorersCompassScreen extends Screen {
 					Scrollbar.rowThumbHeight(trackHeight, settingsVisibleRows(), settingsRows.size()), settingsFirstRow, settingsMaxFirstRow());
 			case HIDDEN -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
 					Scrollbar.rowThumbHeight(trackHeight, hiddenVisibleRows(), filteredHiddenStructures().size()), hiddenScroll, hiddenMaxScroll());
+			case FOUND -> foundScrollbar();
 			case NOT_FOUND -> notFoundScrollbar();
 		};
 	}
@@ -1407,13 +1417,13 @@ public class ExplorersCompassScreen extends Screen {
 		int backX = x + (w - 70) / 2;
 		if (dialog == Dialog.FOUND) {
 			int actionY = searchActionsY();
-			if (showTeleportButton() && ButtonPress.contains(mouseX, mouseY, foundTeleportX(), actionY, FOUND_ACTION_BUTTON_WIDTH, 20)) {
+			if (showTeleportButton() && ButtonPress.contains(mouseX, mouseY, foundTeleportX(), actionY, foundActionWidth(), 20)) {
 				return new ButtonPress(dialog, "teleport", this::teleport);
 			}
-			if (ButtonPress.contains(mouseX, mouseY, foundCloseX(), actionY, FOUND_ACTION_BUTTON_WIDTH, 20)) {
+			if (ButtonPress.contains(mouseX, mouseY, foundCloseX(), actionY, foundActionWidth(), 20)) {
 				return new ButtonPress(dialog, "close", () -> client.setScreen(null));
 			}
-			return ButtonPress.at(mouseX, mouseY, foundBackX(), actionY, FOUND_ACTION_BUTTON_WIDTH, 20, dialog, "back", this::dismissDialog);
+			return ButtonPress.at(mouseX, mouseY, foundBackX(), actionY, foundActionWidth(), 20, dialog, "back", this::dismissDialog);
 		}
 		if (dialog == Dialog.NOT_FOUND) {
 			int actionY = notFoundActionsY();
@@ -1490,6 +1500,7 @@ public class ExplorersCompassScreen extends Screen {
         }
         if (dialog == Dialog.SEARCHING && !searchConfirmed) return true;
         if (dialog != Dialog.NONE) {
+            if (dialog == Dialog.FOUND && button == 0 && beginScrollbarDrag(ScrollPanel.FOUND, mouseX, mouseY)) return true;
             if (dialog == Dialog.NOT_FOUND && button == 0 && beginScrollbarDrag(ScrollPanel.NOT_FOUND, mouseX, mouseY)) return true;
             if (mouseX < dialogX() - 1 || mouseX >= dialogX() + dialogWidth() + 1
                     || mouseY < dialogY() - 1 || mouseY >= dialogY() + dialogHeight() + 1) {
@@ -1733,6 +1744,7 @@ public class ExplorersCompassScreen extends Screen {
 				updateViewButtons();
 			}
 			case HIDDEN -> hiddenScroll = (int)Math.round(offset);
+			case FOUND -> foundScroll = offset;
 			case NOT_FOUND -> notFoundScroll = offset;
 		}
 	}
@@ -1866,7 +1878,7 @@ public class ExplorersCompassScreen extends Screen {
         searchRadius = Math.max(searchRadius, radius);
     }
 
-    public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, RequirementNode requirements) {
+    public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, Set<Identifier> validBiomes, RequirementNode requirements) {
         if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
         if (result == SearchResultPacket.FOUND) {
             if (ExplorersCompassConfig.closeOnFound) {
@@ -1878,6 +1890,8 @@ public class ExplorersCompassScreen extends Screen {
                 this.foundZ = foundZ;
                 showFoundCoordinates = displayCoordinates;
                 showFoundDistance = displayDistance;
+                foundBiomes = sortedBiomeNames(biomes, validBiomes);
+                foundScroll = 0;
 				double scrollAmount = selectionList.getScrollAmount();
 				selectionList.refreshList();
 				selectionList.setScrollAmount(scrollAmount);
@@ -1918,7 +1932,7 @@ public class ExplorersCompassScreen extends Screen {
             finalizePendingHides();
             disabledView = null;
         }
-        if (draggedScrollbar == ScrollPanel.NOT_FOUND) draggedScrollbar = null;
+        if (draggedScrollbar == ScrollPanel.NOT_FOUND || draggedScrollbar == ScrollPanel.FOUND) draggedScrollbar = null;
         if (dialog == Dialog.SEARCHING && client.getNetworkHandler() != null) {
             ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(activeRequestId));
         }
@@ -1999,13 +2013,41 @@ public class ExplorersCompassScreen extends Screen {
                 Scrollbar.pixelThumbHeight(textHeight, maxScroll, 12, 0), notFoundScroll, maxScroll);
     }
 
-	private int foundTeleportX() {
-		int count = showTeleportButton() ? 3 : 2;
-		return dialogX() + (dialogWidth() - FOUND_ACTION_BUTTON_WIDTH * count - FOUND_ACTION_BUTTON_GAP * (count - 1)) / 2;
-	}
-	private int foundBackX() { return foundTeleportX() + (showTeleportButton() ? FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP : 0); }
-	private int foundCloseX() { return foundBackX() + FOUND_ACTION_BUTTON_WIDTH + FOUND_ACTION_BUTTON_GAP; }
-	private int searchActionsY() { return dialogY() + SEARCH_DIALOG_HEIGHT - 25; }
+    private int foundActionWidth() {
+        int count = showTeleportButton() ? 3 : 2;
+        return Math.max(1, Math.min(FOUND_ACTION_BUTTON_WIDTH,
+                (dialogWidth() - 12 - FOUND_ACTION_BUTTON_GAP * (count - 1)) / count));
+    }
+
+    private int foundTeleportX() {
+        int count = showTeleportButton() ? 3 : 2;
+        return dialogX() + (dialogWidth() - foundActionWidth() * count - FOUND_ACTION_BUTTON_GAP * (count - 1)) / 2;
+    }
+
+    private int foundBackX() { return foundTeleportX() + (showTeleportButton() ? foundActionWidth() + FOUND_ACTION_BUTTON_GAP : 0); }
+    private int foundCloseX() { return foundBackX() + foundActionWidth() + FOUND_ACTION_BUTTON_GAP; }
+    private int searchActionsY() { return dialogY() + dialogHeight() - 25; }
+
+    private int foundContentHeight() {
+        return (2 + foundBiomes.size()) * FOUND_LINE_STEP + textRenderer.fontHeight;
+    }
+
+    private int foundViewportHeight() {
+        return Math.max(0, dialogHeight() - 30 - FOUND_DETAILS_TOP);
+    }
+
+    private int foundMaxScroll() {
+        return Math.max(0, foundContentHeight() - foundViewportHeight());
+    }
+
+    private Scrollbar foundScrollbar() {
+        int top = dialogY() + FOUND_DETAILS_TOP;
+        int viewport = foundViewportHeight();
+        int maxScroll = viewport > 0 ? foundMaxScroll() : 0;
+        return new Scrollbar(dialogX() + dialogWidth() - 12 - SCROLLBAR_WIDTH, top, top + viewport,
+                Scrollbar.pixelThumbHeight(viewport, maxScroll, 12, 0), foundScroll, maxScroll);
+    }
+
     private Text wrongDimensionCountText() {
         return Text.literal("Wrong dimension: " + listedSkippedCount + "   Disabled: " + listedDisabledCount);
     }
@@ -2015,7 +2057,9 @@ public class ExplorersCompassScreen extends Screen {
             case INFO -> textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68;
             case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
             case INSUFFICIENT_XP -> textRenderer.fontHeight * 2 + 16;
-            case SEARCHING, FOUND -> SEARCH_DIALOG_HEIGHT;
+            case SEARCHING -> SEARCH_DIALOG_HEIGHT;
+            case FOUND -> Math.min(Math.max(0, height - 10),
+                    Math.max(SEARCH_DIALOG_HEIGHT, FOUND_DETAILS_TOP + foundContentHeight() + 30));
             default -> 80;
         };
     }
@@ -2047,6 +2091,65 @@ public class ExplorersCompassScreen extends Screen {
             lines.add(Text.literal(foundX + ", " + foundZ).formatted(Formatting.GRAY));
         }
         return lines.toArray(Text[]::new);
+    }
+
+    private List<Text> sortedBiomeNames(List<Identifier> biomes, Set<Identifier> validBiomes) {
+        record BiomeName(Identifier id, Text name) {}
+        Collator collator = Collator.getInstance(Locale.forLanguageTag(client.getLanguageManager().getLanguage().replace('_', '-')));
+        return biomes.stream()
+                .map(id -> new BiomeName(id, Text.translatableWithFallback(
+                        "biome." + id.getNamespace() + "." + id.getPath().replace('/', '.'),
+                        StructureUtils.getStructureName(id)).formatted(Formatting.GRAY)))
+                .sorted(Comparator.comparing((BiomeName biome) -> !validBiomes.contains(biome.id()))
+                        .thenComparing(biome -> biome.name().getString(), collator)
+                        .thenComparing(BiomeName::id))
+                .map(BiomeName::name)
+                .toList();
+    }
+
+    private void renderFoundDetails(DrawContext context, int x, int y, int width) {
+        int viewport = foundViewportHeight();
+        if (viewport <= 0) return;
+        Text[] lines = foundInfoLines();
+        Text[] locationLines = foundLocationLines();
+        int indent = textRenderer.getWidth(FOUND_BIOMES_LABEL);
+        int scrollbarSpace = foundMaxScroll() > 0 ? SCROLLBAR_WIDTH + 4 : 0;
+        int leftWidth = width - 24 - scrollbarSpace;
+        int rightWidth = 0;
+        for (Text line : locationLines) rightWidth = Math.max(rightWidth, textRenderer.getWidth(line));
+        if (locationLines.length > 0) {
+            int leftWanted = 0;
+            for (Text line : lines) leftWanted = Math.max(leftWanted, textRenderer.getWidth(line));
+            for (Text name : foundBiomes) leftWanted = Math.max(leftWanted, indent + textRenderer.getWidth(name));
+            int available = Math.max(2, leftWidth - 12);
+            leftWidth = Math.min(leftWanted, Math.max(1, available - Math.min(rightWidth, available / 2)));
+            rightWidth = Math.min(rightWidth, Math.max(1, available - leftWidth));
+        }
+
+        int top = y + FOUND_DETAILS_TOP;
+        int leftX = x + 12;
+        int rightX = x + width - 12 - scrollbarSpace - rightWidth;
+        int lineY = top - (int) MathHelper.clamp(foundScroll, 0, foundMaxScroll());
+        context.enableScissor(leftX, top, x + width - 12 - scrollbarSpace, top + viewport);
+        for (int i = 0; i < lines.length; i++) {
+            drawFoundDetail(context, lines[i], leftX, lineY + i * FOUND_LINE_STEP, leftWidth);
+        }
+        for (int i = 0; i < foundBiomes.size(); i++) {
+            int biomeY = lineY + (lines.length + i) * FOUND_LINE_STEP;
+            if (i == 0) drawFoundDetail(context, Text.literal(FOUND_BIOMES_LABEL), leftX, biomeY, leftWidth);
+            drawFoundDetail(context, foundBiomes.get(i), leftX + indent, biomeY, leftWidth - indent);
+        }
+        for (int i = 0; i < locationLines.length; i++) {
+            drawFoundDetail(context, locationLines[i], rightX, lineY + i * FOUND_LINE_STEP, rightWidth);
+        }
+        context.disableScissor();
+        foundScrollbar().render(context, 0xff242424, 0xff909090);
+    }
+
+    private void drawFoundDetail(DrawContext context, Text text, int x, int y, int width) {
+        if (width <= 0) return;
+        context.drawTextWithShadow(textRenderer, Language.getInstance().reorder(textRenderer.trimToWidth(text, width)),
+                x, y, 0xffffff);
     }
 
     private void drawDialogButton(DrawContext context, String label, int x, int y, int w, int mouseX, int mouseY) {
@@ -2167,30 +2270,12 @@ public class ExplorersCompassScreen extends Screen {
             Identifier texture = new Identifier(ExplorersCompass.MODID, String.format(Locale.ROOT, "textures/item/explorerscompass_%02d.png", frame));
             context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Structure Located"), x + w / 2, y + SEARCH_DIALOG_TITLE_Y, 0xffffff);
-            Text[] lines = foundInfoLines();
-            Text[] locationLines = foundLocationLines();
-            int leftWidth = w - 24;
-            int rightWidth = 0;
-            for (Text line : locationLines) rightWidth = Math.max(rightWidth, textRenderer.getWidth(line));
-            if (locationLines.length > 0) {
-                int leftWanted = 0;
-                for (Text line : lines) leftWanted = Math.max(leftWanted, textRenderer.getWidth(line));
-                int available = Math.max(2, w - 36);
-                leftWidth = Math.min(leftWanted, Math.max(1, available - Math.min(rightWidth, available / 2)));
-                rightWidth = Math.min(rightWidth, Math.max(1, available - leftWidth));
-            }
-            int rightX = x + w - 12 - rightWidth;
-            for (int i = 0; i < lines.length; i++) {
-                context.drawTextWithShadow(textRenderer, Language.getInstance().reorder(textRenderer.trimToWidth(lines[i], leftWidth)), x + 12, y + 50 + i * 12, 0xffffff);
-            }
-            for (int i = 0; i < locationLines.length; i++) {
-                context.drawTextWithShadow(textRenderer, Language.getInstance().reorder(textRenderer.trimToWidth(locationLines[i], rightWidth)), rightX, y + 50 + i * 12, 0xffffff);
-            }
-            drawDialogButton(context, Text.literal("Back").getString(), foundBackX(), searchActionsY(), FOUND_ACTION_BUTTON_WIDTH, mouseX, mouseY);
+            renderFoundDetails(context, x, y, w);
+            drawDialogButton(context, Text.literal("Back").getString(), foundBackX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
 			if (showTeleportButton()) {
-				drawDialogButton(context, Text.literal("Teleport").getString(), foundTeleportX(), searchActionsY(), FOUND_ACTION_BUTTON_WIDTH, mouseX, mouseY);
+				drawDialogButton(context, Text.literal("Teleport").getString(), foundTeleportX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
 			}
-            drawDialogButton(context, Text.literal("Close").getString(), foundCloseX(), searchActionsY(), FOUND_ACTION_BUTTON_WIDTH, mouseX, mouseY);
+            drawDialogButton(context, Text.literal("Close").getString(), foundCloseX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
         } else if (dialog == Dialog.INSUFFICIENT_XP) {
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Not enough experience"), x + w / 2, y + 6, 0xffff4444);
             int lineX = x + (w - xpCostLineWidth()) / 2;

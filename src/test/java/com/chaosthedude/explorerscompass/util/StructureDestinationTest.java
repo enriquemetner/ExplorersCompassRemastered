@@ -1,6 +1,8 @@
 package com.chaosthedude.explorerscompass.util;
 
+import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import org.junit.jupiter.api.Test;
@@ -42,5 +44,37 @@ class StructureDestinationTest {
 
     @Test void usesTheSuppliedCoordinatesWhenThePiecesAreUnavailable() {
         assertEquals(FALLBACK, StructureDestination.refine(List.of(), FALLBACK).pos());
+    }
+
+    @Test void samplesTheCenterAndAllEightCornersAndKeepsBiomesInDiscoveryOrder() {
+        var bounds = new BlockBox(-8, -4, 0, 8, 4, 16);
+        var sampled = new ArrayList<BlockPos>();
+        var plains = new Identifier("minecraft:plains");
+        var caves = new Identifier("minecraft:lush_caves");
+        var result = StructureDestination.sampleBiomes(bounds, pos -> {
+            sampled.add(pos);
+            return pos.getY() < 0 ? caves : plains;
+        });
+
+        assertEquals(List.of(plains, caves), result);
+        assertEquals(List.of(new BlockPos(0, 0, 8),
+                new BlockPos(-8, -4, 0), new BlockPos(-8, -4, 16),
+                new BlockPos(-8, 4, 0), new BlockPos(-8, 4, 16),
+                new BlockPos(8, -4, 0), new BlockPos(8, -4, 16),
+                new BlockPos(8, 4, 0), new BlockPos(8, 4, 16)), sampled);
+    }
+
+    @Test void skipsDuplicateCoordinatesAndMissingBounds() {
+        var pos = new BlockPos(-3, 20, 7);
+        var sampled = new ArrayList<BlockPos>();
+        var biome = new Identifier("minecraft:forest");
+        assertEquals(List.of(biome), StructureDestination.sampleBiomes(new BlockBox(pos), sample -> {
+            sampled.add(sample);
+            return biome;
+        }));
+        assertEquals(List.of(pos), sampled);
+        assertEquals(List.of(), StructureDestination.sampleBiomes(null, ignored -> {
+            throw new AssertionError("Missing bounds should not be sampled");
+        }));
     }
 }
