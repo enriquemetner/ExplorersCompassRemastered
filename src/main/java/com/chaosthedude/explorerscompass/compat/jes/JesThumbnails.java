@@ -1,23 +1,28 @@
 package com.chaosthedude.explorerscompass.compat.jes;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.util.Identifier;
 
 public final class JesThumbnails {
     public static final int SIZE = 40;
-    private static boolean rendering;
+    private static JesThumbnails activeQueue;
     private final Object queue;
     private final Method tick, draw, supported, catalog, entryId, close, startOn;
-    private final java.lang.reflect.Field permanentlyFailed;
+    private final Field permanentlyFailed;
+    private final Map<?, ?> cachedTextures;
+    private final Set<?> pendingTextures;
     private final Class<? extends Screen> browser;
     private boolean failed;
     private CompletableFuture<?> loadedCatalog;
@@ -36,6 +41,12 @@ public final class JesThumbnails {
         var thumbnails = Class.forName(root + "Thumbnails");
         permanentlyFailed = thumbnails.getDeclaredField("FAILED");
         permanentlyFailed.setAccessible(true);
+        Field cache = thumbnails.getDeclaredField("CACHE");
+        cache.setAccessible(true);
+        cachedTextures = (Map<?, ?>) cache.get(null);
+        Field pending = thumbnails.getDeclaredField("PENDING");
+        pending.setAccessible(true);
+        pendingTextures = (Set<?>) pending.get(null);
         draw = thumbnails.getMethod("draw", DrawContext.class, Identifier.class,
                 int.class, int.class, int.class);
         var requests = Class.forName(root + "ClientRequests");
@@ -74,16 +85,28 @@ public final class JesThumbnails {
         }
         List<Identifier> candidates = visible.stream().filter(previewable::contains).toList();
         if (candidates.isEmpty()) return;
-        rendering = true;
+        activeQueue = this;
         try {
             invoke(tick, queue, candidates, false);
         } finally {
-            rendering = false;
+            activeQueue = null;
         }
     }
 
     public static int renderSizeOverride() {
-        return rendering ? 2 * (int) Math.ceil(SIZE * MinecraftClient.getInstance().getWindow().getScaleFactor()) : 0;
+        return activeQueue == null ? 0 : 2 * displaySize();
+    }
+
+    private static int displaySize() {
+        return (int) Math.ceil(SIZE * MinecraftClient.getInstance().getWindow().getScaleFactor());
+    }
+
+    public static boolean needsLargerThumbnail(Identifier id) {
+        if (activeQueue == null || activeQueue.pendingTextures.contains(id)
+                || !(activeQueue.cachedTextures.get(id) instanceof NativeImageBackedTexture texture)) return false;
+        var image = texture.getImage();
+        int size = displaySize();
+        return image != null && (image.getWidth() < size || image.getHeight() < size);
     }
 
     public boolean draw(DrawContext context, Identifier id, int x, int y) {
