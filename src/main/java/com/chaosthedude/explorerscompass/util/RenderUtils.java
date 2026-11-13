@@ -7,6 +7,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.text.Text;
 
 @Environment(EnvType.CLIENT)
 public class RenderUtils {
@@ -27,6 +28,21 @@ public class RenderUtils {
 	public static void drawStringLeft(DrawContext context, String string, TextRenderer textRenderer, int x, int y, int color) {
 		context.drawTextWithShadow(textRenderer, string, x, y, color);
 	}
+
+    public static void drawTextToFit(DrawContext context, TextRenderer textRenderer, Text text, int x, int y, int width, int color) {
+        int textWidth = textRenderer.getWidth(text);
+        if (width <= 0 || textWidth == 0) return;
+        if (textWidth <= width) {
+            context.drawTextWithShadow(textRenderer, text, x, y, color);
+            return;
+        }
+        float scale = (float) width / textWidth;
+        context.getMatrices().push();
+        context.getMatrices().translate(x, y + (1 - scale) * textRenderer.fontHeight / 2, 0);
+        context.getMatrices().scale(scale, scale, 1);
+        context.drawTextWithShadow(textRenderer, text, 0, 0, color);
+        context.getMatrices().pop();
+    }
 
 	public static void drawStringRight(DrawContext context, String string, TextRenderer textRenderer, int x, int y, int color) {
 		context.drawTextWithShadow(textRenderer, string, x - textRenderer.getWidth(string), y, color);

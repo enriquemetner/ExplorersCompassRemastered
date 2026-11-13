@@ -83,9 +83,14 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         String readableName = StructureUtils.getStructureName(structureID);
         int nameY = top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 2);
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(readableName, textWidth), left + 5, nameY, nameColor, true);
-        context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Source").getString() + ": " + StructureUtils.getStructureSource(structureID), textWidth), left + 5, top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 1), infoColor, true);
-        context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Set").getString() + ": " + StructureUtils.getStructureName(ExplorersCompass.structureIDsToSetIDs.get(structureID)), textWidth), left + 5, top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 0), infoColor, true);
-        context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Dimension").getString() + ": " + StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)), textWidth), left + 5, top + (height / 2) + ((client.textRenderer.fontHeight + 2) * 1), infoColor, true);
+        int lineHeight = client.textRenderer.fontHeight + 2;
+        drawDetail(context, "Source: ", StructureUtils.getStructureSource(structureID),
+                left + 5, nameY + lineHeight, textWidth, infoColor);
+        drawDetail(context, "Set: ", StructureUtils.getStructureName(getSetID()),
+                left + 5, nameY + 2 * lineHeight, textWidth, infoColor);
+        drawDetail(context, "Dimension: ",
+                StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)),
+                left + 5, nameY + 3 * lineHeight, textWidth, infoColor);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
         boolean filterHeld = parentScreen.isButtonHeld(this, "filters");
         buttonY = structuresList.rowActionY(top, height, true);
@@ -109,6 +114,12 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         }
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 	}
+
+    private void drawDetail(DrawContext context, String label, String value, int x, int y, int width, int color) {
+        int labelWidth = client.textRenderer.getWidth(label);
+        context.drawTextWithShadow(client.textRenderer, label, x, y, color);
+        RenderUtils.drawTextToFit(context, client.textRenderer, Text.literal(value), x + labelWidth, y, width - labelWidth, color);
+    }
 
     private static int actionBackground(boolean hovered, boolean held) {
         return hovered && !held ? 0xff424242 : 0xff242424;

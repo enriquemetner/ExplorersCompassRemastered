@@ -2272,7 +2272,7 @@ public class ExplorersCompassScreen extends Screen {
         for (int i = 0; i < foundBiomes.size(); i++) {
             int biomeY = lineY + (lines.size() + i) * FOUND_LINE_STEP;
             if (i == 0) context.drawTextWithShadow(textRenderer, FOUND_BIOMES_LABEL, leftX, biomeY, 0xffffff);
-            drawFoundValue(context, foundBiomes.get(i), leftX + indent, biomeY, leftWidth - indent);
+            RenderUtils.drawTextToFit(context, textRenderer, foundBiomes.get(i), leftX + indent, biomeY, leftWidth - indent, 0xaaaaaa);
         }
         for (int i = 0; i < locationLines.size(); i++) {
             drawFoundDetail(context, locationLines.get(i), rightX, lineY + i * FOUND_LINE_STEP, rightWidth);
@@ -2284,22 +2284,7 @@ public class ExplorersCompassScreen extends Screen {
     private void drawFoundDetail(DrawContext context, FoundLine line, int x, int y, int width) {
         int labelWidth = textRenderer.getWidth(line.label());
         if (labelWidth > 0) context.drawTextWithShadow(textRenderer, line.label(), x, y, 0xffffff);
-        drawFoundValue(context, line.value(), x + labelWidth, y, width - labelWidth);
-    }
-
-    private void drawFoundValue(DrawContext context, Text text, int x, int y, int width) {
-        int textWidth = textRenderer.getWidth(text);
-        if (width <= 0 || textWidth == 0) return;
-        if (textWidth <= width) {
-            context.drawTextWithShadow(textRenderer, text, x, y, 0xaaaaaa);
-            return;
-        }
-        float scale = (float) width / textWidth;
-        context.getMatrices().push();
-        context.getMatrices().translate(x, y + (1 - scale) * textRenderer.fontHeight / 2, 0);
-        context.getMatrices().scale(scale, scale, 1);
-        context.drawTextWithShadow(textRenderer, text, 0, 0, 0xaaaaaa);
-        context.getMatrices().pop();
+        RenderUtils.drawTextToFit(context, textRenderer, line.value(), x + labelWidth, y, width - labelWidth, 0xaaaaaa);
     }
 
     private void drawDialogButton(DrawContext context, String label, int x, int y, int w, int mouseX, int mouseY) {
