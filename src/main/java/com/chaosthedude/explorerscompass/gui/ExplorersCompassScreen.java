@@ -54,7 +54,7 @@ import net.minecraft.world.World;
 
 @Environment(EnvType.CLIENT)
 public class ExplorersCompassScreen extends Screen {
-	private static final int SEARCH_BUTTON_WIDTH = 110;
+	private static final int SIDEBAR_X = 10;
 	private static final int SMALL_BUTTON_SIZE = 20;
 	private static final int SEARCH_BUTTON_GAP = 5;
 	private static final String SELECTION_TOGGLE_TOOLTIP = "List all selected structures, regardless of searched or filtered results.\n"
@@ -69,8 +69,7 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int FILTER_COLUMN_GAP = 1;
 	private static final int FILTER_SECTION_GAP = 1;
 	private static final int FILTER_CHECKBOX_SIZE = 9;
-	private static final int FILTER_TITLE_X = 16;
-	private static final int FILTER_TITLE_GAP = 16;
+	private static final int HEADER_TITLE_MARGIN = 16;
 	private static final int BUTTON_CROSS_SIZE = 7;
 	private static final Identifier CLEAR_FILTERS_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/clear_filters.png");
 	private static final int CLEAR_FILTERS_ICON_SIZE = 11;
@@ -413,7 +412,7 @@ public class ExplorersCompassScreen extends Screen {
 		if (searchTextField != null) sessionSearchText = searchTextField.getText();
 		clearChildren();
 		setupButtons();
-		selectionList = new StructureSearchList(this, client, structureSelection, 130, 40, width - 130 - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
+		selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
 		if (isStructureView()) {
 			addDrawableChild(selectionList);
 		}
@@ -481,7 +480,7 @@ public class ExplorersCompassScreen extends Screen {
 			allowedStructureIDs = new ArrayList<Identifier>(ExplorersCompass.allowedStructureIDs);
 			structureSelection.retain(new HashSet<>(allowedStructureIDs)::contains);
 			structureIDsMatchingSearch = new ArrayList<Identifier>(allowedStructureIDs);
-			selectionList = new StructureSearchList(this, client, structureSelection, 130, 40, width - 130 - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
+			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
 			if (isStructureView()) {
 				addDrawableChild(selectionList);
 			}
@@ -564,14 +563,14 @@ public class ExplorersCompassScreen extends Screen {
 			renderFilterTooltip(context, mouseX, mouseY);
 		}
 		if (filtersOpen) {
-			context.drawTextWithShadow(textRenderer, Text.literal("Filters"), FILTER_TITLE_X, 15, 0xffffff);
+			context.drawTextWithShadow(textRenderer, Text.literal("Filters"), HEADER_TITLE_MARGIN, 15, 0xffffff);
         } else if (hiddenStructuresOpen) {
             context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(HIDDEN_STRUCTURES_TITLE,
                     Math.max(1, hiddenSearchTextField.getX() - 20)), 10, 15, 0xffffff);
 		} else if (settingsOpen) {
-			context.drawTextWithShadow(textRenderer, Text.literal("Settings"), FILTER_TITLE_X, 15, 0xffffff);
+			context.drawTextWithShadow(textRenderer, Text.literal("Settings"), HEADER_TITLE_MARGIN, 15, 0xffffff);
 		} else {
-			context.drawCenteredTextWithShadow(textRenderer, title, 65, 15, 0xffffff);
+			context.drawTextWithShadow(textRenderer, title, HEADER_TITLE_MARGIN, 15, 0xffffff);
 		}
 		if (settingsOpen) {
 			renderSettingsTooltip(context, mouseX, mouseY);
@@ -590,7 +589,7 @@ public class ExplorersCompassScreen extends Screen {
 		boolean showCount = isStructureView() && count >= (selectedOnly ? 1 : 2);
 		selectionToggleButton.visible = showCount;
 		if (showCount) selectionToggleButton.setMessage(Text.literal(Integer.toString(count)));
-		searchButton.setWidth(showCount ? SEARCH_BUTTON_WIDTH - SMALL_BUTTON_SIZE - SEARCH_BUTTON_GAP : SEARCH_BUTTON_WIDTH);
+		searchButton.setWidth(showCount ? sidebarWidth() - SMALL_BUTTON_SIZE - SEARCH_BUTTON_GAP : sidebarWidth());
 		searchButton.active = isStructureView() && !structureSelection.isEmpty();
 		boolean canClear = selectedOnly || !FilterSelections.isEmpty();
 		clearFiltersButton.active = canClear;
@@ -1282,8 +1281,8 @@ public class ExplorersCompassScreen extends Screen {
 		for (String name : ExplorersCompassConfig.sortOrder) sortOrder.add(SortCriterion.valueOf(name));
 		if (fittedRows != ExplorersCompassConfig.adjustRowsToFitView) {
 			remove(selectionList);
-			selectionList = new StructureSearchList(this, client, structureSelection, 130, 40,
-					width - 130 - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
+			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40,
+					width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
 		}
 		processSearchTerm();
 		selectionList.setScrollAmount(scroll);
@@ -2653,9 +2652,9 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void setupButtons() {
-		searchButton = addDrawableChild(new TransparentButton(10, 40, SEARCH_BUTTON_WIDTH, 20, Text.literal("Search"), button -> searchSelected()));
+		searchButton = addDrawableChild(new TransparentButton(SIDEBAR_X, 40, sidebarWidth(), 20, Text.literal("Search"), button -> searchSelected()));
 		selectionToggleButton = addDrawableChild(new TransparentButton(
-				searchButton.getX() + SEARCH_BUTTON_WIDTH - SMALL_BUTTON_SIZE, searchButton.getY(),
+				searchButton.getX() + sidebarWidth() - SMALL_BUTTON_SIZE, searchButton.getY(),
 				SMALL_BUTTON_SIZE, SMALL_BUTTON_SIZE, Text.empty(), button -> {
 			selectedOnly = !selectedOnly;
 			processSearchTerm();
@@ -2678,18 +2677,19 @@ public class ExplorersCompassScreen extends Screen {
 			}
 		});
 
-		sortOrderButton = addDrawableChild(new TransparentButton(10, searchButton.getY() + SIDEBAR_BUTTON_STEP, 110, 20, Text.literal("Sort Priority"), (onPress) -> {
+		sortOrderButton = addDrawableChild(new TransparentButton(SIDEBAR_X, searchButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20, Text.literal("Sort Priority"), (onPress) -> {
 			if (sortMenuOpen) {
 				closeSortMenu();
 			} else {
 				sortMenuOpen = true;
 			}
 		}));
-		filtersButton = addDrawableChild(new TransparentButton(10, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP, 85, 20, Text.literal("Filters"), (onPress) -> {
+		filtersButton = addDrawableChild(new TransparentButton(SIDEBAR_X, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP,
+				sidebarWidth() - SMALL_BUTTON_SIZE - SEARCH_BUTTON_GAP, 20, Text.literal("Filters"), (onPress) -> {
 			setFiltersOpen(!filtersOpen);
 		}));
-		clearFiltersButton = addDrawableChild(createClearFiltersButton(100, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP));
-		settingsButton = addDrawableChild(new TransparentButton(10, height - 30, 110, 20, Text.literal("Settings"), (onPress) -> {
+		clearFiltersButton = addDrawableChild(createClearFiltersButton(SIDEBAR_X + sidebarWidth() - SMALL_BUTTON_SIZE, filtersButton.getY()));
+		settingsButton = addDrawableChild(new TransparentButton(SIDEBAR_X, height - 30, sidebarWidth(), 20, Text.literal("Settings"), (onPress) -> {
 			setSettingsOpen(true);
 		}));
 		int controlX = settingsControlX();
@@ -2749,7 +2749,7 @@ public class ExplorersCompassScreen extends Screen {
 			ExplorersCompassConfig.adjustRowsToFitView = !ExplorersCompassConfig.adjustRowsToFitView;
 			ExplorersCompassConfig.saveClient();
 			remove(selectionList);
-			selectionList = new StructureSearchList(this, client, structureSelection, 130, 40, width - 130 - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
+			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
 			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 			updateSettingsButtonLabels();
 		}));
@@ -2796,7 +2796,7 @@ public class ExplorersCompassScreen extends Screen {
 			client.setScreen(null);
 		}));
 
-		teleportButton = addDrawableChild(new TransparentButton(10, height - 55, SEARCH_BUTTON_WIDTH, 20, Text.literal("Teleport"), (onPress) -> {
+		teleportButton = addDrawableChild(new TransparentButton(SIDEBAR_X, height - 55, sidebarWidth(), 20, Text.literal("Teleport"), (onPress) -> {
 			teleport();
 		}));
 		teleportButton.active = false;
@@ -2941,8 +2941,16 @@ public class ExplorersCompassScreen extends Screen {
 		return buttonWidthForLabel(SETTINGS_RESET_ALL_LABEL) + SETTINGS_RESET_ICON_SIZE + SETTINGS_RESET_LABEL_GAP;
 	}
 
+	private int sidebarWidth() {
+		return textRenderer.getWidth(title) + 2 * (HEADER_TITLE_MARGIN - SIDEBAR_X);
+	}
+
+	private int structureListX() {
+		return SIDEBAR_X + sidebarWidth() + HEADER_GAP;
+	}
+
 	private int settingsSearchX() {
-		return FILTER_TITLE_X + textRenderer.getWidth("Settings") + HEADER_GAP;
+		return textRenderer.getWidth("Settings") + 2 * HEADER_TITLE_MARGIN;
 	}
 
 	private int settingsSearchWidth(int x) {
@@ -2955,7 +2963,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int filterSearchX() {
-		return FILTER_TITLE_X + textRenderer.getWidth(Text.literal("Filters")) + FILTER_TITLE_GAP;
+		return textRenderer.getWidth("Filters") + 2 * HEADER_TITLE_MARGIN;
 	}
 
 	private int filterSearchWidth(int searchX) {

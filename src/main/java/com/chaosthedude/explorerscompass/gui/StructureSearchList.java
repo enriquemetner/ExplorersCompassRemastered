@@ -144,6 +144,11 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	}
 
 	@Override
+	public int getRowLeft() {
+		return left;
+	}
+
+	@Override
 	public int getRowWidth() {
 		return width;
 	}
