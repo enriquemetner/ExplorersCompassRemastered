@@ -321,6 +321,7 @@ public class ExplorersCompassScreen extends Screen {
 
     private final JesThumbnails jesThumbnails = JesThumbnails.create();
     private boolean openingJesPreview;
+    private static Screen pausedIntegrationScreen;
 
     JesThumbnails jesThumbnails() {
         return jesThumbnails;
@@ -329,7 +330,7 @@ public class ExplorersCompassScreen extends Screen {
     void openJesPreview(Identifier id) {
         openingJesPreview = true;
         try {
-            jesThumbnails.open(this, id);
+            if (jesThumbnails.open(this, id)) pauseOpenedIntegration();
         } finally {
             openingJesPreview = false;
         }
@@ -2335,7 +2336,22 @@ public class ExplorersCompassScreen extends Screen {
 				|| (player != null && player.getAbilities().creativeMode));
 	}
 
+    private void pauseOpenedIntegration() {
+        if (shouldPause() && client.currentScreen != this) {
+            pausedIntegrationScreen = client.currentScreen;
+        }
+    }
+
+    public static boolean shouldPauseIntegration(Screen screen) {
+        return screen != null && screen == pausedIntegrationScreen;
+    }
+
+    public static void clearIntegrationPause(Screen nextScreen) {
+        if (nextScreen != pausedIntegrationScreen) pausedIntegrationScreen = null;
+    }
+
     private void rememberQuestBookReturn() {
+        pauseOpenedIntegration();
         refreshAfterQuestBook = true;
         restoreQuestListAfterSync = true;
         questReturnScroll = selectionList.getScrollAmount();

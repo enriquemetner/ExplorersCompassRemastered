@@ -19,6 +19,7 @@
     "JesCompassRegistrationMixin",
     "JesThumbnailSizeMixin",
     "DroppedCompassRenderMixin",
+    "CompassIntegrationPauseMixin",
     "CompassGuiRenderMixin"
   ],
   "injectors": {
