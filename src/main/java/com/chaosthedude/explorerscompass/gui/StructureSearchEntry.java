@@ -41,25 +41,31 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         boolean locked = parentScreen.isStructureLocked(structureID);
         int nameColor = !locked ? 0xffffff : 0xc0c0c0;
         int infoColor = !locked ? 0x808080 : 0x707070;
-        int buttonWidth = parentScreen.rowActionButtonWidth();
+        int buttonWidth = structuresList.rowActionWidth();
         int buttonX = structuresList.rowActionX();
-        if (structuresList.hasPreviews()) {
+        boolean hasPreview = structuresList.hasPreviews();
+        if (hasPreview) {
             int x = structuresList.previewX();
             int y = structuresList.previewY(top, height);
             int size = JesThumbnails.SIZE;
-            context.fill(x, y, x + size, y + size, 0xff242424);
+            boolean previewHovered = hovered && ButtonPress.contains(mouseX, mouseY, x, y, size, size);
+            boolean previewHeld = parentScreen.isButtonHeld(this, "jesPreview");
+            context.fill(x, y, x + size, y + size, actionBackground(previewHovered, previewHeld));
             var previews = parentScreen.jesThumbnails();
             if (!previews.draw(context, structureID, x, y)) {
                 String label = previews.thumbnailUnavailable(structureID) ? "N/A" : "...";
                 context.drawCenteredTextWithShadow(client.textRenderer, label, x + size / 2,
                         y + (size - client.textRenderer.fontHeight) / 2, 0xaaaaaa);
             }
+            context.drawBorder(x, y, size, size, ACTION_BORDER);
         }
-        int buttonHeight = StructureSearchList.ACTION_BUTTON_HEIGHT;
+        int buttonHeight = structuresList.rowActionHeight();
+        int labelOffset = (buttonHeight - 8) / 2;
         int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
         int buttonY = top + (height - actionsHeight) / 2;
         boolean partyUnlocked = parentScreen.isUnlockedThroughParty(structureID);
-        int textRight = partyUnlocked ? partyLabelX(buttonX) : buttonX;
+        int controlsX = structuresList.rowControlsX();
+        int textRight = partyUnlocked ? partyLabelX(controlsX) : controlsX;
         int textWidth = Math.max(1, textRight - left - 10);
         if (partyUnlocked) {
             int panelWidth = partyLabelWidth();
@@ -82,15 +88,16 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(Text.literal("Dimension").getString() + ": " + StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)), textWidth), left + 5, top + (height / 2) + ((client.textRenderer.fontHeight + 2) * 1), infoColor, true);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
         boolean filterHeld = parentScreen.isButtonHeld(this, "filters");
+        buttonY = structuresList.rowActionY(top, height, true);
         context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, filterHeld ? HELD_ACTION_BORDER : ACTION_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, filterHovered && !filterHeld ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("filters"), buttonX + buttonWidth / 2, buttonY + 4, filterHeld ? 0x808080 : 0xffffff);
-        buttonY += buttonHeight + StructureSearchList.ACTION_BUTTON_GAP;
+        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(filterHovered, filterHeld));
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Filters"), buttonX + buttonWidth / 2, buttonY + labelOffset, filterHeld ? 0x808080 : 0xffffff);
+        buttonY = structuresList.rowActionY(top, height, false);
         boolean buttonHovered = structuresList.isActionButtonClick(this, mouseX, mouseY);
         boolean moreHeld = parentScreen.isButtonHeld(this, "more");
         context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, moreHeld ? HELD_ACTION_BORDER : ACTION_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, buttonHovered && !moreHeld ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("more"), buttonX + buttonWidth / 2, buttonY + 4, moreHeld ? 0x808080 : 0xffffff);
+        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(buttonHovered, moreHeld));
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("More"), buttonX + buttonWidth / 2, buttonY + labelOffset, moreHeld ? 0x808080 : 0xffffff);
 		if (locked) {
 			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 			RenderSystem.enableBlend();
@@ -103,18 +110,22 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 	}
 
+    private static int actionBackground(boolean hovered, boolean held) {
+        return hovered && !held ? 0xff424242 : 0xff242424;
+    }
+
     int partyLabelWidth() {
         return client.textRenderer.getWidth(PARTY_LABEL[0]) + 8;
     }
 
-    int partyLabelX(int buttonX) {
-        return buttonX - 5 - partyLabelWidth();
+    int partyLabelX(int controlsX) {
+        return controlsX - 5 - partyLabelWidth();
     }
 
-    boolean isPartyLabelAt(double mouseX, double mouseY, int buttonX, int top, int height) {
+    boolean isPartyLabelAt(double mouseX, double mouseY, int controlsX, int top, int height) {
         int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
         return parentScreen.isUnlockedThroughParty(structureID)
-                && ButtonPress.contains(mouseX, mouseY, partyLabelX(buttonX), top + (height - actionsHeight) / 2,
+                && ButtonPress.contains(mouseX, mouseY, partyLabelX(controlsX), top + (height - actionsHeight) / 2,
                         partyLabelWidth(), actionsHeight);
     }
 

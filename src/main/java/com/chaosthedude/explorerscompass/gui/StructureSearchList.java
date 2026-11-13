@@ -180,7 +180,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
                 int rowTop = getRowTop(i);
                 int rowBottom = displayedRowBottom(i);
                 if (parentScreen.isUnlockedThroughParty(entry.getStructureID())) {
-                    int labelX = entry.partyLabelX(rowActionX());
+                    int labelX = entry.partyLabelX(rowControlsX());
                     int labelLeft = MathHelper.clamp(labelX, rowLeft, right);
                     int labelRight = MathHelper.clamp(labelX + entry.partyLabelWidth(), rowLeft, right);
                     int labelTop = rowTop + (rowBottom - rowTop - ACTION_BUTTONS_HEIGHT) / 2;
@@ -311,7 +311,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
         if (row == null) return false;
         int index = children().indexOf(row);
         int top = getRowTop(index);
-        return row.isPartyLabelAt(mouseX, mouseY, rowActionX(), top, displayedRowBottom(index) - top);
+        return row.isPartyLabelAt(mouseX, mouseY, rowControlsX(), top, displayedRowBottom(index) - top);
     }
 
     ButtonPress buttonAt(double mouseX, double mouseY) {
@@ -347,11 +347,11 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 
     boolean hasPreviews() {
         var previews = parentScreen.jesThumbnails();
-        return previews != null && previews.available() && getRowWidth() >= JesThumbnails.SIZE + parentScreen.rowActionButtonWidth() + 42;
+        return previews != null && previews.available() && getRowWidth() >= JesThumbnails.SIZE + parentScreen.rowActionButtonWidth() + 6 + 42;
     }
 
     int previewX() {
-        return getRowLeft() + getRowWidth() - 7 - JesThumbnails.SIZE;
+        return rowActionX() - 5 - JesThumbnails.SIZE;
     }
 
     int previewY(int top, int height) {
@@ -359,8 +359,24 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
     }
 
 	int rowActionX() {
-		int right = hasPreviews() ? previewX() - 5 : getRowLeft() + getRowWidth() - 7;
-		return right - parentScreen.rowActionButtonWidth();
+		return getRowLeft() + getRowWidth() - 7 - rowActionWidth();
+	}
+
+    int rowControlsX() {
+        return hasPreviews() ? previewX() : rowActionX();
+    }
+
+    int rowActionWidth() {
+        return parentScreen.rowActionButtonWidth() + (hasPreviews() ? 6 : 0);
+    }
+
+    int rowActionHeight() {
+        return hasPreviews() ? (JesThumbnails.SIZE - ACTION_BUTTON_GAP) / 2 - 1 : ACTION_BUTTON_HEIGHT;
+    }
+
+	int rowActionY(int top, int height, boolean filter) {
+		int stackHeight = hasPreviews() ? JesThumbnails.SIZE : ACTION_BUTTONS_HEIGHT;
+		return top + (height - stackHeight) / 2 + (filter ? 0 : stackHeight - rowActionHeight());
 	}
 
 	private boolean isRowButtonClick(StructureSearchEntry entry, double mouseX, double mouseY, boolean filter) {
@@ -368,10 +384,9 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		if (index < 0) return false;
 		int buttonX = rowActionX();
 		int rowHeight = displayedRowBottom(index) - getRowTop(index);
-		int buttonY = getRowTop(index) + (rowHeight - ACTION_BUTTONS_HEIGHT) / 2
-				+ (filter ? 0 : ACTION_BUTTON_HEIGHT + ACTION_BUTTON_GAP);
-		return mouseX >= buttonX && mouseX < buttonX + parentScreen.rowActionButtonWidth()
-				&& mouseY >= Math.max(buttonY, top) && mouseY < Math.min(buttonY + ACTION_BUTTON_HEIGHT, bottom);
+		int buttonY = rowActionY(getRowTop(index), rowHeight, filter);
+		return mouseX >= buttonX && mouseX < buttonX + rowActionWidth()
+				&& mouseY >= Math.max(buttonY, top) && mouseY < Math.min(buttonY + rowActionHeight(), bottom);
 	}
 
 	public boolean containsStructure(Identifier id) {
