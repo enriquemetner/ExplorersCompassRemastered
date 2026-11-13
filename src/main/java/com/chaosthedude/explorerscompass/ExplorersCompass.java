@@ -18,6 +18,7 @@ import com.chaosthedude.explorerscompass.network.CancelSearchPacket;
 import com.chaosthedude.explorerscompass.network.ContinueSearchPacket;
 import com.chaosthedude.explorerscompass.network.ResetCompassPacket;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
+import com.chaosthedude.explorerscompass.network.CurrentStructurePacket;
 import com.chaosthedude.explorerscompass.network.TeleportPacket;
 import com.chaosthedude.explorerscompass.network.RepairDurabilityPacket;
 import com.chaosthedude.explorerscompass.network.RefreshCompassPacket;
@@ -89,6 +90,7 @@ public class ExplorersCompass implements ModInitializer {
 
 		ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> entries.add(EXPLORERS_COMPASS_ITEM));
 
+		ServerPlayNetworking.registerGlobalReceiver(CurrentStructurePacket.ID, CurrentStructurePacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(SearchPacket.ID, SearchPacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(SearchListedPacket.ID, SearchListedPacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(CancelSearchPacket.ID, CancelSearchPacket::apply);

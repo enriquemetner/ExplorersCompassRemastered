@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -19,6 +20,7 @@ import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
 import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
+import com.chaosthedude.explorerscompass.network.CurrentStructurePacket;
 import com.chaosthedude.explorerscompass.network.SearchPacket;
 import com.chaosthedude.explorerscompass.network.SearchListedPacket;
 import com.chaosthedude.explorerscompass.network.CancelSearchPacket;
@@ -36,6 +38,7 @@ import com.chaosthedude.explorerscompass.util.StructureUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.sound.PositionedSoundInstance;
@@ -158,6 +161,7 @@ public class ExplorersCompassScreen extends Screen {
 	private boolean selectedOnly;
 	private TransparentButton sortOrderButton;
 	private ButtonWidget filtersButton;
+	private ButtonWidget currentStructureButton;
 	private ButtonWidget settingsButton;
 	private ButtonWidget restoreDefaultsButton;
 	private final Map<Integer, ButtonWidget> settingResetButtons = new HashMap<>();
@@ -191,6 +195,9 @@ public class ExplorersCompassScreen extends Screen {
 	private StructureSearchList selectionList;
 	private boolean awaitingOpeningSync = true;
 	private EntryDetailsPopup entryDetails;
+	private CurrentStructurePopup currentStructurePopup;
+	private UUID currentStructureRequest;
+	private Identifier revealedStructure;
 	private final Set<Identifier> pendingHiddenStructures = new HashSet<>();
 	private String hiddenSearchText = "";
 	private boolean filtersOpen;
@@ -349,6 +356,9 @@ public class ExplorersCompassScreen extends Screen {
 	@Override
 	public void removed() {
 		cancelButtonPress();
+		currentStructureRequest = null;
+		currentStructurePopup = null;
+		clearCurrentStructureReveal();
         if (openingJesPreview) return;
         if (jesThumbnails != null) jesThumbnails.close();
         var handler = client.getNetworkHandler();
@@ -371,6 +381,7 @@ public class ExplorersCompassScreen extends Screen {
 	@Override
 	public boolean mouseScrolled(double scroll1, double scroll2, double scroll3) {
         if (dialog == Dialog.DISABLED) { disabledView.scroll(scroll3); return true; }
+		if (currentStructurePopup != null) { currentStructurePopup.scroll(scroll3, width, height); return true; }
 		if (entryDetails != null) { entryDetails.scroll(scroll3, width, height); return true; }
 		if (entryFiltersId != null) {
 			List<EntryFilterRow> rows = entryFilterRows();
@@ -525,7 +536,7 @@ public class ExplorersCompassScreen extends Screen {
         hoveredPressedButton = pressedButton != null && pressedButton.matches(hovered) ? hovered : null;
         // Covered layers still draw, but only the top layer gets the pointer.
         final int offscreen = -10000;
-        boolean dialogExposed = entryDetails == null;
+        boolean dialogExposed = entryDetails == null && currentStructurePopup == null;
         boolean filtersExposed = dialogExposed && dialog == Dialog.NONE;
         boolean sortExposed = filtersExposed && entryFiltersId == null;
         boolean pageExposed = sortExposed && !sortMenuOpen;
@@ -536,6 +547,7 @@ public class ExplorersCompassScreen extends Screen {
             renderSearchDialog(context, dialogExposed ? mouseX : offscreen, dialogExposed ? mouseY : offscreen);
         }
         if (entryDetails != null) entryDetails.render(context, width, height, mouseX, mouseY, hoveredPressedButton != null);
+        if (currentStructurePopup != null) currentStructurePopup.render(context, width, height, mouseX, mouseY, hoveredPressedButton != null);
     }
 
     private void renderPage(DrawContext context, int mouseX, int mouseY, float partialTicks) {
@@ -934,6 +946,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void toggleFilter(int column, FilterOption option) {
+		clearCurrentStructureReveal();
 		if (column == 0) {
 			toggleSet(FilterSelections.sources, option.source);
 		} else if (column == 1) {
@@ -959,6 +972,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void clearFilters() {
+		clearCurrentStructureReveal();
 		FilterSelections.clear();
 		showNormalResults();
 		processSearchTerm();
@@ -1390,6 +1404,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private Object buttonLayer() {
+		if (currentStructurePopup != null) return currentStructurePopup;
 		if (entryDetails != null) return entryDetails;
 		if (dialog == Dialog.DISABLED) return disabledView;
 		if (entryFiltersId != null) return entryFiltersId;
@@ -1420,6 +1435,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private ButtonPress buttonAt(double mouseX, double mouseY) {
+		if (currentStructurePopup != null) return currentStructurePopup.buttonAt(mouseX, mouseY, width, height);
 		if (entryDetails != null) return entryDetails.buttonAt(mouseX, mouseY, width, height);
 		if (dialog == Dialog.DISABLED) return disabledView.buttonAt(mouseX, mouseY, width, height);
 		if (entryFiltersId != null) {
@@ -1506,7 +1522,7 @@ public class ExplorersCompassScreen extends Screen {
 				|| entryDetails != null || entryFiltersId != null || sortMenuOpen || !selectionList.isMouseOver(mouseX, mouseY))) {
 			selectionList.resetDoubleClick();
 		}
-		draggingStructureScrollbar = entryDetails == null && button == 0 && dialog == Dialog.NONE
+		draggingStructureScrollbar = currentStructurePopup == null && entryDetails == null && button == 0 && dialog == Dialog.NONE
 				&& entryFiltersId == null && !filtersOpen && !settingsOpen && !hiddenStructuresOpen && !sortMenuOpen
 				&& selectionList != null && selectionList.isScrollbarAt(mouseX, mouseY);
 		try {
@@ -1521,6 +1537,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private boolean handleMouseClicked(double mouseX, double mouseY, int button) {
+		if (currentStructurePopup != null) { currentStructurePopup.click(mouseX, mouseY, button, width, height); return true; }
         if (dialog == Dialog.DISABLED) { disabledView.click(mouseX,mouseY,button,width,height); return true; }
 		if (entryDetails != null) { entryDetails.click(mouseX, mouseY, button, width, height); return true; }
 		if (entryFiltersId != null) return clickEntryFilters(mouseX, mouseY, button);
@@ -1597,7 +1614,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void focusActiveSearchField() {
-		if (entryDetails != null) return;
+		if (currentStructurePopup != null || entryDetails != null) return;
 		TransparentTextField active = activeSearchField();
 		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, settingsSearchTextField, hiddenSearchTextField}) {
 			if (field != null && field != active) field.setFocused(false);
@@ -1614,6 +1631,7 @@ public class ExplorersCompassScreen extends Screen {
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
 		if (pressedButton != null && button == 0) return true;
         if (dialog == Dialog.DISABLED) { disabledView.drag(mouseY, width, height); return true; }
+		if (currentStructurePopup != null) { currentStructurePopup.drag(mouseY, width, height); return true; }
 		if (entryDetails != null) { entryDetails.drag(mouseY, width, height); return true; }
 		if (entryFiltersId != null) return true;
         if (dialog == Dialog.LOCKED) { lockedRequirementsView.drag(mouseY); return true; }
@@ -1656,6 +1674,7 @@ public class ExplorersCompassScreen extends Screen {
 			return true;
 		}
         if (dialog == Dialog.DISABLED) { disabledView.release(); return true; }
+		if (currentStructurePopup != null) { currentStructurePopup.release(); return true; }
 		if (entryDetails != null) { entryDetails.release(); return true; }
 		if (entryFiltersId != null) return true;
         if (draggingStructureScrollbar && button == 0) {
@@ -1681,6 +1700,10 @@ public class ExplorersCompassScreen extends Screen {
 	@Override
 	public boolean keyPressed(int par1, int par2, int par3) {
 		if (par1 == 256) cancelButtonPress();
+		if (currentStructurePopup != null) {
+			if (par1 == 256) closeCurrentStructurePopup();
+			return true;
+		}
 		if (entryDetails != null) {
 			if (par1 == 256) closeEntryDetails();
 			return true;
@@ -1748,7 +1771,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean charTyped(char typedChar, int keyCode) {
-		if (entryDetails != null || dialog != Dialog.NONE || entryFiltersId != null || sortMenuOpen) return true;
+		if (currentStructurePopup != null || entryDetails != null || dialog != Dialog.NONE || entryFiltersId != null || sortMenuOpen) return true;
 		boolean ret = super.charTyped(typedChar, keyCode);
 		focusActiveSearchField();
 		return ret;
@@ -1852,7 +1875,7 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     public void searchForStructure(Identifier structureID) {
-		if (isStructureHidden(structureID)) return;
+		if (isHiddenFromStructureList(structureID)) return;
         boolean started = beginSearch(structureID);
 		finalizePendingHides();
         if (started) ClientPlayNetworking.send(SearchPacket.ID, new SearchPacket(structureID, false, searchedExcludeVisited, ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
@@ -1895,6 +1918,49 @@ public class ExplorersCompassScreen extends Screen {
                     () -> isStructureHidden(response.disabled().get(0).structure()),this::navigateToReplacement);
         }
     }
+    private void requestCurrentStructure() {
+        currentStructureRequest = UUID.randomUUID();
+        var packet = PacketByteBufs.create();
+        packet.writeUuid(currentStructureRequest);
+        ClientPlayNetworking.send(CurrentStructurePacket.ID, packet);
+    }
+
+    public void onCurrentStructure(UUID request, List<Identifier> matches) {
+        if (!request.equals(currentStructureRequest)) return;
+        currentStructureRequest = null;
+        if (client.world != world || !isStructureView() || dialog != Dialog.NONE
+                || entryDetails != null || entryFiltersId != null || sortMenuOpen) return;
+        List<Identifier> available = matches.stream().filter(allowedStructureIDs::contains).toList();
+        if (available.size() == 1) selectCurrentStructure(available.get(0));
+        else currentStructurePopup = new CurrentStructurePopup(textRenderer, available, searchDialogHeight(foundRowsHeight(4)),
+                this::selectCurrentStructure, this::closeCurrentStructurePopup);
+    }
+
+    private void closeCurrentStructurePopup() {
+        currentStructurePopup = null;
+        focusActiveSearchField();
+    }
+
+    private void selectCurrentStructure(Identifier id) {
+        closeCurrentStructurePopup();
+        clearCurrentStructureReveal();
+        structureSelection.clear();
+        searchTextField.setText(StructureUtils.getStructureName(id));
+        revealedStructure = id;
+        focusNavigationTarget(id);
+        updateSearchButtons();
+    }
+
+    private void clearCurrentStructureReveal() {
+        if (revealedStructure == null) return;
+        if (revealedStructure.equals(navigationTarget)) navigationTarget = null;
+        revealedStructure = null;
+    }
+
+    boolean isHiddenFromStructureList(Identifier id) {
+        return !id.equals(revealedStructure) && isStructureHidden(id);
+    }
+
     public void selectStructureAfterSync(Identifier id) {
         selectionAfterSync = id;
         structureSelection.clear();
@@ -2564,6 +2630,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void finalizePendingHides() {
 		if (pendingHiddenStructures.isEmpty()) return;
+		if (pendingHiddenStructures.contains(revealedStructure)) clearCurrentStructureReveal();
 		if (pendingHiddenStructures.contains(navigationTarget)) navigationTarget = null;
 		pendingHiddenStructures.clear();
 		double scroll = selectionList.getScrollAmount();
@@ -2577,13 +2644,13 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private boolean passesStructureVisibility(Identifier id) {
-		return (!isStructureHidden(id) || pendingHiddenStructures.contains(id))
+		return (!isHiddenFromStructureList(id) || pendingHiddenStructures.contains(id))
 				&& (!FilterSelections.excludeLocked() || !isStructureLocked(id));
 	}
 
 	public void processSearchTerm() {
 		availableFilterOptions = null;
-		structureSelection.retain(id -> !isStructureHidden(id) || pendingHiddenStructures.contains(id));
+		structureSelection.retain(id -> !isHiddenFromStructureList(id) || pendingHiddenStructures.contains(id));
 		if (structureSelection.isEmpty()) showNormalResults();
 		if (selectedOnly) {
 			structureIDsMatchingSearch = structureSelection.ids();
@@ -2690,6 +2757,9 @@ public class ExplorersCompassScreen extends Screen {
 			setFiltersOpen(!filtersOpen);
 		}));
 		clearFiltersButton = addDrawableChild(createClearFiltersButton(SIDEBAR_X + sidebarWidth() - SMALL_BUTTON_SIZE, filtersButton.getY()));
+		currentStructureButton = addDrawableChild(new TransparentButton(SIDEBAR_X,
+				filtersButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20,
+				Text.literal("Identify"), button -> requestCurrentStructure()));
 		settingsButton = addDrawableChild(new TransparentButton(SIDEBAR_X, height - 30, sidebarWidth(), 20, Text.literal("Settings"), (onPress) -> {
 			setSettingsOpen(true);
 		}));
@@ -2805,12 +2875,17 @@ public class ExplorersCompassScreen extends Screen {
 		TransparentButton excludeButton = addDrawableChild(new TransparentButton(10, 10,
 				excludeButtonWidth("Exclude Visited"), 20, Text.literal("Exclude Visited"), button -> {
 			FilterSelections.toggleExcludeVisited();
+			if (revealedStructure != null) {
+				clearCurrentStructureReveal();
+				processSearchTerm();
+			}
 		}));
 		excludeButton.setRightInset(FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
 		excludeVisitedButton = excludeButton;
 		TransparentButton lockedButton = addDrawableChild(new TransparentButton(10, 10,
 				excludeButtonWidth("Exclude Locked"), 20, Text.literal("Exclude Locked"), button -> {
 			FilterSelections.toggleExcludeLocked();
+			clearCurrentStructureReveal();
 			showNormalResults();
 			processSearchTerm();
 		}));
@@ -2819,6 +2894,7 @@ public class ExplorersCompassScreen extends Screen {
         TransparentButton newlyButton = addDrawableChild(new TransparentButton(10, 40,
                 excludeButtonWidth("Newly Unlocked"), 20, Text.literal("Newly Unlocked"), button -> {
             FilterSelections.toggleNewlyUnlocked();
+            clearCurrentStructureReveal();
             showNormalResults();
             processSearchTerm();
         }));
@@ -2857,6 +2933,7 @@ public class ExplorersCompassScreen extends Screen {
 		searchTextField = new TransparentTextField(textRenderer, searchX, 10, availableWidth, 20, Text.literal("Search"));
 		searchTextField.setText(sessionSearchText);
 		searchTextField.setChangedListener(value -> {
+			clearCurrentStructureReveal();
 			showNormalResults();
             if (navigationTarget != null && !value.equals(StructureUtils.getStructureName(navigationTarget))) navigationTarget = null;
 			processSearchTerm();
@@ -2931,6 +3008,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void positionFilterButtons() {
 		filtersButton.setY(sortOrderButton.getY() + SIDEBAR_BUTTON_STEP);
+		currentStructureButton.setY(filtersButton.getY() + SIDEBAR_BUTTON_STEP);
 		clearFiltersButton.setY(sortOrderButton.getY() + SIDEBAR_BUTTON_STEP);
 	}
 
@@ -3010,6 +3088,8 @@ public class ExplorersCompassScreen extends Screen {
 		updateSearchButtons();
 		sortOrderButton.visible = isStructureView();
 		filtersButton.visible = isStructureView();
+		currentStructureButton.visible = isStructureView();
+		currentStructureButton.active = ClientPlayNetworking.canSend(CurrentStructurePacket.ID);
 		clearFiltersButton.visible = isStructureView();
 		settingsButton.visible = isStructureView();
         hiddenStructuresButton.visible = settingsOpen;

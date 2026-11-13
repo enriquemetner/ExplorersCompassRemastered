@@ -143,7 +143,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (button == 0 && isEnabled()) {
-            if (parentScreen.isStructureHidden(structureID)) {
+            if (parentScreen.isHiddenFromStructureList(structureID)) {
                 structuresList.resetDoubleClick();
                 return true;
             }

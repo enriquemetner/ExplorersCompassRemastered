@@ -33,6 +33,19 @@ public final class ClientPacketHandlers {
     public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
     public static boolean pendingNoticeRelocked;
 
+    public static void applyCurrentStructure(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
+        var request = buf.readUuid();
+        var dimension = buf.readIdentifier();
+        var matches = buf.readList(PacketByteBuf::readIdentifier);
+        client.execute(() -> {
+            if (client.getNetworkHandler() == handler && client.world != null
+                    && client.world.getRegistryKey().getValue().equals(dimension)
+                    && client.currentScreen instanceof ExplorersCompassScreen screen) {
+                screen.onCurrentStructure(request, matches);
+            }
+        });
+    }
+
     public static void applySearchAvailability(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         var response = SearchAvailabilityPacket.read(buf);
         client.execute(() -> {

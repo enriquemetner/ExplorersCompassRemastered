@@ -2,6 +2,7 @@ package com.chaosthedude.explorerscompass;
 
 import com.chaosthedude.explorerscompass.gui.ExplorersCompassScreen;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
+import com.chaosthedude.explorerscompass.network.CurrentStructurePacket;
 import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
 import com.chaosthedude.explorerscompass.network.SearchProgressPacket;
@@ -23,6 +24,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestClientIntegration.register();
+		ClientPlayNetworking.registerGlobalReceiver(CurrentStructurePacket.ID, ClientPacketHandlers::applyCurrentStructure);
 		ClientPlayNetworking.registerGlobalReceiver(SyncPacket.ID, ClientPacketHandlers::applySync);
 		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, ClientPacketHandlers::applySearchResult);
 		ClientPlayNetworking.registerGlobalReceiver(SearchProgressPacket.ID, ClientPacketHandlers::applySearchProgress);

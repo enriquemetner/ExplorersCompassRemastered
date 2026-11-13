@@ -226,7 +226,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
     }
 
     public void focusStructure(Identifier id) {
-        if (id == null || parentScreen.isStructureHidden(id)) return;
+        if (id == null || parentScreen.isHiddenFromStructureList(id)) return;
         for (int index = 0; index < getEntryCount(); index++) {
             if (id.equals(getEntry(index).getStructureID())) {
                 resetDoubleClick();
@@ -240,7 +240,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
     private List<Identifier> selectableRows() {
         boolean selectedOnly = parentScreen.isSelectedOnly();
         return children().stream().map(StructureSearchEntry::getStructureID)
-                .filter(id -> !parentScreen.isStructureHidden(id) && (!selectedOnly || selection.contains(id))).toList();
+                .filter(id -> !parentScreen.isHiddenFromStructureList(id) && (!selectedOnly || selection.contains(id))).toList();
     }
 
     void selectAllMatches() {
@@ -295,7 +295,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	public StructureSearchEntry soleSearchableEntry() {
 		StructureSearchEntry only = null;
 		for (StructureSearchEntry entry : children()) {
-			if (parentScreen.isStructureHidden(entry.getStructureID())) continue;
+			if (parentScreen.isHiddenFromStructureList(entry.getStructureID())) continue;
 			if (only != null) return null;
 			only = entry;
 		}
