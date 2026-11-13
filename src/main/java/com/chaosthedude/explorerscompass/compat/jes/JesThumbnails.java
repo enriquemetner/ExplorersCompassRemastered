@@ -3,11 +3,13 @@ package com.chaosthedude.explorerscompass.compat.jes;
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.IntFunction;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
@@ -19,12 +21,15 @@ public final class JesThumbnails {
     public static final int SIZE = 40;
     private static JesThumbnails activeQueue;
     private final Object queue;
-    private final Method tick, draw, supported, catalog, entryId, close, startOn;
-    private final Field permanentlyFailed;
+    private final Method tick, draw, supported, catalog, forgetCatalog, has, entryId, close, startOn;
+    private final Field permanentlyFailed, waiting, viewport;
     private final Map<?, ?> cachedTextures;
     private final Set<?> pendingTextures;
     private final Class<? extends Screen> browser;
     private boolean failed;
+    private boolean catalogRequested;
+    private int preloadSize;
+    private final Set<Identifier> preloaded = new HashSet<>();
     private CompletableFuture<?> loadedCatalog;
     private Set<Identifier> previewable = Set.of();
 
@@ -36,6 +41,10 @@ public final class JesThumbnails {
         queue = constructor.newInstance();
         tick = queueType.getDeclaredMethod("tick", List.class, boolean.class);
         tick.setAccessible(true);
+        waiting = queueType.getDeclaredField("waiting");
+        waiting.setAccessible(true);
+        viewport = queueType.getDeclaredField("viewport");
+        viewport.setAccessible(true);
         close = queueType.getDeclaredMethod("close");
         close.setAccessible(true);
         var thumbnails = Class.forName(root + "Thumbnails");
@@ -47,11 +56,13 @@ public final class JesThumbnails {
         Field pending = thumbnails.getDeclaredField("PENDING");
         pending.setAccessible(true);
         pendingTextures = (Set<?>) pending.get(null);
+        has = thumbnails.getMethod("has", Identifier.class);
         draw = thumbnails.getMethod("draw", DrawContext.class, Identifier.class,
                 int.class, int.class, int.class);
         var requests = Class.forName(root + "ClientRequests");
         supported = requests.getMethod("serverSupported");
         catalog = requests.getMethod("catalog");
+        forgetCatalog = requests.getMethod("forgetCatalog");
         entryId = Class.forName("com.finndog.justenoughstructures.catalog.StructureCatalog$Entry").getMethod("id");
         browser = Class.forName(root + "screen.JesScreen").asSubclass(Screen.class);
         startOn = browser.getMethod("startOn", Identifier.class);
@@ -71,8 +82,14 @@ public final class JesThumbnails {
         return !failed && Boolean.TRUE.equals(invoke(supported, null));
     }
 
-    public void prepare(List<Identifier> visible) {
-        if (visible.isEmpty()) return;
+    public void prepare(int count, int first, int end, IntFunction<Identifier> rowId) {
+        if (count == 0 && !queueBusy()) return;
+        if (!catalogRequested) {
+            // A fresh catalog request registers this player as a browser on the server.
+            // A cached catalog alone can leave new captures cancelled as superseded.
+            invoke(forgetCatalog, null);
+            catalogRequested = true;
+        }
         if (!(invoke(catalog, null) instanceof CompletableFuture<?> entries)
                 || !entries.isDone() || entries.isCompletedExceptionally()) return;
         if (loadedCatalog != entries) {
@@ -82,15 +99,50 @@ public final class JesThumbnails {
             }
             previewable = ids;
             loadedCatalog = entries;
+            preloaded.clear();
         }
-        List<Identifier> candidates = visible.stream().filter(previewable::contains).toList();
-        if (candidates.isEmpty()) return;
+        int size = displaySize();
+        if (preloadSize != size) {
+            preloaded.clear();
+            preloadSize = size;
+        }
+        List<Identifier> candidates = queueBusy() ? List.of() : candidates(count, first, end, rowId);
         activeQueue = this;
         try {
             invoke(tick, queue, candidates, false);
         } finally {
             activeQueue = null;
         }
+    }
+
+    private boolean queueBusy() {
+        try {
+            return waiting.getBoolean(queue) || viewport.get(queue) != null;
+        } catch (IllegalAccessException e) {
+            disable(e);
+            return false;
+        }
+    }
+
+    private List<Identifier> candidates(int count, int first, int end, IntFunction<Identifier> rowId) {
+        List<Identifier> missing = new ArrayList<>();
+        List<Identifier> available = new ArrayList<>();
+        for (int i = first; i < end; i++) {
+            Identifier id = rowId.apply(i);
+            if (!previewable.contains(id)) continue;
+            if (Boolean.TRUE.equals(invoke(has, null, id))) available.add(id);
+            else missing.add(id);
+        }
+        missing.addAll(available);
+        for (int above = first - 1, below = end; above >= 0 || below < count; above--, below++) {
+            if (above >= 0) addPreloadCandidate(missing, rowId.apply(above));
+            if (below < count) addPreloadCandidate(missing, rowId.apply(below));
+        }
+        return missing;
+    }
+
+    private void addPreloadCandidate(List<Identifier> candidates, Identifier id) {
+        if (previewable.contains(id) && !preloaded.contains(id)) candidates.add(id);
     }
 
     public static int renderSizeOverride() {
@@ -106,7 +158,9 @@ public final class JesThumbnails {
                 || !(activeQueue.cachedTextures.get(id) instanceof NativeImageBackedTexture texture)) return false;
         var image = texture.getImage();
         int size = displaySize();
-        return image != null && (image.getWidth() < size || image.getHeight() < size);
+        boolean undersized = image != null && (image.getWidth() < size || image.getHeight() < size);
+        if (image != null && !undersized) activeQueue.preloaded.add(id);
+        return undersized;
     }
 
     public boolean draw(DrawContext context, Identifier id, int x, int y) {

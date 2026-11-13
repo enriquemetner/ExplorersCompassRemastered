@@ -162,11 +162,12 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	public void render(DrawContext context, int mouseX, int mouseY, float partialTicks) {
 		int rowsBottom = fullRowsBottom();
         if (hasPreviews()) {
-            List<Identifier> visible = new ArrayList<>();
-            for (int i = 0; i < getEntryCount(); i++) {
-                if (getRowBottom(i) > top && getRowTop(i) < rowsBottom) visible.add(getEntry(i).getStructureID());
-            }
-            parentScreen.jesThumbnails().prepare(visible);
+            int first = 0;
+            while (first < getEntryCount() && getRowBottom(first) <= top) first++;
+            int end = first;
+            while (end < getEntryCount() && getRowTop(end) < rowsBottom) end++;
+            parentScreen.jesThumbnails().prepare(getEntryCount(), first, end,
+                    index -> getEntry(index).getStructureID());
         }
 		context.enableScissor(left, top, right, bottom);
 		if (getEntryCount() == 0) {
