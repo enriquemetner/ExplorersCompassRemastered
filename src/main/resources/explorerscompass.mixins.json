@@ -17,6 +17,7 @@
     "HeldItemRendererMixin",
     "InGameHudMixin",
     "JesCompassRegistrationMixin",
+    "JesThumbnailSizeMixin",
     "DroppedCompassRenderMixin",
     "CompassGuiRenderMixin"
   ],

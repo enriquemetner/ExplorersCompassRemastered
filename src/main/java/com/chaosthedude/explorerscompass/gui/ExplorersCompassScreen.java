@@ -14,6 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.compat.jes.JesThumbnails;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
@@ -319,6 +320,22 @@ public class ExplorersCompassScreen extends Screen {
 		}
 	}
 
+    private final JesThumbnails jesThumbnails = JesThumbnails.create();
+    private boolean openingJesPreview;
+
+    JesThumbnails jesThumbnails() {
+        return jesThumbnails;
+    }
+
+    void openJesPreview(Identifier id) {
+        openingJesPreview = true;
+        try {
+            jesThumbnails.open(this, id);
+        } finally {
+            openingJesPreview = false;
+        }
+    }
+
 	@Override
 	public boolean shouldPause() {
 		return ExplorersCompassConfig.pauseGameWhenOpen;
@@ -332,6 +349,8 @@ public class ExplorersCompassScreen extends Screen {
 	@Override
 	public void removed() {
 		cancelButtonPress();
+        if (openingJesPreview) return;
+        if (jesThumbnails != null) jesThumbnails.close();
         var handler = client.getNetworkHandler();
         boolean connected = handler != null && handler.getConnection().isOpen();
         if (dialog == Dialog.SEARCHING && !successfulClose && connected) {

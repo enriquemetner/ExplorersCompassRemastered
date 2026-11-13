@@ -1,5 +1,6 @@
 package com.chaosthedude.explorerscompass.gui;
 
+import com.chaosthedude.explorerscompass.compat.jes.JesThumbnails;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import com.chaosthedude.explorerscompass.util.RenderUtils;
 import net.fabricmc.api.EnvType;
@@ -12,6 +13,7 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.Util;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Environment(EnvType.CLIENT)
@@ -154,6 +156,13 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float partialTicks) {
 		int rowsBottom = fullRowsBottom();
+        if (hasPreviews()) {
+            List<Identifier> visible = new ArrayList<>();
+            for (int i = 0; i < getEntryCount(); i++) {
+                if (getRowBottom(i) > top && getRowTop(i) < rowsBottom) visible.add(getEntry(i).getStructureID());
+            }
+            parentScreen.jesThumbnails().prepare(visible);
+        }
 		context.enableScissor(left, top, right, bottom);
 		if (getEntryCount() == 0) {
 			context.drawCenteredTextWithShadow(client.textRenderer, "No matching results",
@@ -308,6 +317,14 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
     ButtonPress buttonAt(double mouseX, double mouseY) {
         StructureSearchEntry row = actionRowAt(mouseX, mouseY);
         if (row == null || !row.isEnabled()) return null;
+        if (hasPreviews()) {
+            int index = children().indexOf(row);
+            int y = previewY(getRowTop(index), displayedRowBottom(index) - getRowTop(index));
+            if (parentScreen.jesThumbnails().canPreview(row.getStructureID())
+                    && ButtonPress.contains(mouseX, mouseY, previewX(), y, JesThumbnails.SIZE, JesThumbnails.SIZE)) {
+                return new ButtonPress(row, "jesPreview", () -> parentScreen.openJesPreview(row.getStructureID()));
+            }
+        }
         if (isPartyLabelAt(row, mouseX, mouseY)) {
             return new ButtonPress(row, "partyRequirements", () -> parentScreen.showPartyRequirements(row.getStructureID()));
         }
@@ -328,8 +345,22 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		return isRowButtonClick(entry, mouseX, mouseY, true);
 	}
 
-	private int rowActionX() {
-		return getRowLeft() + getRowWidth() - parentScreen.rowActionButtonWidth() - 7;
+    boolean hasPreviews() {
+        var previews = parentScreen.jesThumbnails();
+        return previews != null && previews.available() && getRowWidth() >= JesThumbnails.SIZE + parentScreen.rowActionButtonWidth() + 42;
+    }
+
+    int previewX() {
+        return getRowLeft() + getRowWidth() - 7 - JesThumbnails.SIZE;
+    }
+
+    int previewY(int top, int height) {
+        return top + (height - JesThumbnails.SIZE) / 2;
+    }
+
+	int rowActionX() {
+		int right = hasPreviews() ? previewX() - 5 : getRowLeft() + getRowWidth() - 7;
+		return right - parentScreen.rowActionButtonWidth();
 	}
 
 	private boolean isRowButtonClick(StructureSearchEntry entry, double mouseX, double mouseY, boolean filter) {

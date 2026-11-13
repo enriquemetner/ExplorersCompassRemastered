@@ -1,6 +1,7 @@
 package com.chaosthedude.explorerscompass.gui;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.compat.jes.JesThumbnails;
 import com.chaosthedude.explorerscompass.util.RenderUtils;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -41,7 +42,19 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int nameColor = !locked ? 0xffffff : 0xc0c0c0;
         int infoColor = !locked ? 0x808080 : 0x707070;
         int buttonWidth = parentScreen.rowActionButtonWidth();
-        int buttonX = left + width - buttonWidth - 7;
+        int buttonX = structuresList.rowActionX();
+        if (structuresList.hasPreviews()) {
+            int x = structuresList.previewX();
+            int y = structuresList.previewY(top, height);
+            int size = JesThumbnails.SIZE;
+            context.fill(x, y, x + size, y + size, 0xff242424);
+            var previews = parentScreen.jesThumbnails();
+            if (!previews.draw(context, structureID, x, y)) {
+                String label = previews.thumbnailUnavailable(structureID) ? "N/A" : "...";
+                context.drawCenteredTextWithShadow(client.textRenderer, label, x + size / 2,
+                        y + (size - client.textRenderer.fontHeight) / 2, 0xaaaaaa);
+            }
+        }
         int buttonHeight = StructureSearchList.ACTION_BUTTON_HEIGHT;
         int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
         int buttonY = top + (height - actionsHeight) / 2;
