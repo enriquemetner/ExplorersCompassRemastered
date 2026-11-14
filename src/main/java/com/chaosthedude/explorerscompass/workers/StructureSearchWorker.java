@@ -127,7 +127,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 		return null;
 	}
 
-	private boolean wasVisited(Structure structure, ChunkPos startChunk) {
+	protected boolean wasVisited(Structure structure, ChunkPos startChunk) {
 		if (!excludeVisited) return false;
 		Identifier structureId = StructureUtils.getIDForStructure(level, structure);
 		return structureId != null && VisitedStructures.hasEffectiveVisit(level.getServer(), player.getUuid(),
@@ -141,7 +141,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
             StructureStart start = match.start() != null ? match.start()
                     : StructureDestination.readStart(level, match.startChunk(), match.structure());
             var pieces = StructureDestination.pieces(start);
-            BlockPos pos = StructureDestination.refine(pieces, placement.getLocatePos(match.startChunk())).pos();
+            BlockPos pos = StructureDestination.refine(pieces, placement == null ? match.startChunk().getStartPos() : placement.getLocatePos(match.startChunk())).pos();
 			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, match.structure()),
                     match.startChunk(), pos.getX(), pos.getZ(), BlockBox.encompass(pieces).orElse(null), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
 		} else {

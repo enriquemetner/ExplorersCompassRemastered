@@ -3,6 +3,7 @@ package com.chaosthedude.explorerscompass.workers;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 import java.util.function.BiFunction;
+import java.util.function.BiConsumer;
 
 /** A lazy best-first traversal. Region bounds and exact candidates share one queue. */
 final class NearestFirstQueue<T> {
@@ -20,11 +21,24 @@ final class NearestFirstQueue<T> {
                 sequence++, candidate, null));
     }
 
+    void addArea(long x, long z, int spanX, int spanZ, Runnable expand) {
+        long bound = squared(gap(originX, x, x + spanX), gap(originZ, z, z + spanZ));
+        pending.add(new Entry<>(bound, sequence++, null, expand));
+    }
+
     /** span is the inclusive maximum candidate offset, in blocks, within a cell. */
     void addGrid(int step, int span, int offsetX, int offsetZ,
                  BiFunction<Integer, Integer, Candidate<T>> calculate) {
         if (step <= 0 || span < 0 || span >= step) throw new IllegalArgumentException("Invalid grid");
-        new Grid(step, span, offsetX, offsetZ, calculate).seed();
+        new Grid(step, span, span, offsetX, offsetZ, (x, z) -> {
+            Candidate<T> candidate = calculate.apply(x, z);
+            if (candidate != null) addCandidate(candidate);
+        }).seed();
+    }
+
+    void addOverlappingGrid(int step, int spanX, int spanZ, int offsetX, int offsetZ,
+                            BiConsumer<Integer, Integer> expand) {
+        new Grid(step, spanX, spanZ, offsetX, offsetZ, expand).seed();
     }
 
     boolean isEmpty() { return pending.isEmpty(); }
@@ -43,16 +57,17 @@ final class NearestFirstQueue<T> {
     }
 
     private final class Grid {
-        final int step, span, offsetX, offsetZ, seedX, seedZ;
-        final BiFunction<Integer, Integer, Candidate<T>> calculate;
-        Grid(int step, int span, int offsetX, int offsetZ,
-             BiFunction<Integer, Integer, Candidate<T>> calculate) {
-            this.step = step; this.span = span; this.offsetX = offsetX; this.offsetZ = offsetZ;
-            this.calculate = calculate;
-            seedX = closestCell(originX, offsetX);
-            seedZ = closestCell(originZ, offsetZ);
+        final int step, spanX, spanZ, offsetX, offsetZ, seedX, seedZ;
+        final BiConsumer<Integer, Integer> expand;
+        Grid(int step, int spanX, int spanZ, int offsetX, int offsetZ,
+             BiConsumer<Integer, Integer> expand) {
+            this.step = step; this.spanX = spanX;
+            this.spanZ = spanZ; this.offsetX = offsetX; this.offsetZ = offsetZ;
+            this.expand = expand;
+            seedX = closestCell(originX, offsetX, spanX);
+            seedZ = closestCell(originZ, offsetZ, spanZ);
         }
-        int closestCell(long origin, int offset) {
+        int closestCell(long origin, int offset, int span) {
             int cell = (int) Math.floorDiv(origin - offset, step);
             long min = (long) cell * step + offset;
             return gap(origin, min, min + span) <= gap(origin, min + step, min + step + span)
@@ -61,10 +76,9 @@ final class NearestFirstQueue<T> {
         void seed() { add(seedX, seedZ); }
         void add(int x, int z) {
             long minX = (long) x * step + offsetX, minZ = (long) z * step + offsetZ;
-            long bound = squared(gap(originX, minX, minX + span), gap(originZ, minZ, minZ + span));
+            long bound = squared(gap(originX, minX, minX + spanX), gap(originZ, minZ, minZ + spanZ));
             pending.add(new Entry<>(bound, sequence++, null, () -> {
-                Candidate<T> candidate = calculate.apply(x, z);
-                if (candidate != null) addCandidate(candidate);
+                expand.accept(x, z);
                 // Unique parent per cell: grow columns along the seed row, then each column outward.
                 // Bounds never decrease along these paths, so the frontier covers all unseen cells.
                 if (z == seedZ) {

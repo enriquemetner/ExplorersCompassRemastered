@@ -8,6 +8,8 @@
     "PlayerAdvancementTrackerMixin",
     "StructureLocatorMixin",
     "StorageIoWorkerMixin",
+    "RegionFileIndexMixin",
+    "ChunkSaveIndexMixin",
     "RegionBasedStorageAccessor",
     "StructureChunkStorageAccessor",
     "StructurePlacementAccessor"

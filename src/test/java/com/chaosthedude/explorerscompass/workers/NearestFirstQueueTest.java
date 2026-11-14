@@ -98,6 +98,24 @@ class NearestFirstQueueTest {
         assertEquals("-1,0",first.value());
         assertTrue(calculated[0] <= 3, "Check the closer discovery before filling the original large circle");
     }
+    @Test void savedChunkCanBeatGenerationCandidateAcrossAnOffsetRegionBoundary() {
+        var queue = new NearestFirstQueue<String>(512, 0);
+        queue.addCandidate(new NearestFirstQueue.Candidate<>(540, 0, "current"));
+        var read = new ArrayList<String>();
+        queue.addOverlappingGrid(512, 528, 496, 0, 0, (x, z) -> {
+            if (x != 0 || z != 0) return;
+            queue.addArea(496, 0, 32, 0, () -> {
+                read.add("edge");
+                queue.addCandidate(new NearestFirstQueue.Candidate<>(515, 0, "saved"));
+            });
+            queue.addArea(100, 100, 32, 0, () -> read.add("distant"));
+        });
+        NearestFirstQueue.Candidate<String> first;
+        do { first = queue.advance(); } while (first == null);
+        assertEquals("saved", first.value());
+        assertEquals(List.of("edge"), read);
+    }
+
     @Test void handlesWorldEdgeCoordinatesWithoutDistanceOverflow() {
         var queue = new NearestFirstQueue<String>(-29999999,29999999);
         queue.addCandidate(new NearestFirstQueue.Candidate<>(29999999,-29999999,"far"));

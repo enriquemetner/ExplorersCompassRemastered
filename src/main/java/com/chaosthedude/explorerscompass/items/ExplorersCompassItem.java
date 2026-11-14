@@ -164,6 +164,7 @@ public class ExplorersCompassItem extends Item {
         final ServerWorld world;
         final List<Identifier> eligibleIds;
 		final boolean creativeBypass;
+        AvailabilitySelection availability;
         final int radiusLimit = ExplorersCompassConfig.maxSearchRadius;
         SearchSession(ServerWorld world, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass) {
             this.world = world;
@@ -195,11 +196,6 @@ public class ExplorersCompassItem extends Item {
 		clearSearchData(stack);
 	}
 
-	private void rejectWrongDimension(PlayerEntity player, int requestId) {
-		cancelSearch(player, -1);
-		SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.WRONG_DIMENSION, 0);
-	}
-
     private void finishSearch(PlayerEntity player, int result, int radius) {
         finishSearch(player, result, radius, null, 0, 0, false, false, List.of(), 0, null);
     }
@@ -215,34 +211,6 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
-    private List<Identifier> availableForSearch(ServerWorld world, ServerPlayerEntity player, List<Identifier> ids,
-                                                boolean creativeBypass, boolean listed, int requestId) {
-        var selection = AvailabilitySelection.classify(ids, id -> StructureAvailability.check(world, id),
-                id -> creativeBypass || UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), id));
-        if (selection.eligible().isEmpty() && !selection.disabled().isEmpty()) {
-            cancelSearch(player, -1);
-            if (ServerPlayNetworking.canSend(player, SearchAvailabilityPacket.ID)) {
-                SearchAvailabilityPacket.send(player, requestId, selection);
-            } else {
-                SearchResultPacket.send(player, requestId, SearchResultPacket.REJECTED, 0);
-            }
-            return List.of();
-        }
-        if (selection.eligible().isEmpty() && selection.locked() > 0) {
-            RequirementNode requirements = listed
-                    ? new RequirementNode(Text.literal("No unlocked structures in the list are available in this dimension."), false, List.of())
-                    : UnlockingRules.get().personalRequirements(player, ids).get(ids.get(0));
-            SearchResultPacket.sendLocked(player, requestId, requirements);
-            return List.of();
-        }
-        if (rejectIfInsufficientXp(player, requestId)) return List.of();
-        if (selection.eligible().isEmpty()) {
-            rejectWrongDimension(player, requestId);
-            return List.of();
-        }
-        SearchAvailabilityPacket.send(player, requestId, selection);
-        return selection.eligible();
-    }
 
 	private boolean rejectIfInsufficientXp(PlayerEntity player, int requestId) {
 		int cost = ExplorersCompassConfig.defaultXpCost;
@@ -384,14 +352,27 @@ public class ExplorersCompassItem extends Item {
         ensureHolder(player, stack);
         PartySharing.synchronize(world.getServer());
         boolean creativeBypass = creativeUnlocksAll && player.getAbilities().creativeMode;
-        List<Identifier> searchable = availableForSearch(world, player, ids, creativeBypass, listed, requestId);
-        if (searchable.isEmpty()) return;
-        List<Structure> structures = new ArrayList<>();
-        for (Identifier id : searchable) structures.add(StructureUtils.getStructureForID(world, id));
+        var selection = AvailabilitySelection.classify(ids, id -> StructureAvailability.check(world, id),
+                id -> creativeBypass || UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), id));
+        List<Identifier> searchable = ids.stream()
+                .filter(id -> creativeBypass || UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), id))
+                .distinct().toList();
+        if (searchable.isEmpty()) {
+            RequirementNode requirements = listed
+                    ? new RequirementNode(Text.literal("No unlocked structures in the list."), false, List.of())
+                    : UnlockingRules.get().personalRequirements(player, ids).get(ids.get(0));
+            SearchResultPacket.sendLocked(player, requestId, requirements);
+            return;
+        }
+        if (rejectIfInsufficientXp(player, requestId)) return;
+        List<Structure> structures = searchable.stream().map(id -> StructureUtils.getStructureForID(world, id)).toList();
+        List<Structure> generation = selection.eligible().stream().map(id -> StructureUtils.getStructureForID(world, id)).toList();
         Identifier firstId = searchable.get(0);
         SearchSession session = beginSearch(world, player, stack, requestId, searchable, creativeBypass);
+        session.availability = selection;
         setSearching(stack, firstId);
-        session.workers.createWorkers(world, player, stack, structures, firstId, excludeVisited, creativeBypass, pos);
+        SearchAvailabilityPacket.send(player, requestId, new AvailabilitySelection(searchable, List.of(), 0, selection.locked()));
+        session.workers.createWorkers(world, player, stack, generation, structures, firstId, excludeVisited, creativeBypass, pos);
         session.workers.setRadiusLimit(session.radiusLimit);
         if (session.workers.start()) {
             SearchProgressPacket.send(player, requestId, 0);
@@ -466,6 +447,23 @@ public class ExplorersCompassItem extends Item {
         boolean started = session.workers.start();
 		if (!started) {
 			CompassSearchData.restore(stack.getOrCreateNbt(), session.previousNbt);
+            if (session.availability != null && session.availability.eligible().isEmpty()) {
+                var selection = session.availability;
+                if (!selection.disabled().isEmpty() && player instanceof ServerPlayerEntity serverPlayer
+                        && ServerPlayNetworking.canSend(serverPlayer, SearchAvailabilityPacket.ID)) {
+                    cancelSearch(player, session.requestId);
+                    SearchAvailabilityPacket.send(serverPlayer, session.requestId, selection);
+                    return;
+                }
+                if (selection.wrongDimension() > 0) {
+                    finishSearch(player, SearchResultPacket.WRONG_DIMENSION, 0);
+                    return;
+                }
+            }
+            if (session.availability != null && player instanceof ServerPlayerEntity serverPlayer) {
+                var original = session.availability;
+                SearchAvailabilityPacket.send(serverPlayer, session.requestId, original);
+            }
             finishSearch(player, SearchResultPacket.NOT_FOUND, session.radiusLimit);
 		}
 	}

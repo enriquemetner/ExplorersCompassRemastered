@@ -69,6 +69,13 @@ public class ExplorersCompass implements ModInitializer {
         com.chaosthedude.explorerscompass.network.AcknowledgeNoticePacket.register();
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents.LOAD.register((server, world) -> {
+            var worker = world.getChunkManager().threadedAnvilChunkStorage.getWorker();
+            if (worker instanceof com.chaosthedude.explorerscompass.storage.EmptyChunkStorage backend) {
+                var index = com.chaosthedude.explorerscompass.storage.SavedStructureIndex.get(world);
+                backend.explorerscompass$attachIndex(index, world.getPersistentStateManager()::save);
+            }
+        });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server ->
                 com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server));
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> {

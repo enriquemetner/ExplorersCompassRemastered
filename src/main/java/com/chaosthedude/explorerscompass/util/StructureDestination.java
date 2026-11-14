@@ -84,9 +84,10 @@ public final class StructureDestination {
                 .map(pos -> readStart(world, pos, structure, emptyChunks)).filter(Objects::nonNull).toList();
     }
 
-    private static Chunk existingChunk(ServerWorld world, ChunkPos pos, ChunkStatus status) {
+    public static Chunk existingChunk(ServerWorld world, ChunkPos pos, ChunkStatus status) {
         var storage = (StructureChunkStorageAccessor) world.getChunkManager().threadedAnvilChunkStorage;
         var holder = storage.explorerscompass$getCurrentChunkHolder(pos.toLong());
+        if (holder == null) holder = storage.explorerscompass$chunksToUnload().get(pos.toLong());
         var chunk = holder == null ? null : holder.getCurrentChunk();
         return chunk != null && chunk.getStatus().isAtLeast(status) ? chunk : null;
     }

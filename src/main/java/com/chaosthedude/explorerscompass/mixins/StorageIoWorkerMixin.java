@@ -6,6 +6,11 @@ import com.mojang.datafixers.util.Either;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import com.chaosthedude.explorerscompass.storage.IndexedRegionFile;
+import com.chaosthedude.explorerscompass.storage.SavedStructureIndex;
+import com.chaosthedude.explorerscompass.storage.SavedStructureReader;
+import net.minecraft.SharedConstants;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -21,6 +26,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -31,6 +37,61 @@ public abstract class StorageIoWorkerMixin implements EmptyChunkStorage {
     @Shadow @Final private Map<ChunkPos, ?> results;
     @Shadow private <T> CompletableFuture<T> run(Supplier<Either<T, Exception>> task) { throw new AssertionError(); }
     @Unique private final EmptyChunkCache.WriteState explorerscompass$writes = new EmptyChunkCache.WriteState();
+
+    @Unique private volatile SavedStructureIndex explorerscompass$index;
+    @Unique private Runnable explorerscompass$persistIndex;
+
+    @Override
+    public void explorerscompass$attachIndex(SavedStructureIndex index, Runnable persist) {
+        if (((Object) this).getClass() != StorageIoWorker.class) return;
+        explorerscompass$persistIndex = persist;
+        explorerscompass$index = index;
+    }
+
+    @Override
+    public void explorerscompass$saveIndex() {
+        if (explorerscompass$persistIndex != null && explorerscompass$index.isDirty()) {
+            explorerscompass$persistIndex.run();
+        }
+    }
+
+    @Redirect(method = "write", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/storage/RegionBasedStorage;write(Lnet/minecraft/util/math/ChunkPos;Lnet/minecraft/nbt/NbtCompound;)V"))
+    private void explorerscompass$indexWrite(RegionBasedStorage target, ChunkPos pos, NbtCompound nbt) throws IOException {
+        explorerscompass$writes.beginWrite();
+        try {
+            explorerscompass$writeAndIndex(target, pos, nbt);
+        } finally {
+            explorerscompass$writes.endWrite();
+        }
+    }
+
+    @Unique
+    private void explorerscompass$writeAndIndex(RegionBasedStorage target, ChunkPos pos, NbtCompound nbt)
+            throws IOException {
+        var index = explorerscompass$index;
+        var access = (RegionBasedStorageAccessor) (Object) target;
+        Path path = explorerscompass$regionPath(access, pos);
+        String before = index == null ? null : SavedStructureIndex.tryRevision(path);
+        try {
+            access.explorerscompass$write(pos, nbt);
+        } catch (IOException | RuntimeException e) {
+            if (index != null) index.written(pos, before, null, null);
+            throw e;
+        }
+        if (index == null) return;
+        var starts = nbt != null && nbt.getInt("DataVersion") == SharedConstants.getGameVersion().getSaveVersion().getId()
+                ? SavedStructureReader.readStarts(nbt.getCompound("structures").getCompound("starts"), pos) : null;
+        index.written(pos, before, SavedStructureIndex.tryRevision(path), starts);
+        var file = access.explorerscompass$getCachedRegionFiles().get(ChunkPos.toLong(pos.getRegionX(), pos.getRegionZ()));
+        if (file instanceof IndexedRegionFile indexed) indexed.explorerscompass$trackPadding(index, pos);
+    }
+
+    @Unique
+    private static Path explorerscompass$regionPath(RegionBasedStorageAccessor storage, ChunkPos pos) {
+        return storage.explorerscompass$getDirectory().resolve(
+                "r." + pos.getRegionX() + "." + pos.getRegionZ() + RegionBasedStorage.MCA_EXTENSION);
+    }
 
     @Inject(method = "setResult", at = @At("HEAD"))
     private void explorerscompass$beginWrite(ChunkPos pos, NbtCompound nbt, CallbackInfoReturnable<CompletableFuture<Void>> cir) {
@@ -64,6 +125,30 @@ public abstract class StorageIoWorkerMixin implements EmptyChunkStorage {
                 return null;
             }
         });
+    }
+
+    @Override
+    public long explorerscompass$writeStamp() { return explorerscompass$writes.stamp(); }
+
+    @Override
+    public RegionSnapshot explorerscompass$savedRegion(ChunkPos pos) {
+        if (((Object) this).getClass() != StorageIoWorker.class) return null;
+        long stamp = explorerscompass$writes.stamp();
+        return this.<RegionSnapshot>run(() -> {
+            try {
+                var access = (RegionBasedStorageAccessor) (Object) storage;
+                String revision = SavedStructureIndex.revision(explorerscompass$regionPath(access, pos));
+                long[] pending = new long[16];
+                for (ChunkPos chunk : results.keySet()) {
+                    if (chunk.getRegionX() != pos.getRegionX() || chunk.getRegionZ() != pos.getRegionZ()) continue;
+                    int slot = chunk.getRegionRelativeX() + (chunk.getRegionRelativeZ() << 5);
+                    pending[slot >>> 6] |= 1L << (slot & 63);
+                }
+                return Either.left(new RegionSnapshot(explorerscompass$snapshotRegion(pos), pending, revision, stamp));
+            } catch (IOException e) {
+                return Either.right(e);
+            }
+        }).join();
     }
 
     @Unique

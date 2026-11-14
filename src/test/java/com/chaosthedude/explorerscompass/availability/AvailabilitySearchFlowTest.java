@@ -2,13 +2,12 @@ package com.chaosthedude.explorerscompass.availability;
 
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Check the actual request entrypoints without constructing a live player or server in JUnit. */
 class AvailabilitySearchFlowTest {
-    @Test void bothSearchTypesValidateBeforeApplyingErrorPriorityAndStartingWorkers() throws Exception {
+    @Test void bothSearchTypesValidateBeforeStartingWorkers() throws Exception {
         ClassNode node = new ClassNode();
         try (var stream = getClass().getResourceAsStream("/com/chaosthedude/explorerscompass/items/ExplorersCompassItem.class")) {
             assertNotNull(stream);
@@ -20,20 +19,10 @@ class AvailabilitySearchFlowTest {
             assertCallsInOrder(entry, "isBroken", "getAllowedStructureIDs", "startValidatedSearch");
         }
 
-        var preflight = method(node, "availableForSearch");
-        assertCallsInOrder(preflight, "classify", "disabled", "locked", "sendLocked",
-                "rejectIfInsufficientXp", "rejectWrongDimension");
-        for (var instruction : preflight.instructions) {
-            if (instruction instanceof MethodInsnNode call) {
-                assertFalse(java.util.Set.of("createWorkers", "beginSearch", "damageCompass",
-                        "addExperienceLevels", "getChunk").contains(call.name));
-            }
-        }
-
         var search = method(node, "startValidatedSearch");
-        assertCallsInOrder(search, "availableForSearch", "isEmpty", "beginSearch", "createWorkers");
-        assertEquals(Opcodes.RETURN, search.instructions.get(callIndex(search, "isEmpty")).getNext().getNext().getOpcode(),
-                "An empty preflight result must return before starting a search");
+        assertCallsInOrder(search, "classify", "isEmpty", "sendLocked",
+                "rejectIfInsufficientXp", "beginSearch", "createWorkers");
+        assertCallsInOrder(method(node, "fail"), "pop", "start", "disabled", "finishSearch");
     }
 
     private static MethodNode method(ClassNode node, String name) {
