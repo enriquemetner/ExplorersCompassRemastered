@@ -2758,20 +2758,20 @@ public class ExplorersCompassScreen extends Screen {
 			}
 		});
 
-		sortOrderButton = addDrawableChild(new TransparentButton(SIDEBAR_X, searchButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20, Text.literal("Sort Priority"), (onPress) -> {
+		sortOrderButton = addDrawableChild(new TransparentButton(SIDEBAR_X, searchButton.getY() + 2 * SIDEBAR_BUTTON_STEP, sidebarWidth(), 20, Text.literal("Sort Priority"), (onPress) -> {
 			if (sortMenuOpen) {
 				closeSortMenu();
 			} else {
 				sortMenuOpen = true;
 			}
 		}));
-		filtersButton = addDrawableChild(new TransparentButton(SIDEBAR_X, sortOrderButton.getY() + SIDEBAR_BUTTON_STEP,
+		filtersButton = addDrawableChild(new TransparentButton(SIDEBAR_X, searchButton.getY() + SIDEBAR_BUTTON_STEP,
 				sidebarWidth() - SMALL_BUTTON_SIZE - SEARCH_BUTTON_GAP, 20, Text.literal("Filters"), (onPress) -> {
 			setFiltersOpen(!filtersOpen);
 		}));
 		clearFiltersButton = addDrawableChild(createClearFiltersButton(SIDEBAR_X + sidebarWidth() - SMALL_BUTTON_SIZE, filtersButton.getY()));
 		currentStructureButton = addDrawableChild(new TransparentButton(SIDEBAR_X,
-				filtersButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20,
+				sortOrderButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20,
 				Text.literal("Identify"), button -> requestCurrentStructure()));
 		settingsButton = addDrawableChild(new TransparentButton(SIDEBAR_X, height - 30, sidebarWidth(), 20, Text.literal("Settings"), (onPress) -> {
 			setSettingsOpen(true);
@@ -2880,7 +2880,7 @@ public class ExplorersCompassScreen extends Screen {
 			client.setScreen(null);
 		}));
 
-		teleportButton = addDrawableChild(new TransparentButton(SIDEBAR_X, height - 55, sidebarWidth(), 20, Text.literal("Teleport"), (onPress) -> {
+		teleportButton = addDrawableChild(new TransparentButton(SIDEBAR_X, currentStructureButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20, Text.literal("Teleport"), (onPress) -> {
 			teleport();
 		}));
 		teleportButton.active = false;
@@ -3020,9 +3020,9 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void positionFilterButtons() {
-		filtersButton.setY(sortOrderButton.getY() + SIDEBAR_BUTTON_STEP);
-		currentStructureButton.setY(filtersButton.getY() + SIDEBAR_BUTTON_STEP);
-		clearFiltersButton.setY(sortOrderButton.getY() + SIDEBAR_BUTTON_STEP);
+		filtersButton.setY(searchButton.getY() + SIDEBAR_BUTTON_STEP);
+		currentStructureButton.setY(sortOrderButton.getY() + SIDEBAR_BUTTON_STEP);
+		clearFiltersButton.setY(filtersButton.getY());
 	}
 
 	private int buttonWidthForLabel(String label) {
@@ -3074,7 +3074,7 @@ public class ExplorersCompassScreen extends Screen {
 		settingsButton.setY(height - 30);
         hiddenStructuresButton.setX(settingsControlX());
         hiddenStructuresButton.setY(settingsRowY(SETTINGS_HIDDEN_ROW));
-		teleportButton.setY(settingsButton.getY() - teleportButton.getHeight() - 5);
+		teleportButton.setY(currentStructureButton.getY() + SIDEBAR_BUTTON_STEP);
 		backButton.setX(cancelButton.getX() - backButton.getWidth() - 5);
 		int settingsSearchX = settingsSearchX();
 		int restoreRight = backButton.getX() - 5;
