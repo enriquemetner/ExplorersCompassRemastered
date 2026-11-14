@@ -115,19 +115,6 @@ public class ExplorersCompassConfig {
 		try {
 			Files.createDirectories(directory());
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
-			CommentedConfig common = readOrCreate(COMMON);
-			loadCommon(common);
-			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
-					|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
-					|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
-					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
-                    || common.get(SEARCH_SAVED_STRUCTURES) == null
-                    || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
-				common.remove("permissions.allowTeleport");
-				writeCommon(common);
-				write(directory().resolve(COMMON), common);
-			}
-			structureBlacklist = strings(readOrCreate(COMMON_BLACKLIST), "structureBlacklist", structureBlacklist);
 			if (client) {
 				CommentedConfig clientConfig = readOrCreate(CLIENT);
 				boolean migrateClient = clientConfig.get("behavior.searchTechnicalNames") != null
@@ -148,6 +135,27 @@ public class ExplorersCompassConfig {
 			}
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass configuration", e);
+		}
+	}
+
+	public static void loadServer() {
+		try {
+			Files.createDirectories(directory());
+			CommentedConfig common = readOrCreate(COMMON);
+			loadCommon(common);
+			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
+					|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
+					|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
+					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
+                    || common.get(SEARCH_SAVED_STRUCTURES) == null
+                    || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
+				common.remove("permissions.allowTeleport");
+				writeCommon(common);
+				write(directory().resolve(COMMON), common);
+			}
+			structureBlacklist = strings(readOrCreate(COMMON_BLACKLIST), "structureBlacklist", List.of());
+		} catch (IOException e) {
+			throw new RuntimeException("Could not load Explorer's Compass server configuration", e);
 		}
 	}
 
@@ -224,16 +232,16 @@ public class ExplorersCompassConfig {
 		if (radius > MAX_SEARCH_RADIUS) throw bad(SEARCH_RADIUS, "integer between 1 and " + MAX_SEARCH_RADIUS);
 		maxSearchRadius = radius;
 		findOldStructures = bool(config, SEARCH_SAVED_STRUCTURES, false);
-		compassSharing = bool(config, "unlocking.compassSharing", compassSharing);
-		visitsSharing = bool(config, "unlocking.visitsSharing", visitsSharing);
-        opacPartySharing = bool(config, "unlocking.opacPartySharing", opacPartySharing);
-		allowExcludeVisited = bool(config, "search.allowExcludeVisited", allowExcludeVisited);
-		relockOnReload = bool(config, "unlocking.relockOnReload", relockOnReload);
-		displayCoordinates = bool(config, "compass.displayCoordinates", displayCoordinates);
-		displayDistance = bool(config, "compass.displayDistance", displayDistance);
-		compassDurability = number(config, "compass.compassDurability", compassDurability, 0);
-		defaultXpCost = number(config, "search.defaultXpCost", defaultXpCost, 0);
-		allowSearchWithoutEnoughXp = bool(config, "search.allowSearchWithoutEnoughXp", allowSearchWithoutEnoughXp);
+		compassSharing = bool(config, "unlocking.compassSharing", false);
+		visitsSharing = bool(config, "unlocking.visitsSharing", false);
+        opacPartySharing = bool(config, "unlocking.opacPartySharing", true);
+		allowExcludeVisited = bool(config, "search.allowExcludeVisited", true);
+		relockOnReload = bool(config, "unlocking.relockOnReload", false);
+		displayCoordinates = bool(config, "compass.displayCoordinates", true);
+		displayDistance = bool(config, "compass.displayDistance", true);
+		compassDurability = number(config, "compass.compassDurability", 0, 0);
+		defaultXpCost = number(config, "search.defaultXpCost", 0, 0);
+		allowSearchWithoutEnoughXp = bool(config, "search.allowSearchWithoutEnoughXp", false);
 	}
 
 	static boolean loadClient(CommentedConfig config) {
