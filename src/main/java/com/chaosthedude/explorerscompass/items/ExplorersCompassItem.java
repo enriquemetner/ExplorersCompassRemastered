@@ -354,10 +354,20 @@ public class ExplorersCompassItem extends Item {
         boolean creativeBypass = creativeUnlocksAll && player.getAbilities().creativeMode;
         var selection = AvailabilitySelection.classify(ids, id -> StructureAvailability.check(world, id),
                 id -> creativeBypass || UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), id));
-        List<Identifier> searchable = ids.stream()
+        boolean includeSaved = ExplorersCompassConfig.findOldStructures;
+        if (!includeSaved && selection.eligible().isEmpty() && !selection.disabled().isEmpty()) {
+            cancelSearch(player, -1);
+            if (ServerPlayNetworking.canSend(player, SearchAvailabilityPacket.ID)) {
+                SearchAvailabilityPacket.send(player, requestId, selection);
+            } else {
+                SearchResultPacket.send(player, requestId, SearchResultPacket.REJECTED, 0);
+            }
+            return;
+        }
+        List<Identifier> searchable = includeSaved ? ids.stream()
                 .filter(id -> creativeBypass || UnlockingRules.isUnlocked(world.getServer(), player.getUuid(), id))
-                .distinct().toList();
-        if (searchable.isEmpty()) {
+                .distinct().toList() : selection.eligible();
+        if (searchable.isEmpty() && (includeSaved || selection.locked() > 0)) {
             RequirementNode requirements = listed
                     ? new RequirementNode(Text.literal("No unlocked structures in the list."), false, List.of())
                     : UnlockingRules.get().personalRequirements(player, ids).get(ids.get(0));
@@ -365,13 +375,20 @@ public class ExplorersCompassItem extends Item {
             return;
         }
         if (rejectIfInsufficientXp(player, requestId)) return;
-        List<Structure> structures = searchable.stream().map(id -> StructureUtils.getStructureForID(world, id)).toList();
+        if (searchable.isEmpty()) {
+            cancelSearch(player, -1);
+            SearchResultPacket.send(player, requestId, SearchResultPacket.WRONG_DIMENSION, 0);
+            return;
+        }
+        List<Structure> structures = includeSaved
+                ? searchable.stream().map(id -> StructureUtils.getStructureForID(world, id)).toList() : List.of();
         List<Structure> generation = selection.eligible().stream().map(id -> StructureUtils.getStructureForID(world, id)).toList();
         Identifier firstId = searchable.get(0);
         SearchSession session = beginSearch(world, player, stack, requestId, searchable, creativeBypass);
-        session.availability = selection;
+        session.availability = includeSaved ? selection : null;
         setSearching(stack, firstId);
-        SearchAvailabilityPacket.send(player, requestId, new AvailabilitySelection(searchable, List.of(), 0, selection.locked()));
+        SearchAvailabilityPacket.send(player, requestId, includeSaved
+                ? new AvailabilitySelection(searchable, List.of(), 0, selection.locked()) : selection);
         session.workers.createWorkers(world, player, stack, generation, structures, firstId, excludeVisited, creativeBypass, pos);
         session.workers.setRadiusLimit(session.radiusLimit);
         if (session.workers.start()) {

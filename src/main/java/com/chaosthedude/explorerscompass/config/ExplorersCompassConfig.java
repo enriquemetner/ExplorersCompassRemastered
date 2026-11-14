@@ -29,10 +29,12 @@ public class ExplorersCompassConfig {
 	private static final String CLIENT = "client.toml";
 	private static final String COMMON_BLACKLIST = "common_blacklist.toml";
 	private static final String HIDDEN_STRUCTURES = "hidden_structures.toml";
+	private static final String SEARCH_SAVED_STRUCTURES = "search.findOldStructures";
 	private static final String SEARCH_RADIUS = "search.maxSearchRadius";
 	private static final int DEFAULT_SEARCH_RADIUS = 30_000;
 	private static final int MAX_SEARCH_RADIUS = 50_000;
 
+	public static boolean findOldStructures = false;
 	public static boolean allowExcludeVisited = true;
 	public static int maxSearchRadius = DEFAULT_SEARCH_RADIUS;
 	public static boolean relockOnReload = false;
@@ -119,6 +121,7 @@ public class ExplorersCompassConfig {
 					|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
 					|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
 					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
+                    || common.get(SEARCH_SAVED_STRUCTURES) == null
                     || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 				common.remove("permissions.allowTeleport");
 				writeCommon(common);
@@ -220,6 +223,7 @@ public class ExplorersCompassConfig {
 		int radius = number(config, SEARCH_RADIUS, DEFAULT_SEARCH_RADIUS, 1);
 		if (radius > MAX_SEARCH_RADIUS) throw bad(SEARCH_RADIUS, "integer between 1 and " + MAX_SEARCH_RADIUS);
 		maxSearchRadius = radius;
+		findOldStructures = bool(config, SEARCH_SAVED_STRUCTURES, false);
 		compassSharing = bool(config, "unlocking.compassSharing", compassSharing);
 		visitsSharing = bool(config, "unlocking.visitsSharing", visitsSharing);
         opacPartySharing = bool(config, "unlocking.opacPartySharing", opacPartySharing);
@@ -290,6 +294,8 @@ public class ExplorersCompassConfig {
 		put(config, "unlocking.compassSharing", compassSharing, "Preserve located targets and unlock structures that the previous compass holder had unlocked when a different player gets hold of the compass.");
 		put(config, "unlocking.visitsSharing", visitsSharing, "Share temporary visit history in OPAC parties and copy saved visits on compass transfer when the respective sharing option is enabled.");
 		put(config, "search.allowExcludeVisited", allowExcludeVisited, "Allow players to exclude visited structure instances from searches. Visits are always recorded.");
+		put(config, SEARCH_SAVED_STRUCTURES, findOldStructures,
+                "Find existing structures saved under older world generation rules. Searches can be much slower in explored areas. Usually only needed if world or structure generation changed significantly through mods or datapacks after those chunks were generated.");
 		put(config, SEARCH_RADIUS, maxSearchRadius, "Maximum horizontal search radius in blocks (1 to 50000). Requires a restart to change.");
 		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");

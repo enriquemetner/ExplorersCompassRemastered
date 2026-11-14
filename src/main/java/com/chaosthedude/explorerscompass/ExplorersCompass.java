@@ -70,6 +70,7 @@ public class ExplorersCompass implements ModInitializer {
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents.LOAD.register((server, world) -> {
+            if (!ExplorersCompassConfig.findOldStructures) return;
             var worker = world.getChunkManager().threadedAnvilChunkStorage.getWorker();
             if (worker instanceof com.chaosthedude.explorerscompass.storage.EmptyChunkStorage backend) {
                 var index = com.chaosthedude.explorerscompass.storage.SavedStructureIndex.get(world);

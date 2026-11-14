@@ -44,7 +44,7 @@ public class SearchWorkerManager {
 			}
 		}
 
-        if (!savedStructures.isEmpty()) {
+        if (!placementToStructuresMap.isEmpty() || !savedStructures.isEmpty()) {
             StructureSearchWorker<?> worker = new NearestFirstSearchWorker(world, player, stack, startPos,
                     placementToStructuresMap, savedStructures, structureOrSetId, excludeVisited, id);
             worker.setCreativeBypass(creativeBypass);

@@ -37,8 +37,8 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
         super(world, player, stack, origin, null, List.of(), searchId, excludeVisited, managerId);
         queue = new NearestFirstQueue<>(origin.getX(), origin.getZ());
         boolean generate = !finished;
-        finished = false;
-        savedIndex = SavedStructureIndex.get(world);
+        if (!searchStructures.isEmpty()) finished = false;
+        savedIndex = searchStructures.isEmpty() ? null : SavedStructureIndex.get(world);
         for (Structure structure : searchStructures) {
             Identifier id = StructureUtils.getIDForStructure(world, structure);
             if (id == null) continue;
@@ -54,7 +54,7 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
                 maxZ = Math.max(maxZ, offset.getZ());
             }
         }
-        queue.addOverlappingGrid(512, 496 + maxX - minX, 496 + maxZ - minZ, minX, minZ, (x, z) -> {
+        if (savedIndex != null) queue.addOverlappingGrid(512, 496 + maxX - minX, 496 + maxZ - minZ, minX, minZ, (x, z) -> {
             addSavedRegion(x, z);
         });
         if (generate) placements.forEach((rule, structures) -> {
