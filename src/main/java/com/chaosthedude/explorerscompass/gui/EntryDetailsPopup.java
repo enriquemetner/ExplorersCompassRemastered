@@ -53,7 +53,7 @@ final class EntryDetailsPopup {
         details.add(new Detail("Name", StructureUtils.getStructureName(id), id.toString()));
         details.add(new Detail("Source", StructureUtils.getStructureSource(id), id.getNamespace()));
         Identifier set = ExplorersCompass.structureIDsToSetIDs.get(id);
-        details.add(new Detail("Set", StructureUtils.getStructureName(set), set == null ? null : set.toString()));
+        details.add(new Detail("Set", StructureUtils.formatIdPath(set), set == null ? null : set.toString()));
         List<Identifier> dimensions = ExplorersCompass.allowedStructureIDsToDimensionIDs.get(id);
         if (dimensions == null || dimensions.isEmpty()) {
             details.add(new Detail("Dimension", null, null));

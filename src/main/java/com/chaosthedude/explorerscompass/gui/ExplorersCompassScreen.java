@@ -921,7 +921,7 @@ public class ExplorersCompassScreen extends Screen {
 			filterOptions.get(1).add(new FilterOption(StructureUtils.getDimensionName(dimension), null, dimension, false));
 		}
 		for (Identifier set : sets) {
-			filterOptions.get(2).add(new FilterOption(StructureUtils.getStructureName(set), null, set, false));
+			filterOptions.get(2).add(new FilterOption(StructureUtils.formatIdPath(set), null, set, false));
 		}
 		Collator collator = englishCollator();
 		Comparator<FilterOption> alphabetical = Comparator.comparing((FilterOption option) -> option.label, collator)
@@ -1021,7 +1021,7 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		Identifier set = ExplorersCompass.structureIDsToSetIDs.get(entryFiltersId);
 		if (set != null) {
-			rows.add(new EntryFilterRow("Set:", StructureUtils.getStructureName(set), 2,
+			rows.add(new EntryFilterRow("Set:", StructureUtils.formatIdPath(set), 2,
 					new FilterOption("", null, set, false)));
 		}
 		return rows;
@@ -1368,12 +1368,23 @@ public class ExplorersCompassScreen extends Screen {
 		return option.current || "minecraft".equals(option.source) ? text.copy().formatted(Formatting.ITALIC) : text;
 	}
 
+	private Text currentDimensionSuffix(FilterOption option) {
+		return Text.literal(" (" + StructureUtils.getDimensionName(option.id) + ")").formatted(Formatting.GRAY);
+	}
+
 	private void drawFilterOptionLabel(DrawContext context, FilterOption option, int x, int rowY, int availableWidth) {
 		if (availableWidth <= 1) {
 			return;
 		}
 		Text label = filterOptionText(option, option.label);
 		int labelWidth = textRenderer.getWidth(label);
+		if (option.current) {
+			int y = rowY + (filterRowHeight() - textRenderer.fontHeight) / 2;
+			context.drawTextWithShadow(textRenderer, label, x, y, 0xffffff);
+			RenderUtils.drawTextToFit(context, textRenderer, currentDimensionSuffix(option),
+					x + labelWidth, y, availableWidth - labelWidth, 0xffffff);
+			return;
+		}
 		if (labelWidth <= availableWidth) {
 			context.drawTextWithShadow(textRenderer, label, x, rowY + (filterRowHeight() - textRenderer.fontHeight) / 2, 0xffffff);
 			return;
@@ -1398,8 +1409,10 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		int availableWidth = Math.max(0, filterColumnRight(column) - FILTER_CHECKBOX_SIZE - 7 - filterColumnLeft(column) - 9);
 		FilterOption option = options.get(index);
-		if (textRenderer.getWidth(filterOptionText(option, option.label)) > availableWidth) {
-			context.drawTooltip(textRenderer, filterOptionText(option, option.label), mouseX, mouseY);
+		var label = filterOptionText(option, option.label).copy();
+		if (option.current) label.append(currentDimensionSuffix(option));
+		if (textRenderer.getWidth(label) > availableWidth) {
+			context.drawTooltip(textRenderer, label, mouseX, mouseY);
 		}
 	}
 
@@ -2267,7 +2280,7 @@ public class ExplorersCompassScreen extends Screen {
         return List.of(
                 new FoundLine("Name: ", Text.literal(StructureUtils.getStructureName(foundStructureId))),
                 new FoundLine("Source: ", Text.literal(StructureUtils.getStructureSource(foundStructureId))),
-                new FoundLine("Set: ", Text.literal(StructureUtils.getStructureName(setId))));
+                new FoundLine("Set: ", Text.literal(StructureUtils.formatIdPath(setId))));
     }
 
     private List<FoundLine> foundLocationLines() {

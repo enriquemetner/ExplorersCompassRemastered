@@ -28,6 +28,7 @@ import net.minecraft.server.world.ServerWorld;
 import net.minecraft.structure.StructureSet;
 import net.minecraft.structure.StructureSet.WeightedEntry;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Language;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.biome.Biome;
@@ -152,6 +153,13 @@ public class StructureUtils {
 	}
 
 	public static String getStructureName(Identifier id) {
+		if (id == null) return "";
+		String key = "structure." + id.getNamespace() + "." + id.getPath().replace('/', '.');
+		Language language = Language.getInstance();
+		return language.hasTranslation(key) ? language.get(key) : formatIdPath(id);
+	}
+
+	public static String formatIdPath(Identifier id) {
 		if (id == null) {
 			return "";
 		}

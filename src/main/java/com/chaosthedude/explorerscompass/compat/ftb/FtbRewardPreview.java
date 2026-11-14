@@ -19,7 +19,7 @@ public record FtbRewardPreview(int totalCount, List<Identifier> structures) {
 
     public static FtbRewardPreview of(Set<Identifier> resolved) {
         return new FtbRewardPreview(resolved.size(), resolved.stream()
-                .sorted(Comparator.comparing(StructureUtils::getStructureName).thenComparing(Identifier::toString))
+                .sorted(Comparator.comparing(StructureUtils::formatIdPath).thenComparing(Identifier::toString))
                 .toList());
     }
 

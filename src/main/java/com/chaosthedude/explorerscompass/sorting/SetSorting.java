@@ -17,7 +17,7 @@ public class SetSorting implements ISorting {
 
 	@Override
 	public String getValue(Identifier id) {
-		return StructureUtils.getStructureName(ExplorersCompass.structureIDsToSetIDs.get(id));
+		return StructureUtils.formatIdPath(ExplorersCompass.structureIDsToSetIDs.get(id));
 	}
 
 	@Override

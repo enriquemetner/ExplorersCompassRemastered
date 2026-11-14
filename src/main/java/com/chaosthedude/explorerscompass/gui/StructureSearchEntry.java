@@ -86,7 +86,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int lineHeight = client.textRenderer.fontHeight + 2;
         drawDetail(context, "Source: ", StructureUtils.getStructureSource(structureID),
                 left + 5, nameY + lineHeight, textWidth, infoColor);
-        drawDetail(context, "Set: ", StructureUtils.getStructureName(getSetID()),
+        drawDetail(context, "Set: ", StructureUtils.formatIdPath(getSetID()),
                 left + 5, nameY + 2 * lineHeight, textWidth, infoColor);
         drawDetail(context, "Dimension: ",
                 StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)),
