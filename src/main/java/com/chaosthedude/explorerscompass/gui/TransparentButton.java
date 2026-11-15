@@ -25,11 +25,12 @@ public class TransparentButton extends ButtonWidget {
 	public void renderButton(DrawContext context, int mouseX, int mouseY, float partialTicks) {
 		if (visible) {
 			MinecraftClient mc = MinecraftClient.getInstance();
-			boolean held = mc.currentScreen instanceof ExplorersCompassScreen screen && screen.isButtonHeld(this, "widget");
-			int opacity = !active || held ? RenderUtils.DISABLED_BUTTON_OPACITY_PERCENT
-					: isHovered() ? RenderUtils.HIGHLIGHTED_BACKGROUND_OPACITY_PERCENT
-					: RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT;
+			int opacity = active ? RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT : RenderUtils.DISABLED_BUTTON_OPACITY_PERCENT;
 			context.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), RenderUtils.blackWithOpacity(opacity));
+			if (active && isHovered()) {
+				context.drawBorder(getX(), getY(), getWidth(), getHeight(),
+						RenderUtils.ROW_BUTTON_BORDER);
+			}
 			renderLabel(context, mc.textRenderer);
 		}
 	}

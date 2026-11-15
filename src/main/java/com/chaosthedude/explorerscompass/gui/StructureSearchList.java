@@ -353,7 +353,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 
     boolean hasPreviews() {
         var previews = parentScreen.jesThumbnails();
-        return previews != null && previews.available() && getRowWidth() >= JesThumbnails.SIZE + parentScreen.rowActionButtonWidth() + 6 + 42;
+        return previews != null && previews.available() && getRowWidth() >= 2 * JesThumbnails.SIZE + 42;
     }
 
     int previewX() {
@@ -373,7 +373,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
     }
 
     int rowActionWidth() {
-        return parentScreen.rowActionButtonWidth() + (hasPreviews() ? 6 : 0);
+        return hasPreviews() ? JesThumbnails.SIZE : parentScreen.rowActionButtonWidth();
     }
 
     int rowActionHeight() {

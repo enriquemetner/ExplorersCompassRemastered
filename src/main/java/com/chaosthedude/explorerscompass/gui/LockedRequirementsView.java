@@ -90,7 +90,7 @@ final class LockedRequirementsView {
                 Scrollbar.pixelThumbHeight(bodyHeight, maxScroll(), 12, 0), scroll, maxScroll());
     }
 
-    void render(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY, boolean held) {
+    void render(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY) {
         layout(screenWidth, screenHeight);
         context.getMatrices().push();
         context.getMatrices().translate(0, 0, 300);
@@ -123,10 +123,10 @@ final class LockedRequirementsView {
         // The thumb's transparent grip dots reveal the track color.
         scrollbar().render(context, BUTTON_BORDER, BUTTON_BACKGROUND);
         int buttonX = x + (width - 70) / 2;
-        renderPopupButton(context, buttonX, backTop(), Text.literal("Back"), mouseX, mouseY, held && questPopup == null);
+        renderPopupButton(context, buttonX, backTop(), Text.literal("Back"), mouseX, mouseY);
         context.getMatrices().pop();
         if (questPopup != null) {
-            renderQuestPopup(context, screenWidth, screenHeight, mouseX, mouseY, held);
+            renderQuestPopup(context, screenWidth, screenHeight, mouseX, mouseY);
         } else if (hoveredQuest != null) {
             context.drawTooltip(renderer, Text.translatable("gui.explorerscompass.open_quest_tooltip"), mouseX, mouseY);
         } else if (hoveredAdvancement != null) {
@@ -137,7 +137,6 @@ final class LockedRequirementsView {
         }
     }
 
-    Object buttonLayer() { return questPopup == null ? this : questPopup; }
 
     ButtonPress buttonAt(double mouseX, double mouseY, int screenWidth, int screenHeight, Runnable back) {
         layout(screenWidth, screenHeight);
@@ -226,7 +225,7 @@ final class LockedRequirementsView {
                 openX, openX + 76, title, message);
     }
 
-    private void renderQuestPopup(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY, boolean held) {
+    private void renderQuestPopup(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY) {
         PopupLayout p = popupLayout(screenWidth, screenHeight);
         context.getMatrices().push();
         context.getMatrices().translate(0, 0, 400);
@@ -243,17 +242,16 @@ final class LockedRequirementsView {
             context.drawText(renderer, line, p.x + 12, rowY, 0xffffff, true);
             rowY += lineHeight;
         }
-        renderPopupButton(context, p.openX, p.buttonY, Text.translatable("gui.explorerscompass.open"), mouseX, mouseY, held);
-        renderPopupButton(context, p.cancelX, p.buttonY, Text.translatable("gui.explorerscompass.cancel"), mouseX, mouseY, held);
+        renderPopupButton(context, p.openX, p.buttonY, Text.translatable("gui.explorerscompass.open"), mouseX, mouseY);
+        renderPopupButton(context, p.cancelX, p.buttonY, Text.translatable("gui.explorerscompass.cancel"), mouseX, mouseY);
         context.getMatrices().pop();
     }
 
-    private void renderPopupButton(DrawContext context, int buttonX, int buttonY, Text label, int mouseX, int mouseY, boolean held) {
+    private void renderPopupButton(DrawContext context, int buttonX, int buttonY, Text label, int mouseX, int mouseY) {
         boolean hovered = ButtonPress.contains(mouseX, mouseY, buttonX, buttonY, 70, 20);
-        boolean available = !(hovered && held);
-        context.fill(buttonX, buttonY, buttonX + 70, buttonY + 20, available ? BUTTON_BORDER : 0xff505050);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + 69, buttonY + 19, available && hovered ? 0xff424242 : BUTTON_BACKGROUND);
-        context.drawCenteredTextWithShadow(renderer, label, buttonX + 35, buttonY + 6, available ? 0xffffff : 0x808080);
+        context.fill(buttonX, buttonY, buttonX + 70, buttonY + 20, BUTTON_BORDER);
+        context.fill(buttonX + 1, buttonY + 1, buttonX + 69, buttonY + 19, hovered ? 0xff424242 : BUTTON_BACKGROUND);
+        context.drawCenteredTextWithShadow(renderer, label, buttonX + 35, buttonY + 6, 0xffffff);
     }
 
     private void clickQuestPopup(double mouseX, double mouseY, int screenWidth, int screenHeight) {

@@ -92,7 +92,7 @@ final class DisabledStructureView {
         return mouseX >= textX - 2 && mouseX < textX + renderer.getWidth(line.text) + 2 ? row : -1;
     }
 
-    void render(DrawContext context,int sw,int sh,int mx,int my,boolean held) {
+    void render(DrawContext context,int sw,int sh,int mx,int my) {
         int w=width(sw),h=height(sw,sh),x=(sw-w)/2,y=(sh-h)/2;
         var lines=lines(w-32);scroll=MathHelper.clamp(scroll,0,maxScroll(lines,h));
         context.getMatrices().push();context.getMatrices().translate(0,0,300);
@@ -108,20 +108,19 @@ final class DisabledStructureView {
         }
         context.disableScissor();
         scrollbar(x, y, w, h, lines).render(context, 0xff242424, 0xff909090);
-        if(single)button(context,hidden.getAsBoolean()?"Undo":"Hide",firstButtonX(x,w),y+h-30,buttonWidth(w),mx,my,held);
-        button(context,"Back",backButtonX(x,w),y+h-30,buttonWidth(w),mx,my,held);
+        if(single)button(context,hidden.getAsBoolean()?"Undo":"Hide",firstButtonX(x,w),y+h-30,buttonWidth(w),mx,my);
+        button(context,"Back",backButtonX(x,w),y+h-30,buttonWidth(w),mx,my);
         if(single&&!hidden.getAsBoolean()&&mx>=firstButtonX(x,w)&&mx<firstButtonX(x,w)+buttonWidth(w)
                 &&my>=y+h-30&&my<y+h-10) {
             context.drawOrderedTooltip(renderer,renderer.wrapLines(Text.literal(EntryDetailsPopup.HIDE_TOOLTIP),Math.max(1,Math.min(220,sw-30))),mx,my);
         }
         context.getMatrices().pop();
     }
-    private void button(DrawContext c, String text, int x, int y, int w, int mx, int my, boolean held) {
+    private void button(DrawContext c, String text, int x, int y, int w, int mx, int my) {
         boolean hovered = ButtonPress.contains(mx, my, x, y, w, 20);
-        boolean available = !(hovered && held);
-        c.fill(x, y, x + w, y + 20, available ? 0xff909090 : 0xff505050);
-        c.fill(x + 1, y + 1, x + w - 1, y + 19, available && hovered ? 0xff424242 : 0xff242424);
-        c.drawCenteredTextWithShadow(renderer, Text.literal(text), x + w / 2, y + 6, available ? 0xffffffff : 0xff808080);
+        c.fill(x, y, x + w, y + 20, 0xff909090);
+        c.fill(x + 1, y + 1, x + w - 1, y + 19, hovered ? 0xff424242 : 0xff242424);
+        c.drawCenteredTextWithShadow(renderer, Text.literal(text), x + w / 2, y + 6, 0xffffffff);
     }
 
     ButtonPress buttonAt(double mx, double my, int sw, int sh) {

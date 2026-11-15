@@ -11,6 +11,7 @@ import net.minecraft.text.Text;
 
 @Environment(EnvType.CLIENT)
 public class RenderUtils {
+	public static final int ROW_BUTTON_BORDER = 0xff909090;
 	public static final int NORMAL_BACKGROUND_OPACITY_PERCENT = 50;
 	public static final int HIGHLIGHTED_BACKGROUND_OPACITY_PERCENT = 75;
 	public static final int LOCKED_ENTRY_BACKGROUND_OPACITY_PERCENT = 65;
@@ -81,7 +82,9 @@ public class RenderUtils {
 		context.getMatrices().translate(x, 0, 0);
 		context.getMatrices().scale(0.5f, 1.0f, 1.0f);
 		context.fill(0, y, firstDot, y + 1, color);
+		context.fill(firstDot, y, firstDot + 2, y + 1, ROW_BUTTON_BORDER);
 		context.fill(firstDot + 2, y, secondDot, y + 1, color);
+		context.fill(secondDot, y, secondDot + 2, y + 1, ROW_BUTTON_BORDER);
 		context.fill(secondDot + 2, y, width * 2, y + 1, color);
 		context.getMatrices().pop();
 	}

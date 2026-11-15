@@ -156,9 +156,6 @@ public class ExplorersCompassScreen extends Screen {
 	private ItemStack stack;
 	private ExplorersCompassItem explorersCompass;
 	private enum ButtonLayer { STRUCTURES, FILTERS, SETTINGS, HIDDEN, SORT }
-	private ButtonPress pressedButton;
-	private Object pressedButtonLayer;
-	private ButtonPress hoveredPressedButton;
 	private ButtonWidget searchButton;
 	private ButtonWidget selectionToggleButton;
 	private boolean selectedOnly;
@@ -359,7 +356,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void removed() {
-		cancelButtonPress();
 		currentStructureRequest = null;
 		currentStructurePopup = null;
 		clearCurrentStructureReveal();
@@ -422,7 +418,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	protected void init() {
-		cancelButtonPress();
 		boolean firstOpen = selectionList == null;
 		double scroll = firstOpen ? 0 : selectionList.getScrollAmount();
 		if (searchTextField != null) sessionSearchText = searchTextField.getText();
@@ -448,7 +443,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void tick() {
-		validateButtonPress();
         if ((dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_XP) && System.currentTimeMillis() - dialogStarted >= 3000) {
 			dialog = Dialog.NONE;
 			focusActiveSearchField();
@@ -535,9 +529,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void render(DrawContext context, int mouseX, int mouseY, float partialTicks) {
-        validateButtonPress();
-        ButtonPress hovered = pressedButton == null ? null : buttonAt(mouseX, mouseY);
-        hoveredPressedButton = pressedButton != null && pressedButton.matches(hovered) ? hovered : null;
         // Covered layers still draw, but only the top layer gets the pointer.
         final int offscreen = -10000;
         boolean dialogExposed = entryDetails == null && currentStructurePopup == null;
@@ -550,8 +541,8 @@ public class ExplorersCompassScreen extends Screen {
         if (dialog != Dialog.NONE && (dialog != Dialog.SEARCHING || searchConfirmed)) {
             renderSearchDialog(context, dialogExposed ? mouseX : offscreen, dialogExposed ? mouseY : offscreen);
         }
-        if (entryDetails != null) entryDetails.render(context, width, height, mouseX, mouseY, hoveredPressedButton != null);
-        if (currentStructurePopup != null) currentStructurePopup.render(context, width, height, mouseX, mouseY, hoveredPressedButton != null);
+        if (entryDetails != null) entryDetails.render(context, width, height, mouseX, mouseY);
+        if (currentStructurePopup != null) currentStructurePopup.render(context, width, height, mouseX, mouseY);
     }
 
     private void renderPage(DrawContext context, int mouseX, int mouseY, float partialTicks) {
@@ -1119,7 +1110,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void renderCrossIcon(DrawContext context, ButtonWidget button) {
-		int color = button.active && !isButtonHeld(button, "widget") ? 0xffffffff : 0xff909090;
+		int color = button.active ? 0xffffffff : 0xff909090;
 		context.getMatrices().push();
 		context.getMatrices().translate(
 				button.getX() + (button.getWidth() - BUTTON_CROSS_SIZE) / 2.0,
@@ -1421,37 +1412,6 @@ public class ExplorersCompassScreen extends Screen {
 		}
 	}
 
-	private Object buttonLayer() {
-		if (currentStructurePopup != null) return currentStructurePopup;
-		if (entryDetails != null) return entryDetails;
-		if (dialog == Dialog.DISABLED) return disabledView;
-		if (entryFiltersId != null) return entryFiltersId;
-		if (sortMenuOpen) return ButtonLayer.SORT;
-		if (dialog == Dialog.LOCKED) return lockedRequirementsView.buttonLayer();
-		if (dialog != Dialog.NONE) return dialog;
-		if (hiddenStructuresOpen) return ButtonLayer.HIDDEN;
-		if (settingsOpen) return ButtonLayer.SETTINGS;
-		return filtersOpen ? ButtonLayer.FILTERS : ButtonLayer.STRUCTURES;
-	}
-
-	boolean isButtonHeld(Object owner, Object key) {
-		return hoveredPressedButton != null && hoveredPressedButton.owner() == owner && hoveredPressedButton.key().equals(key);
-	}
-
-	private void cancelButtonPress() {
-		pressedButton = null;
-		pressedButtonLayer = null;
-		hoveredPressedButton = null;
-	}
-
-	private void validateButtonPress() {
-		if (pressedButton == null) return;
-		if (!client.isWindowFocused() || pressedButtonLayer != buttonLayer()
-				|| (pressedButton.owner() instanceof TransparentButton widget && (!widget.active || !widget.visible))) {
-			cancelButtonPress();
-		}
-	}
-
 	private ButtonPress buttonAt(double mouseX, double mouseY) {
 		if (currentStructurePopup != null) return currentStructurePopup.buttonAt(mouseX, mouseY, width, height);
 		if (entryDetails != null) return entryDetails.buttonAt(mouseX, mouseY, width, height);
@@ -1527,12 +1487,16 @@ public class ExplorersCompassScreen extends Screen {
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (button == 0) {
-			cancelButtonPress();
 			ButtonPress hit = buttonAt(mouseX, mouseY);
 			if (hit != null) {
-				pressedButton = hit;
-				pressedButtonLayer = buttonLayer();
 				selectionList.resetDoubleClick();
+				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+				hit.action().run();
+				if (client.currentScreen == this) {
+					refreshSelectedOnlyRows();
+					updateSearchButtons();
+					if (dialog == Dialog.NONE && entryFiltersId == null && !sortMenuOpen) focusActiveSearchField();
+				}
 				return true;
 			}
 		}
@@ -1647,7 +1611,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-		if (pressedButton != null && button == 0) return true;
         if (dialog == Dialog.DISABLED) { disabledView.drag(mouseY, width, height); return true; }
 		if (currentStructurePopup != null) { currentStructurePopup.drag(mouseY, width, height); return true; }
 		if (entryDetails != null) { entryDetails.drag(mouseY, width, height); return true; }
@@ -1675,22 +1638,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
-		if (pressedButton != null && button == 0) {
-			validateButtonPress();
-			ButtonPress hit = pressedButton == null ? null : buttonAt(mouseX, mouseY);
-			boolean activate = pressedButton != null && pressedButton.matches(hit);
-			cancelButtonPress();
-			if (activate) {
-				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
-				hit.action().run();
-				if (client.currentScreen == this) {
-					refreshSelectedOnlyRows();
-					updateSearchButtons();
-					if (dialog == Dialog.NONE && entryFiltersId == null && !sortMenuOpen) focusActiveSearchField();
-				}
-			}
-			return true;
-		}
         if (dialog == Dialog.DISABLED) { disabledView.release(); return true; }
 		if (currentStructurePopup != null) { currentStructurePopup.release(); return true; }
 		if (entryDetails != null) { entryDetails.release(); return true; }
@@ -1717,7 +1664,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean keyPressed(int par1, int par2, int par3) {
-		if (par1 == 256) cancelButtonPress();
 		if (currentStructurePopup != null) {
 			if (par1 == 256) closeCurrentStructurePopup();
 			return true;
@@ -2374,10 +2320,9 @@ public class ExplorersCompassScreen extends Screen {
 
     private void drawDialogButton(DrawContext context, String label, int x, int y, int w, int mouseX, int mouseY) {
         boolean hovered = ButtonPress.contains(mouseX, mouseY, x, y, w, 20);
-        boolean available = !(hovered && hoveredPressedButton != null);
-        context.fill(x, y, x + w, y + 20, available ? 0xff909090 : 0xff505050);
-        context.fill(x + 1, y + 1, x + w - 1, y + 19, available && hovered ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(textRenderer, label, x + w / 2, y + 6, available ? 0xffffff : 0xff808080);
+        context.fill(x, y, x + w, y + 20, 0xff909090);
+        context.fill(x + 1, y + 1, x + w - 1, y + 19, hovered ? 0xff424242 : 0xff242424);
+        context.drawCenteredTextWithShadow(textRenderer, label, x + w / 2, y + 6, 0xffffff);
     }
 
     private void drawQuestionTooltip(DrawContext context, String message, int mouseX, int mouseY) {
@@ -2448,9 +2393,9 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private void renderSearchDialog(DrawContext context, int mouseX, int mouseY) {
-        if (dialog == Dialog.DISABLED) { disabledView.render(context,width,height,mouseX,mouseY,hoveredPressedButton != null); return; }
+        if (dialog == Dialog.DISABLED) { disabledView.render(context,width,height,mouseX,mouseY); return; }
         if (dialog == Dialog.LOCKED) {
-            lockedRequirementsView.render(context, width, height, mouseX, mouseY, hoveredPressedButton != null);
+            lockedRequirementsView.render(context, width, height, mouseX, mouseY);
             return;
         }
         int w = dialogWidth(), x = dialogX(), y = dialogY(), h = dialogHeight();
@@ -2729,7 +2674,7 @@ public class ExplorersCompassScreen extends Screen {
 				int size = CLEAR_FILTERS_ICON_SIZE;
 				int iconX = getX() + (getWidth() - size) / 2;
 				int iconY = getY() + (getHeight() - size) / 2;
-				float brightness = active && !isButtonHeld(this, "widget") ? 1.0f : 144 / 255.0f;
+				float brightness = active ? 1.0f : 144 / 255.0f;
 				context.setShaderColor(brightness, brightness, brightness, 1.0f);
 				context.drawTexture(CLEAR_FILTERS_ICON, iconX, iconY, 0, 0, size, size, size, size);
 				context.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -2747,10 +2692,8 @@ public class ExplorersCompassScreen extends Screen {
 		}) {
 			@Override
 			protected void renderLabel(DrawContext context, net.minecraft.client.font.TextRenderer renderer) {
-				if (selectedOnly) {
-					int border = !active || isButtonHeld(this, "widget") ? 0x33ffffff
-							: isHovered() ? 0x40ffffff : 0x80ffffff;
-					context.drawBorder(getX(), getY(), getWidth(), getHeight(), border);
+				if (selectedOnly && !isHovered()) {
+					context.drawBorder(getX(), getY(), getWidth(), getHeight(), 0xffffffff);
 				}
 				String label = getMessage().getString();
 				float scale = Math.min(1f, (getWidth() - 2f) / renderer.getWidth(label));

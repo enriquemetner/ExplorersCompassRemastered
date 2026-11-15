@@ -65,7 +65,7 @@ final class CurrentStructurePopup {
                 Scrollbar.pixelThumbHeight(track, maxScroll(layout), 12, 0), scroll, maxScroll(layout));
     }
 
-    void render(DrawContext context, int width, int height, int mouseX, int mouseY, boolean held) {
+    void render(DrawContext context, int width, int height, int mouseX, int mouseY) {
         Layout box = layout(width, height);
         scroll = MathHelper.clamp(scroll, 0, maxScroll(box));
         context.getMatrices().push();
@@ -89,10 +89,10 @@ final class CurrentStructurePopup {
                 int x = box.x + 8;
                 boolean hovered = mouseY >= box.top() && mouseY < box.bottom()
                         && ButtonPress.contains(mouseX, mouseY, x, y, box.rowWidth(), ROW_HEIGHT - 2);
-                drawButton(context, x, y, box.rowWidth(), ROW_HEIGHT - 2, hovered, held);
+                drawButton(context, x, y, box.rowWidth(), ROW_HEIGHT - 2, hovered);
                 Identifier id = matches.get(i);
                 RenderUtils.drawTextToFit(context, font, Text.literal(StructureUtils.getStructureName(id)),
-                        x + 4, y + 3, box.rowWidth() - 8, hovered && held ? 0x808080 : 0xffffff);
+                        x + 4, y + 3, box.rowWidth() - 8, 0xffffff);
                 RenderUtils.drawTextToFit(context, font, Text.literal(id.toString()),
                         x + 4, y + 13, box.rowWidth() - 8, 0xaaaaaa);
             }
@@ -100,15 +100,15 @@ final class CurrentStructurePopup {
             scrollbar(box).render(context, 0xff242424, 0xff909090);
         }
         boolean backHovered = ButtonPress.contains(mouseX, mouseY, box.backX(), box.backY(), BACK_WIDTH, 20);
-        drawButton(context, box.backX(), box.backY(), BACK_WIDTH, 20, backHovered, held);
+        drawButton(context, box.backX(), box.backY(), BACK_WIDTH, 20, backHovered);
         context.drawCenteredTextWithShadow(font, "Back", width / 2, box.backY() + 6,
-                backHovered && held ? 0x808080 : 0xffffff);
+                0xffffff);
         context.getMatrices().pop();
     }
 
-    private static void drawButton(DrawContext context, int x, int y, int w, int h, boolean hovered, boolean held) {
-        context.fill(x, y, x + w, y + h, hovered && held ? 0xff505050 : 0xff909090);
-        context.fill(x + 1, y + 1, x + w - 1, y + h - 1, hovered && !held ? 0xff424242 : 0xff242424);
+    private static void drawButton(DrawContext context, int x, int y, int w, int h, boolean hovered) {
+        context.fill(x, y, x + w, y + h, 0xff909090);
+        context.fill(x + 1, y + 1, x + w - 1, y + h - 1, hovered ? 0xff424242 : 0xff242424);
     }
 
     ButtonPress buttonAt(double x, double y, int width, int height) {

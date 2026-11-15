@@ -93,7 +93,7 @@ final class EntryDetailsPopup {
                 Scrollbar.pixelThumbHeight(track, maxScroll(layout), 12, 0), scroll, maxScroll(layout));
     }
 
-    void render(DrawContext context, int width, int height, int mouseX, int mouseY, boolean held) {
+    void render(DrawContext context, int width, int height, int mouseX, int mouseY) {
         Layout layout = layout(width, height);
         scroll = MathHelper.clamp(scroll, 0, maxScroll(layout));
         context.getMatrices().push();
@@ -113,7 +113,7 @@ final class EntryDetailsPopup {
             int readableWidth = technicalWidth;
             drawLine(context, detail.readableLine(), textX, rowY + 4, readableWidth, 0xffffff);
             drawLine(context, detail.technicalLine(), textX, technicalY, technicalWidth, 0xaaaaaa);
-            drawButton(context, "Copy", layout.copyX(), technicalY - 4, copyWidth, COPY_HEIGHT, mouseX, mouseY, detail.canCopy(), held && mouseY >= layout.top && mouseY < layout.bottom);
+            drawButton(context, "Copy", layout.copyX(), technicalY - 4, copyWidth, COPY_HEIGHT, mouseX, mouseY, detail.canCopy());
             if (mouseY >= layout.top && mouseY < layout.bottom) {
                 if (textHovered(detail.readableLine(), textX, rowY + 4, readableWidth, mouseX, mouseY)) hoveredText = detail.readableLine();
                 if (textHovered(detail.technicalLine(), textX, technicalY, technicalWidth, mouseX, mouseY)) hoveredText = detail.technicalLine();
@@ -121,8 +121,8 @@ final class EntryDetailsPopup {
         }
         context.disableScissor();
         scrollbar(layout).render(context, 0xff242424, 0xff909090);
-        drawButton(context, hidden.getAsBoolean() ? "Undo" : "Hide", layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true, held);
-        drawButton(context, "Back", layout.backX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true, held);
+        drawButton(context, hidden.getAsBoolean() ? "Undo" : "Hide", layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true);
+        drawButton(context, "Back", layout.backX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true);
         if (!hidden.getAsBoolean() && inside(mouseX, mouseY, layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20)) {
             context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(HIDE_TOOLTIP), Math.min(220, width - 30)), mouseX, mouseY);
         } else if (hoveredText != null) {
@@ -142,9 +142,9 @@ final class EntryDetailsPopup {
     }
 
     private void drawButton(DrawContext context, String label, int x, int y, int width, int height,
-                            int mouseX, int mouseY, boolean enabled, boolean held) {
+                            int mouseX, int mouseY, boolean enabled) {
         boolean hovered = inside(mouseX, mouseY, x, y, width, height);
-        boolean available = enabled && !(held && hovered);
+        boolean available = enabled;
         context.fill(x, y, x + width, y + height, available ? 0xff909090 : 0xff505050);
         context.fill(x + 1, y + 1, x + width - 1, y + height - 1,
                 available && hovered ? 0xff424242 : 0xff242424);

@@ -21,8 +21,6 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 	private static final Identifier LOCK_TEXTURE = new Identifier(ExplorersCompass.MODID, "textures/gui/lock.png");
 
 	private static final String[] PARTY_LABEL = {"Unlocked", "through", "party"};
-	private static final int ACTION_BORDER = 0xff909090;
-	private static final int HELD_ACTION_BORDER = 0xff505050;
 
 	private final MinecraftClient client;
 	private final ExplorersCompassScreen parentScreen;
@@ -49,15 +47,14 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
             int y = structuresList.previewY(top, height);
             int size = JesThumbnails.SIZE;
             boolean previewHovered = hovered && ButtonPress.contains(mouseX, mouseY, x, y, size, size);
-            boolean previewHeld = parentScreen.isButtonHeld(this, "jesPreview");
-            context.fill(x, y, x + size, y + size, actionBackground(previewHovered, previewHeld));
+            context.fill(x, y, x + size, y + size, actionBackground(previewHovered));
             var previews = parentScreen.jesThumbnails();
             if (!previews.draw(context, structureID, x, y)) {
                 String label = previews.thumbnailUnavailable(structureID) ? "N/A" : "...";
                 context.drawCenteredTextWithShadow(client.textRenderer, label, x + size / 2,
                         y + (size - client.textRenderer.fontHeight) / 2, 0xaaaaaa);
             }
-            context.drawBorder(x, y, size, size, ACTION_BORDER);
+            context.drawBorder(x, y, size, size, RenderUtils.ROW_BUTTON_BORDER);
         }
         int buttonHeight = structuresList.rowActionHeight();
         int labelOffset = (buttonHeight - 8) / 2;
@@ -69,12 +66,11 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int textWidth = Math.max(1, textRight - left - 10);
         if (partyUnlocked) {
             int panelWidth = partyLabelWidth();
-            boolean held = parentScreen.isButtonHeld(this, "partyRequirements");
             context.fill(textRight, buttonY, textRight + panelWidth, buttonY + actionsHeight,
                     RenderUtils.blackWithOpacity(RenderUtils.LOCKED_ENTRY_BACKGROUND_OPACITY_PERCENT));
             int x = textRight + panelWidth / 2;
             int y = buttonY + (actionsHeight - PARTY_LABEL.length * client.textRenderer.fontHeight) / 2;
-            int color = held ? 0x808080 : 0xffffff;
+            int color = 0xffffff;
             for (String line : PARTY_LABEL) {
                 context.drawCenteredTextWithShadow(client.textRenderer, line, x, y, color);
                 y += client.textRenderer.fontHeight;
@@ -92,17 +88,15 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
                 StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)),
                 left + 5, nameY + 3 * lineHeight, textWidth, infoColor);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
-        boolean filterHeld = parentScreen.isButtonHeld(this, "filters");
         buttonY = structuresList.rowActionY(top, height, true);
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, filterHeld ? HELD_ACTION_BORDER : ACTION_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(filterHovered, filterHeld));
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Filters"), buttonX + buttonWidth / 2, buttonY + labelOffset, filterHeld ? 0x808080 : 0xffffff);
+        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, RenderUtils.ROW_BUTTON_BORDER);
+        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(filterHovered));
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Filters"), buttonX + buttonWidth / 2, buttonY + labelOffset, 0xffffff);
         buttonY = structuresList.rowActionY(top, height, false);
         boolean buttonHovered = structuresList.isActionButtonClick(this, mouseX, mouseY);
-        boolean moreHeld = parentScreen.isButtonHeld(this, "more");
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, moreHeld ? HELD_ACTION_BORDER : ACTION_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(buttonHovered, moreHeld));
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("More"), buttonX + buttonWidth / 2, buttonY + labelOffset, moreHeld ? 0x808080 : 0xffffff);
+        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, RenderUtils.ROW_BUTTON_BORDER);
+        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(buttonHovered));
+        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("More"), buttonX + buttonWidth / 2, buttonY + labelOffset, 0xffffff);
 		if (locked) {
 			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 			RenderSystem.enableBlend();
@@ -121,8 +115,8 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         RenderUtils.drawTextToFit(context, client.textRenderer, Text.literal(value), x + labelWidth, y, width - labelWidth, color);
     }
 
-    private static int actionBackground(boolean hovered, boolean held) {
-        return hovered && !held ? 0xff424242 : 0xff242424;
+    private static int actionBackground(boolean hovered) {
+        return hovered ? 0xff424242 : 0xff242424;
     }
 
     int partyLabelWidth() {
