@@ -1,12 +1,26 @@
 package com.chaosthedude.explorerscompass.gui;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import net.minecraft.util.Identifier;
 
 record StructureSearchQuery(String source, String dimension, String set, String phrase, String[] fragments) {
     private static final Pattern TOKEN = Pattern.compile("\\S+");
+
+    static List<StructureSearchQuery> parseAlternatives(String query, boolean anyOrder) {
+        List<StructureSearchQuery> alternatives = new ArrayList<>();
+        boolean hasQuery = false;
+        for (String segment : query.split(";")) {
+            if (segment.isBlank()) continue;
+            hasQuery = true;
+            StructureSearchQuery alternative = parse(segment, anyOrder);
+            if (alternative != null) alternatives.add(alternative);
+        }
+        return hasQuery ? alternatives : List.of(parse("", anyOrder));
+    }
 
     static StructureSearchQuery parse(String query, boolean anyOrder) {
         query = query.strip().toLowerCase(Locale.ROOT);

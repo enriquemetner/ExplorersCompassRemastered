@@ -2627,8 +2627,8 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		structureIDsMatchingSearch = new ArrayList<Identifier>();
 		String searchTerm = searchTextField.getText().toLowerCase(Locale.ROOT);
-		var query = StructureSearchQuery.parse(searchTerm, ExplorersCompassConfig.matchSearchWordsInAnyOrder);
-		if (query == null && navigationTarget == null) {
+		var queries = StructureSearchQuery.parseAlternatives(searchTerm, ExplorersCompassConfig.matchSearchWordsInAnyOrder);
+		if (queries.isEmpty() && navigationTarget == null) {
 			selectionList.refreshList(preserveUnchangedResults);
 			return;
 		}
@@ -2639,9 +2639,10 @@ public class ExplorersCompassScreen extends Screen {
 			if (!passesStructureVisibility(id) || !FilterSelections.matches(id)) {
 				continue;
 			}
-			if (query != null && query.matches(id, StructureUtils.getStructureName(id),
+			String name = StructureUtils.getStructureName(id);
+			if (queries.stream().anyMatch(query -> query.matches(id, name,
 					ExplorersCompass.allowedStructureIDsToDimensionIDs.get(id),
-					ExplorersCompass.structureIDsToSetIDs.get(id), ExplorersCompassConfig.allowIdSearches)) {
+					ExplorersCompass.structureIDsToSetIDs.get(id), ExplorersCompassConfig.allowIdSearches))) {
 				structureIDsMatchingSearch.add(id);
 			}
 		}
