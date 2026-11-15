@@ -123,6 +123,7 @@ public class ExplorersCompassConfig {
 		try {
 			archiveLegacyConfig();
 			ensureServerDefaults();
+			loadServerFiles(directory().resolve(SERVER_SETTINGS), directory().resolve(BLACKLIST), directory().resolve(WHITELIST));
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
 				Files.createDirectories(directory().resolve("client"));
@@ -178,31 +179,34 @@ public class ExplorersCompassConfig {
 	public static void loadServer(net.minecraft.server.MinecraftServer server) {
 		try {
 			ensureServerDefaults();
-			Path commonFile = serverConfigFile(server, SERVER_SETTINGS);
-			Path blacklistFile = serverConfigFile(server, BLACKLIST);
-			CommentedConfig common = parse(commonFile);
-			loadCommon(common);
-			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
-					|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
-					|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
-					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
-                    || common.get(SEARCH_SAVED_STRUCTURES) == null || common.get("compass.showNetherEquivalent") == null
-                    || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
-				common.remove("permissions.allowTeleport");
-				writeCommon(common);
-				write(commonFile, common);
-			}
-			structureWhitelist = strings(parse(serverConfigFile(server, WHITELIST)), "structureWhitelist", List.of());
-			CommentedConfig blacklist = parse(blacklistFile);
-			structureBlacklist = strings(blacklist, "structureBlacklist", List.of());
-			String comment = blacklist.getComment("structureBlacklist");
-			if (comment == null || !comment.contains(WHITELIST_PRECEDENCE)) {
-				if (comment == null) writeCommonBlacklist(blacklist);
-				else blacklist.setComment("structureBlacklist", comment + "\n" + WHITELIST_PRECEDENCE);
-				write(blacklistFile, blacklist);
-			}
+			loadServerFiles(serverConfigFile(server, SERVER_SETTINGS), serverConfigFile(server, BLACKLIST),
+					serverConfigFile(server, WHITELIST));
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass server configuration", e);
+		}
+	}
+
+	private static void loadServerFiles(Path commonFile, Path blacklistFile, Path whitelistFile) throws IOException {
+		CommentedConfig common = parse(commonFile);
+		loadCommon(common);
+		if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
+				|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
+				|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
+				|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
+                    || common.get(SEARCH_SAVED_STRUCTURES) == null || common.get("compass.showNetherEquivalent") == null
+                    || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
+			common.remove("permissions.allowTeleport");
+			writeCommon(common);
+			write(commonFile, common);
+		}
+		structureWhitelist = strings(parse(whitelistFile), "structureWhitelist", List.of());
+		CommentedConfig blacklist = parse(blacklistFile);
+		structureBlacklist = strings(blacklist, "structureBlacklist", List.of());
+		String comment = blacklist.getComment("structureBlacklist");
+		if (comment == null || !comment.contains(WHITELIST_PRECEDENCE)) {
+			if (comment == null) writeCommonBlacklist(blacklist);
+			else blacklist.setComment("structureBlacklist", comment + "\n" + WHITELIST_PRECEDENCE);
+			write(blacklistFile, blacklist);
 		}
 	}
 
