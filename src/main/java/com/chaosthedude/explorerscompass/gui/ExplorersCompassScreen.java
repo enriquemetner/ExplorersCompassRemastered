@@ -97,6 +97,7 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SETTINGS_TELEPORT_ROW = 17;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
+	private String lastSearchFieldText;
 	private static final int SEARCH_DIALOG_WIDTH = 245;
 	private static final int SEARCH_DIALOG_HEIGHT = 119;
 	private static final int SEARCH_DIALOG_TITLE_Y = 32;
@@ -2612,19 +2613,23 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	public void processSearchTerm() {
+		processSearchTerm(false);
+	}
+
+	private void processSearchTerm(boolean preserveUnchangedResults) {
 		availableFilterOptions = null;
 		structureSelection.retain(id -> !isHiddenFromStructureList(id) || pendingHiddenStructures.contains(id));
 		if (structureSelection.isEmpty()) showNormalResults();
 		if (selectedOnly) {
 			structureIDsMatchingSearch = structureSelection.ids();
-			selectionList.refreshList();
+			selectionList.refreshList(preserveUnchangedResults);
 			return;
 		}
 		structureIDsMatchingSearch = new ArrayList<Identifier>();
 		String searchTerm = searchTextField.getText().toLowerCase(Locale.ROOT);
 		var query = StructureSearchQuery.parse(searchTerm, ExplorersCompassConfig.matchSearchWordsInAnyOrder);
 		if (query == null && navigationTarget == null) {
-			selectionList.refreshList();
+			selectionList.refreshList(preserveUnchangedResults);
 			return;
 		}
 		for (Identifier id : allowedStructureIDs) {
@@ -2640,7 +2645,7 @@ public class ExplorersCompassScreen extends Screen {
 				structureIDsMatchingSearch.add(id);
 			}
 		}
-		selectionList.refreshList();
+		selectionList.refreshList(preserveUnchangedResults);
 	}
 
 	public List<Identifier> sortStructures() {
@@ -2901,11 +2906,14 @@ public class ExplorersCompassScreen extends Screen {
 		int availableWidth = Math.max(1, cancelButton.getX() - searchX - HEADER_GAP);
 		searchTextField = new TransparentTextField(textRenderer, searchX, 10, availableWidth, 20, Text.literal("Search"));
 		searchTextField.setText(sessionSearchText);
+		lastSearchFieldText = searchTextField.getText();
 		searchTextField.setChangedListener(value -> {
+			if (value.equals(lastSearchFieldText)) return;
+			lastSearchFieldText = value;
 			clearCurrentStructureReveal();
 			showNormalResults();
             if (navigationTarget != null && !value.equals(StructureUtils.getStructureName(navigationTarget))) navigationTarget = null;
-			processSearchTerm();
+			processSearchTerm(true);
 		});
 		addDrawableChild(searchTextField);
 		searchTextField.setVisible(isStructureView());

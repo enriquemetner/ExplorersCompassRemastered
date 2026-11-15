@@ -220,9 +220,18 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	}
 
     public void refreshList() {
+        refreshList(false);
+    }
+
+    void refreshList(boolean preserveUnchangedResults) {
+        List<Identifier> results = parentScreen.sortStructures();
+        if (preserveUnchangedResults
+                && results.equals(children().stream().map(StructureSearchEntry::getStructureID).toList())) {
+            return;
+        }
         clearEntries();
         lastPlainClick = null;
-        for (Identifier id : parentScreen.sortStructures()) addEntry(new StructureSearchEntry(this, id));
+        for (Identifier id : results) addEntry(new StructureSearchEntry(this, id));
         setScrollAmount(0);
     }
 

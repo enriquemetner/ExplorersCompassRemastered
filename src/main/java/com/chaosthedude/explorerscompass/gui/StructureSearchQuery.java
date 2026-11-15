@@ -9,7 +9,7 @@ record StructureSearchQuery(String source, String dimension, String set, String 
     private static final Pattern TOKEN = Pattern.compile("\\S+");
 
     static StructureSearchQuery parse(String query, boolean anyOrder) {
-        query = query.toLowerCase(Locale.ROOT);
+        query = query.strip().toLowerCase(Locale.ROOT);
         var tokens = TOKEN.matcher(query);
         String source = null, dimension = null, set = null;
         int firstPlain = -1;
