@@ -89,11 +89,12 @@ public class ExplorersCompassScreen extends Screen {
 	private static final String SETTINGS_RESET_ALL_LABEL = "All";
 	private static final int SETTINGS_OFFSET_ROW = 2;
 	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 12;
-	private static final int SETTINGS_HIDDEN_ROW = 18;
+	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 13;
+	private static final int SETTINGS_HIDDEN_ROW = 19;
 	private static final String HIDDEN_STRUCTURES_TITLE = "Hidden Structures";
-	private static final int SETTINGS_PAUSE_ROW = 14;
-	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 15;
-	private static final int SETTINGS_TELEPORT_ROW = 16;
+	private static final int SETTINGS_PAUSE_ROW = 15;
+	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 16;
+	private static final int SETTINGS_TELEPORT_ROW = 17;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
 	private static final int SEARCH_DIALOG_WIDTH = 245;
@@ -116,6 +117,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Clear Search Bar on Close",
 		"Allow ID Searches",
 		"Show Only Matching Filter Options",
+		"Match Search Words in Any Order",
 		"Singleplayer & Creative",
 		"Pause Game When Open",
 		"Unlock All Structures in Creative",
@@ -137,6 +139,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Clears the search bar when you close the compass screen.",
 		"Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.",
 		"Show unchecked sources, dimensions, and structure sets only when they match at least one structure with the filters in the other columns. Checked options stay available so you can uncheck them.",
+		"Match every part of your search in any order, like in Settings.\nExample: 'Plains Village' or 'vil pl' match 'Village Plains'.",
 		null,
 		"Pauses singleplayer while the compass screen is open, except while locating a structure. Searches need the game to keep ticking to make progress.",
 		"Temporarily unlock all structures while in Creative mode. Changing the mode back relocks previously locked structures.",
@@ -168,6 +171,7 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget chatOverlayButton;
 	private ButtonWidget allowIdSearchesButton;
 	private ButtonWidget showOnlyMatchingFilterOptionsButton;
+	private ButtonWidget matchSearchWordsButton;
 	private ButtonWidget overlaySideButton;
 	private ButtonWidget clearOnCloseButton;
 	private ButtonWidget clearSearchBarOnCloseButton;
@@ -1253,6 +1257,7 @@ public class ExplorersCompassScreen extends Screen {
 	private void updateSettingsButtonLabels() {
 		chatOverlayButton.setMessage(onOff(ExplorersCompassConfig.displayWithChatOpen));
 		allowIdSearchesButton.setMessage(onOff(ExplorersCompassConfig.allowIdSearches));
+		matchSearchWordsButton.setMessage(onOff(ExplorersCompassConfig.matchSearchWordsInAnyOrder));
 		showOnlyMatchingFilterOptionsButton.setMessage(onOff(ExplorersCompassConfig.showOnlyMatchingFilterOptions));
 		clearOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearFiltersOnClose));
 		clearSearchBarOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearSearchBarOnClose));
@@ -2672,6 +2677,11 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		structureIDsMatchingSearch = new ArrayList<Identifier>();
 		String searchTerm = searchTextField.getText().toLowerCase(Locale.ROOT);
+		var query = StructureSearchQuery.parse(searchTerm, ExplorersCompassConfig.matchSearchWordsInAnyOrder);
+		if (query == null && navigationTarget == null) {
+			selectionList.refreshList();
+			return;
+		}
 		for (Identifier id : allowedStructureIDs) {
             if (id.equals(navigationTarget) && searchTerm.equals(StructureUtils.getStructureName(id).toLowerCase(Locale.ROOT))) {
                 structureIDsMatchingSearch.add(id);continue;
@@ -2679,14 +2689,9 @@ public class ExplorersCompassScreen extends Screen {
 			if (!passesStructureVisibility(id) || !FilterSelections.matches(id)) {
 				continue;
 			}
-			if (searchTerm.startsWith("@")) {
-				if (StructureUtils.getStructureSource(id).toLowerCase(Locale.ROOT).contains(searchTerm.substring(1))
-						|| (ExplorersCompassConfig.allowIdSearches
-								&& id.getNamespace().toLowerCase(Locale.ROOT).contains(searchTerm.substring(1)))) {
-					structureIDsMatchingSearch.add(id);
-				}
-			} else if (StructureUtils.getStructureName(id).toLowerCase(Locale.ROOT).contains(searchTerm)
-					|| (ExplorersCompassConfig.allowIdSearches && id.toString().toLowerCase(Locale.ROOT).contains(searchTerm))) {
+			if (query != null && query.matches(id, StructureUtils.getStructureName(id),
+					ExplorersCompass.allowedStructureIDsToDimensionIDs.get(id),
+					ExplorersCompass.structureIDsToSetIDs.get(id), ExplorersCompassConfig.allowIdSearches)) {
 				structureIDsMatchingSearch.add(id);
 			}
 		}
@@ -2829,6 +2834,13 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 		}));
+		matchSearchWordsButton = addDrawableChild(new TransparentButton(controlX,
+				settingsRowY(SETTINGS_MATCH_SEARCH_WORDS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+			ExplorersCompassConfig.matchSearchWordsInAnyOrder = !ExplorersCompassConfig.matchSearchWordsInAnyOrder;
+			ExplorersCompassConfig.saveClient();
+			updateSettingsButtonLabels();
+			processSearchTerm();
+		}));
 		adjustRowsToFitViewButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(6), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
 			ExplorersCompassConfig.adjustRowsToFitView = !ExplorersCompassConfig.adjustRowsToFitView;
 			ExplorersCompassConfig.saveClient();
@@ -2872,6 +2884,7 @@ public class ExplorersCompassScreen extends Screen {
 		addSettingResetButton(10, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
 		addSettingResetButton(11, ClientSetting.ALLOW_ID_SEARCHES);
 		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
+		addSettingResetButton(SETTINGS_MATCH_SEARCH_WORDS_ROW, ClientSetting.MATCH_SEARCH_WORDS_IN_ANY_ORDER);
 		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
 		addSettingResetButton(SETTINGS_CREATIVE_UNLOCK_ROW, ClientSetting.CREATIVE_UNLOCKS_ALL);
 		addSettingResetButton(SETTINGS_TELEPORT_ROW, ClientSetting.SHOW_TELEPORT_ONLY_IN_CREATIVE);
@@ -3135,6 +3148,7 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(checkedFiltersFirstButton, 5);
 		placeSetting(adjustRowsToFitViewButton, 6);
 		placeSetting(allowIdSearchesButton, 11);
+		placeSetting(matchSearchWordsButton, SETTINGS_MATCH_SEARCH_WORDS_ROW);
 		placeSetting(showOnlyMatchingFilterOptionsButton, SETTINGS_MATCHING_FILTER_OPTIONS_ROW);
 		placeSetting(closeOnFoundButton, 8);
 		placeSetting(clearOnCloseButton, 9);

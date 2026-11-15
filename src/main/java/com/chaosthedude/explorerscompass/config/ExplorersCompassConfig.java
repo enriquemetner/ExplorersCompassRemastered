@@ -61,6 +61,7 @@ public class ExplorersCompassConfig {
 	public static boolean adjustRowsToFitView;
 	public static boolean allowIdSearches;
 	public static boolean showOnlyMatchingFilterOptions;
+	public static boolean matchSearchWordsInAnyOrder;
 	public static int overlayLineOffset;
 	public static OverlaySide overlaySide;
 	public static List<String> sortOrder;
@@ -76,6 +77,7 @@ public class ExplorersCompassConfig {
 		CLEAR_SEARCH_BAR_ON_CLOSE(() -> clearSearchBarOnClose = true),
 		ALLOW_ID_SEARCHES(() -> allowIdSearches = false),
 		SHOW_ONLY_MATCHING_FILTER_OPTIONS(() -> showOnlyMatchingFilterOptions = false),
+		MATCH_SEARCH_WORDS_IN_ANY_ORDER(() -> matchSearchWordsInAnyOrder = false),
 		PAUSE_GAME_WHEN_OPEN(() -> pauseGameWhenOpen = false),
 		CREATIVE_UNLOCKS_ALL(() -> creativeUnlocksAll = false),
 		SHOW_TELEPORT_ONLY_IN_CREATIVE(() -> showTeleportOnlyInCreative = true),
@@ -121,6 +123,7 @@ public class ExplorersCompassConfig {
 						|| clientConfig.get("view.showTechnicalNames") != null
 						|| clientConfig.get("behavior.allowIdSearches") == null
 						|| clientConfig.get("behavior.showOnlyMatchingFilterOptions") == null
+						|| clientConfig.get("behavior.matchSearchWordsInAnyOrder") == null
 						|| !new ArrayList<>(clientConfig.valueMap().keySet()).get(clientConfig.valueMap().size() - 1).equals("sorting")
 						|| clientConfig.get("behavior.pauseGameWhenOpen") != null
 						|| clientConfig.get("singleplayerAndCreative.pauseGameWhenOpen") == null
@@ -260,6 +263,7 @@ public class ExplorersCompassConfig {
 				? bool(config, "behavior.allowIdSearches", allowIdSearches)
 				: bool(config, "behavior.searchTechnicalNames", allowIdSearches);
 		showOnlyMatchingFilterOptions = bool(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions);
+		matchSearchWordsInAnyOrder = bool(config, "behavior.matchSearchWordsInAnyOrder", false);
 		overlayLineOffset = number(config, "overlay.overlayLineOffset", overlayLineOffset, Integer.MIN_VALUE);
 		Object side = config.get("overlay.overlaySide");
 		if (side != null) {
@@ -333,6 +337,7 @@ public class ExplorersCompassConfig {
 		put(config, "behavior.allowIdSearches", allowIdSearches, "Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.");
 		put(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions,
 				"Show only unchecked filter options with matching structures under the filters in the other columns.");
+		put(config, "behavior.matchSearchWordsInAnyOrder", matchSearchWordsInAnyOrder, "Match every part of the main structure search in any order.");
 		put(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen, "Pause singleplayer while the compass screen is open, except while locating a structure.");
 		put(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll, "Temporarily unlock all structures while in Creative mode without changing saved unlocks.");
 		put(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative, "Show the Teleport button only in Creative mode. Teleport permission is still required.");

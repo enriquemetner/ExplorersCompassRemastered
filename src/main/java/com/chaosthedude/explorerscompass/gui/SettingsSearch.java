@@ -9,7 +9,7 @@ final class SettingsSearch {
     private SettingsSearch() {}
 
     static List<Integer> matchingRows(String[] labels, IntPredicate isDivider, String query) {
-        String[] fragments = query.strip().toLowerCase(Locale.ROOT).split("\\s+");
+        String[] fragments = fragments(query);
         List<Integer> rows = new ArrayList<>();
         int section = -1;
         int displayedSection = -1;
@@ -21,7 +21,7 @@ final class SettingsSearch {
                 continue;
             }
             String searchable = (sectionName + " " + labels[row]).toLowerCase(Locale.ROOT);
-            if (!matches(searchable, fragments)) continue;
+            if (!matches(searchable, fragments, null)) continue;
             if (section != displayedSection) {
                 rows.add(section);
                 displayedSection = section;
@@ -31,9 +31,13 @@ final class SettingsSearch {
         return rows;
     }
 
-    private static boolean matches(String searchable, String[] fragments) {
+    static String[] fragments(String query) {
+        return query.strip().toLowerCase(Locale.ROOT).split("\\s+");
+    }
+
+    static boolean matches(String searchable, String[] fragments, String alternate) {
         for (String fragment : fragments) {
-            if (!searchable.contains(fragment)) return false;
+            if (!searchable.contains(fragment) && (alternate == null || !alternate.contains(fragment))) return false;
         }
         return true;
     }
