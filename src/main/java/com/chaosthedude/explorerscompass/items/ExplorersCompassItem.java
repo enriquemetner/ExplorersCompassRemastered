@@ -29,6 +29,7 @@ import com.chaosthedude.explorerscompass.util.StructureDestination;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.chaosthedude.explorerscompass.workers.SearchWorkerManager;
+import com.chaosthedude.explorerscompass.workers.StructureSearchWorker;
 import com.google.common.collect.ListMultimap;
 
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
@@ -134,6 +135,14 @@ public class ExplorersCompassItem extends Item {
         }
         for (int slot = 0; slot < player.getInventory().size(); slot++) {
             validateTarget(player, player.getInventory().getStack(slot));
+        }
+    }
+
+    public void abortFailedSearch(PlayerEntity player, StructureSearchWorker<?> worker) {
+        UUID owner = player.getUuid();
+        SearchSession session = searches.get(owner);
+        if (session != null && session.workers.ownsWorker(worker)) {
+            stopDetachedSearch(owner, session);
         }
     }
 

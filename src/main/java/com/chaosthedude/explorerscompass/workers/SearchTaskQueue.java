@@ -69,7 +69,14 @@ final class SearchTaskQueue {
                     enqueued.remove(worker);
                     continue;
                 }
-                boolean again = worker.doWork();
+                boolean again;
+                try {
+                    again = worker.doWork();
+                } catch (RuntimeException exception) {
+                    enqueued.remove(worker);
+                    worker.onSearchError(exception);
+                    continue;
+                }
                 if (!closed && worker.hasWork()) {
                     var pending = worker.pendingWork();
                     if (pending == null) workers.addLast(worker);

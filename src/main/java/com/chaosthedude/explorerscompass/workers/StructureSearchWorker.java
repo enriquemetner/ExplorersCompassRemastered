@@ -169,6 +169,13 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 		}
 	}
 
+    @Override
+    public void onSearchError(RuntimeException exception) {
+        ExplorersCompass.LOGGER.error("Compass search {} for {} in {} failed at radius {}",
+                managerId, structureOrSetId, level.getRegistryKey().getValue(), getRadius(), exception);
+        ExplorersCompass.EXPLORERS_COMPASS_ITEM.abortFailedSearch(player, this);
+    }
+
 	public void stop() {
         storageCache.clear();
 		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": " + getName() + " stopped with " + (shouldLogRadius() ? getRadius() + " radius, " : "") + samples + " samples");

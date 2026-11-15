@@ -74,6 +74,10 @@ public class SearchWorkerManager {
 		index++;
 	}
 
+    public boolean ownsWorker(StructureSearchWorker<?> worker) {
+        return workers.contains(worker);
+    }
+
 	public void stop() {
 		for (StructureSearchWorker<?> worker : workers) {
 			worker.stop();

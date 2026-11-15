@@ -35,6 +35,10 @@ public final class WorldWorkerManager {
 
         boolean doWork();
 
+        default void onSearchError(RuntimeException exception) {
+            ExplorersCompass.LOGGER.error("Compass search worker failed", exception);
+        }
+
         default java.util.concurrent.CompletableFuture<?> pendingWork() { return null; }
     }
 }
