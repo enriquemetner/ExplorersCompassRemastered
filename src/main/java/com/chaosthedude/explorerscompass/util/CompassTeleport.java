@@ -64,7 +64,7 @@ public final class CompassTeleport {
     public static void toCoordinates(ServerPlayerEntity player, Identifier id, BlockPos target) throws CommandSyntaxException {
         var world = player.getServerWorld();
         var structure = StructureUtils.getStructureForID(world, id);
-        if (structure == null || StructureUtils.structureIdIsBlacklisted(id)) throw error("Unknown structure: " + id);
+        if (structure == null || StructureUtils.structureIdIsExcluded(id)) throw error("Unknown structure: " + id);
         teleport(player, resolve(world, id, structure, target), structure, target);
     }
 

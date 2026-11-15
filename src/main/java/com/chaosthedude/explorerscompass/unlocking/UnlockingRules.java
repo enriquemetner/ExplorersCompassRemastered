@@ -351,7 +351,7 @@ public final class UnlockingRules {
             for (Identifier id : resolvePattern(selector.trim(), catalog.structureSets(), false))
                 result.addAll(catalog.structureSet(id));
         }
-        result.removeIf(id -> !catalog.structures().contains(id) || StructureUtils.structureIdIsBlacklisted(id));
+        result.removeIf(id -> !catalog.structures().contains(id) || StructureUtils.structureIdIsExcluded(id));
         return result;
     }
 

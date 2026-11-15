@@ -27,6 +27,8 @@ import net.fabricmc.api.EnvType;
 public class ExplorersCompassConfig {
 	private static final String COMMON = "common.toml";
 	private static final String CLIENT = "client.toml";
+	private static final String COMMON_WHITELIST = "common_whitelist.toml";
+	private static final String WHITELIST_PRECEDENCE = "When the structure whitelist contains any entries, the blacklist is ignored.";
 	private static final String COMMON_BLACKLIST = "common_blacklist.toml";
 	private static final String HIDDEN_STRUCTURES = "hidden_structures.toml";
 	private static final String SEARCH_SAVED_STRUCTURES = "search.findOldStructures";
@@ -47,6 +49,7 @@ public class ExplorersCompassConfig {
 	public static int compassDurability = 0;
 	public static int defaultXpCost = 0;
 	public static boolean allowSearchWithoutEnoughXp = false;
+	public static List<String> structureWhitelist = List.of();
 	public static List<String> structureBlacklist = new ArrayList<>();
 	public static List<String> hiddenStructures = new ArrayList<>();
 
@@ -156,7 +159,15 @@ public class ExplorersCompassConfig {
 				writeCommon(common);
 				write(directory().resolve(COMMON), common);
 			}
-			structureBlacklist = strings(readOrCreate(COMMON_BLACKLIST), "structureBlacklist", List.of());
+			structureWhitelist = strings(readOrCreate(COMMON_WHITELIST), "structureWhitelist", List.of());
+			CommentedConfig blacklist = readOrCreate(COMMON_BLACKLIST);
+			structureBlacklist = strings(blacklist, "structureBlacklist", List.of());
+			String comment = blacklist.getComment("structureBlacklist");
+			if (comment == null || !comment.contains(WHITELIST_PRECEDENCE)) {
+				if (comment == null) writeCommonBlacklist(blacklist);
+				else blacklist.setComment("structureBlacklist", comment + "\n" + WHITELIST_PRECEDENCE);
+				write(directory().resolve(COMMON_BLACKLIST), blacklist);
+			}
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass server configuration", e);
 		}
@@ -173,6 +184,7 @@ public class ExplorersCompassConfig {
 		switch (name) {
 			case COMMON -> writeCommon(config);
 			case CLIENT -> writeClient(config);
+			case COMMON_WHITELIST -> writeCommonWhitelist(config);
 			case COMMON_BLACKLIST -> writeCommonBlacklist(config);
 			case HIDDEN_STRUCTURES -> writeHiddenStructures(config);
 			default -> throw new IllegalArgumentException(name);
@@ -347,8 +359,12 @@ public class ExplorersCompassConfig {
 		put(config, "sorting.sortOrder", sortOrder, "Order of the four structure sorting keys.");
 	}
 
+	private static void writeCommonWhitelist(CommentedConfig config) {
+		put(config, "structureWhitelist", List.of(), "Structures allowed by the server. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
+	}
+
 	private static void writeCommonBlacklist(CommentedConfig config) {
-		put(config, "structureBlacklist", structureBlacklist, "Structures excluded from the compass. Supports the * wildcard. Omitted namespaces default to minecraft:.");
+		put(config, "structureBlacklist", structureBlacklist, "Structures excluded from the compass. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
 	}
 
 	private static void writeHiddenStructures(CommentedConfig config) {

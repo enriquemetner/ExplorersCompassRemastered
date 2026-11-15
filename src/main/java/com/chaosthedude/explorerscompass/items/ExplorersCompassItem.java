@@ -62,7 +62,7 @@ public class ExplorersCompassItem extends Item {
         if (getState(stack) != CompassState.FOUND) return;
         Identifier id = Identifier.tryParse(stack.getOrCreateNbt().getString("StructureID"));
         if (id == null || !player.getServer().getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).containsId(id)
-                || StructureUtils.structureIdIsBlacklisted(id)
+                || StructureUtils.structureIdIsExcluded(id)
                 || (!UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), id)
                     && !stack.getOrCreateNbt().getBoolean(CompassTransfer.INHERITED)
 					&& !(stack.getNbt() != null && stack.getNbt().getBoolean("CreativeBypass")
@@ -88,7 +88,7 @@ public class ExplorersCompassItem extends Item {
                 ExplorersCompassConfig.compassSharing, getState(stack) == CompassState.FOUND,
                 state::getStructures, id -> player.getServer().getRegistryManager()
                         .get(net.minecraft.registry.RegistryKeys.STRUCTURE).containsId(id)
-                        && !StructureUtils.structureIdIsBlacklisted(id));
+                        && !StructureUtils.structureIdIsExcluded(id));
         if (transfer.resetTarget()) clearCompassTarget(stack);
         boolean copiedVisits = false;
         if (ExplorersCompassConfig.visitsSharing && transfer.sharingSource() != null) {
@@ -295,7 +295,8 @@ public class ExplorersCompassItem extends Item {
                 UnlockedStructures.get(player.getServer()).latestUnlocked(player.getUuid()),
                 UnlockingRules.get().hasUnlockingRequirements(player),
                 world.getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).getIds().stream()
-                        .filter(StructureUtils::structureIdIsBlacklisted).sorted().toList()));
+                        .filter(StructureUtils::structureIdIsExcluded).sorted().toList(),
+                !ExplorersCompassConfig.structureWhitelist.isEmpty()));
 	}
 
 	@Override
@@ -332,9 +333,9 @@ public class ExplorersCompassItem extends Item {
             SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
             return;
         }
-        if (StructureUtils.structureIdIsBlacklisted(structureOrSetId)
+        if (StructureUtils.structureIdIsExcluded(structureOrSetId)
                 && StructureUtils.getStructureForID(world, structureOrSetId) != null) {
-            SearchResultPacket.sendBlacklisted(serverPlayer, requestId, structureOrSetId);
+            SearchResultPacket.sendExcluded(serverPlayer, requestId, structureOrSetId, !ExplorersCompassConfig.structureWhitelist.isEmpty());
             return;
         }
         if (!StructureUtils.getAllowedStructureIDs(world).contains(structureOrSetId)) {

@@ -118,7 +118,7 @@ public final class UnlockingCommands {
             }
             default -> {
                 Identifier id = IdentifierArgumentType.getIdentifier(context, "id");
-                requireNotBlacklisted(id);
+                requireNotExcluded(id);
                 if (!server.getRegistryManager().get(RegistryKeys.STRUCTURE).containsId(id)
                         && (unlock || !state.contains(player, id))) throw error("Unknown structure: " + id);
                 targets = Set.of(id);
@@ -150,14 +150,14 @@ public final class UnlockingCommands {
         return argument("id", IdentifierArgumentType.identifier()).suggests((c, b) -> {
             if (!set) return CommandSource.suggestIdentifiers(commandStructures(c.getSource().getRegistryManager().get(RegistryKeys.STRUCTURE).getIds()), b);
             return CommandSource.suggestIdentifiers(c.getSource().getRegistryManager().get(RegistryKeys.STRUCTURE_SET).getIds().stream()
-                .filter(id -> !StructureUtils.structureIdIsBlacklisted(id)
+                .filter(id -> !StructureUtils.structureIdIsExcluded(id)
                     && !commandStructures(UnlockingRules.setMembers(c.getSource().getServer(), id)).isEmpty()), b);
         });
     }
 
     private static Set<Identifier> visitTargets(CommandContext<ServerCommandSource> c, boolean set) throws CommandSyntaxException {
         Identifier id = IdentifierArgumentType.getIdentifier(c, "id");
-        requireNotBlacklisted(id);
+        requireNotExcluded(id);
         var registry = c.getSource().getRegistryManager();
         if (!set && registry.get(RegistryKeys.STRUCTURE).containsId(id)) return Set.of(id);
         if (!set || !registry.get(RegistryKeys.STRUCTURE_SET).containsId(id)) throw error("Unknown structure: " + id);
@@ -219,11 +219,11 @@ public final class UnlockingCommands {
     }
 
     static Set<Identifier> commandStructures(Collection<Identifier> structures) {
-        return structures.stream().filter(id -> !StructureUtils.structureIdIsBlacklisted(id)).collect(Collectors.toSet());
+        return structures.stream().filter(id -> !StructureUtils.structureIdIsExcluded(id)).collect(Collectors.toSet());
     }
 
-    static void requireNotBlacklisted(Identifier id) throws CommandSyntaxException {
-        if (StructureUtils.structureIdIsBlacklisted(id)) throw error("Unknown structure: " + id);
+    static void requireNotExcluded(Identifier id) throws CommandSyntaxException {
+        if (StructureUtils.structureIdIsExcluded(id)) throw error("Unknown structure: " + id);
     }
 
     private static UUID player(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {

@@ -120,7 +120,7 @@ public final class PartySharing {
         UnlockedStructures state = UnlockedStructures.get(server);
         var known = server.getRegistryManager().get(RegistryKeys.STRUCTURE);
         Snapshot before = snapshot;
-        snapshot = build(state, parties, id -> known.containsId(id) && !StructureUtils.structureIdIsBlacklisted(id));
+        snapshot = build(state, parties, id -> known.containsId(id) && !StructureUtils.structureIdIsExcluded(id));
         membership = parties;
         dirty = false;
         var compass = ExplorersCompass.EXPLORERS_COMPASS_ITEM;

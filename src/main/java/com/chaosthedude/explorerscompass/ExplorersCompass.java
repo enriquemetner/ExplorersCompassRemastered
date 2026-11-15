@@ -79,8 +79,14 @@ public class ExplorersCompass implements ModInitializer {
                 backend.explorerscompass$attachIndex(index, world.getPersistentStateManager()::save);
             }
         });
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server ->
-                com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server));
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            if (!ExplorersCompassConfig.structureWhitelist.isEmpty()
+                    && server.getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).getIds().stream()
+                            .allMatch(com.chaosthedude.explorerscompass.util.StructureUtils::structureIdIsExcluded)) {
+                LOGGER.warn("The structure whitelist matches no registered structures. The compass list will be empty.");
+            }
+            com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server);
+        });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             // Invalidate queued continuations before shutdown can drain the server task queue.
             WorldWorkerManager.clear(server);

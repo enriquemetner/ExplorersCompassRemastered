@@ -233,8 +233,9 @@ public class ExplorersCompassScreen extends Screen {
     private int listedDisabledCount;
     private Identifier navigationTarget;
     private Identifier selectionAfterSync;
-    private Identifier blacklistedStructure;
-    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, BLACKLISTED, REJECTED }
+    private Identifier excludedStructure;
+    private boolean excludedByWhitelist;
+    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, EXCLUDED, REJECTED }
     private Dialog dialog = Dialog.NONE;
     private LockedRequirementsView lockedRequirementsView;
     private Identifier lockedRequirementsId;
@@ -514,7 +515,7 @@ public class ExplorersCompassScreen extends Screen {
 			focusActiveSearchField();
 
             long revision = com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRevision;
-            if (dialog != Dialog.BLACKLISTED && revision > com.chaosthedude.explorerscompass.network.ClientPacketHandlers.shownNoticeRevision) {
+            if (dialog != Dialog.EXCLUDED && revision > com.chaosthedude.explorerscompass.network.ClientPacketHandlers.shownNoticeRevision) {
                 infoRevision = revision;
                 infoRelocked = com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRelocked;
                 dialog = Dialog.INFO;
@@ -1933,8 +1934,8 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private void selectSyncedStructure(Identifier id) {
-        if (ClientPacketHandlers.blacklistedStructures.contains(id)) {
-            showBlacklisted(id);
+        if (ClientPacketHandlers.excludedStructures.contains(id)) {
+            showExcluded(id, ClientPacketHandlers.whitelistActive);
             return;
         }
         if (isStructureHidden(id)) {
@@ -2000,8 +2001,8 @@ public class ExplorersCompassScreen extends Screen {
             notFoundCompassAngle = 0.0D;
             notFoundCompassSpeed = 0.0D;
             dialog = Dialog.NOT_FOUND;
-        } else if (result == SearchResultPacket.BLACKLISTED) {
-            showBlacklisted(resultId);
+        } else if (result == SearchResultPacket.BLACKLISTED || result == SearchResultPacket.NOT_WHITELISTED) {
+            showExcluded(resultId, result == SearchResultPacket.NOT_WHITELISTED);
         } else if (result == SearchResultPacket.LOCKED) {
             showLockedRequirements(searchedId, requirements);
         } else if (result == SearchResultPacket.WRONG_DIMENSION) {
@@ -2055,15 +2056,16 @@ public class ExplorersCompassScreen extends Screen {
         }
         return Math.min(width - 20, SEARCH_DIALOG_WIDTH);
     }
-    private void showBlacklisted(Identifier id) {
-        blacklistedStructure = id;
+    private void showExcluded(Identifier id, boolean whitelistActive) {
+        excludedByWhitelist = whitelistActive;
+        excludedStructure = id;
         searchFailureScroll = 0;
         searchFailureWrapWidth = 0;
-        dialog = Dialog.BLACKLISTED;
+        dialog = Dialog.EXCLUDED;
     }
 
     private boolean isSearchFailureDialog() {
-        return dialog == Dialog.NOT_FOUND || dialog == Dialog.INVALID_SEARCH || dialog == Dialog.BLACKLISTED;
+        return dialog == Dialog.NOT_FOUND || dialog == Dialog.INVALID_SEARCH || dialog == Dialog.EXCLUDED;
     }
 
     private boolean showNotFoundHide() { return dialog == Dialog.NOT_FOUND && !searchedListed && searchedId != null; }
@@ -2080,7 +2082,7 @@ public class ExplorersCompassScreen extends Screen {
     }
     private int searchFailureActionsY() { return dialogY() + dialogHeight() - 25; }
     private int searchFailureTextOffset() {
-        if (dialog == Dialog.INVALID_SEARCH || dialog == Dialog.BLACKLISTED) return 12 + textRenderer.fontHeight;
+        if (dialog == Dialog.INVALID_SEARCH || dialog == Dialog.EXCLUDED) return 12 + textRenderer.fontHeight;
         return height >= 90 ? 32 : 6;
     }
     private int searchFailureTextHeight() { return Math.max(0, dialogHeight() - searchFailureTextOffset() - 30); }
@@ -2091,17 +2093,21 @@ public class ExplorersCompassScreen extends Screen {
         int wrapWidth = Math.max(1, dialogWidth() - 24 - SCROLLBAR_WIDTH);
         if (wrapWidth != searchFailureWrapWidth) {
             List<SearchFailureLine> lines = new ArrayList<>();
-            if (dialog == Dialog.BLACKLISTED) {
-                addSearchFailureLines(lines, Text.literal(StructureUtils.getStructureName(blacklistedStructure)), wrapWidth, false);
-                addSearchFailureLines(lines, Text.literal(blacklistedStructure.toString()).formatted(Formatting.GRAY), wrapWidth, false);
+            if (dialog == Dialog.EXCLUDED) {
+                addSearchFailureLines(lines, Text.literal(StructureUtils.getStructureName(excludedStructure)), wrapWidth, false);
+                addSearchFailureLines(lines, Text.literal(excludedStructure.toString()).formatted(Formatting.GRAY), wrapWidth, false);
                 lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
-                addSearchFailureLines(lines, Text.literal("The server has blacklisted this structure, so it doesn’t appear in the compass list and can’t be searched"), wrapWidth, false);
-                lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
-                addSearchFailureLines(lines, Text.literal("Possible reasons:"), wrapWidth, false);
-                addSearchFailureBullet(lines, "The structure is disabled", wrapWidth);
-                addSearchFailureBullet(lines, "The server or modpack creator left it out to keep the list focused on useful destinations", wrapWidth);
-                addSearchFailureBullet(lines, "The creator intended players to find it another way", wrapWidth);
-                addSearchFailureBullet(lines, "The creator may have another reason for excluding it", wrapWidth);
+                if (excludedByWhitelist) {
+                    addSearchFailureLines(lines, Text.literal("This structure isn’t on the server’s whitelist, so it doesn’t appear in the compass list and can’t be searched."), wrapWidth, false);
+                } else {
+                    addSearchFailureLines(lines, Text.literal("The server has blacklisted this structure, so it doesn’t appear in the compass list and can’t be searched"), wrapWidth, false);
+                    lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
+                    addSearchFailureLines(lines, Text.literal("Possible reasons:"), wrapWidth, false);
+                    addSearchFailureBullet(lines, "The structure is disabled", wrapWidth);
+                    addSearchFailureBullet(lines, "The server or modpack creator left it out to keep the list focused on useful destinations", wrapWidth);
+                    addSearchFailureBullet(lines, "The creator intended players to find it another way", wrapWidth);
+                    addSearchFailureBullet(lines, "The creator may have another reason for excluding it", wrapWidth);
+                }
             } else if (dialog == Dialog.INVALID_SEARCH) {
                 addSearchFailureLines(lines, Text.literal("None of your selected structures are valid for searching."), wrapWidth, false);
                 lines.add(new SearchFailureLine(OrderedText.EMPTY, false));
@@ -2208,7 +2214,7 @@ public class ExplorersCompassScreen extends Screen {
     }
     private int dialogHeight() {
         return switch (dialog) {
-            case NOT_FOUND, INVALID_SEARCH, BLACKLISTED -> Math.min(height - 10, searchFailureTextOffset() + searchFailureContentHeight() + 30);
+            case NOT_FOUND, INVALID_SEARCH, EXCLUDED -> Math.min(height - 10, searchFailureTextOffset() + searchFailureContentHeight() + 30);
             case INFO -> textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68;
             case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
             case INSUFFICIENT_XP -> textRenderer.fontHeight * 2 + 16;
@@ -2484,8 +2490,8 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private void renderSearchFailureDialog(DrawContext context, int x, int y, int w, int mouseX, int mouseY) {
-        if (dialog == Dialog.BLACKLISTED) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Blacklisted"), x + w / 2, y + 6, 0xffff5555);
+        if (dialog == Dialog.EXCLUDED) {
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal(excludedByWhitelist ? "Not on Whitelist" : "Blacklisted"), x + w / 2, y + 6, 0xffff5555);
         } else if (dialog == Dialog.INVALID_SEARCH) {
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Invalid Search"), x + w / 2, y + 6, 0xffffff);
         } else if (height >= 90) {

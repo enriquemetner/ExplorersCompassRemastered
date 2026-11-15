@@ -91,7 +91,7 @@ public class StructureUtils {
 	public static List<Identifier> getAllowedStructureIDs(ServerWorld world) {
 		final List<Identifier> structureIDs = new ArrayList<Identifier>();
 		for (Structure structure : getStructureRegistry(world)) {
-			if (structure != null && getIDForStructure(world, structure) != null && !getIDForStructure(world, structure).getNamespace().isEmpty() && !getIDForStructure(world, structure).getPath().isEmpty() && !structureIsBlacklisted(world, structure) && !structureIsHidden(world, structure)) {
+			if (structure != null && getIDForStructure(world, structure) != null && !getIDForStructure(world, structure).getNamespace().isEmpty() && !getIDForStructure(world, structure).getPath().isEmpty() && !structureIsExcluded(world, structure) && !structureIsHidden(world, structure)) {
 				structureIDs.add(getIDForStructure(world, structure));
 			}
 		}
@@ -99,20 +99,21 @@ public class StructureUtils {
 		return structureIDs;
 	}
 
-	public static boolean structureIsBlacklisted(ServerWorld world, Structure structure) {
-		return structureIdIsBlacklisted(getIDForStructure(world, structure));
+	public static boolean structureIsExcluded(ServerWorld world, Structure structure) {
+		return structureIdIsExcluded(getIDForStructure(world, structure));
 	}
 
-	public static boolean structureIdIsBlacklisted(Identifier id) {
+	public static boolean structureIdIsExcluded(Identifier id) {
 		if (id == null) return false;
-		final List<String> structureBlacklist = ExplorersCompassConfig.structureBlacklist;
-		for (String structureKey : structureBlacklist) {
+		boolean whitelist = !ExplorersCompassConfig.structureWhitelist.isEmpty();
+		List<String> patterns = whitelist ? ExplorersCompassConfig.structureWhitelist : ExplorersCompassConfig.structureBlacklist;
+		for (String structureKey : patterns) {
 			String pattern = structureKey.contains(":") ? structureKey : "minecraft:" + structureKey;
 			if (id.toString().matches(convertToRegex(pattern))) {
-				return true;
+				return !whitelist;
 			}
 		}
-		return false;
+		return whitelist;
 	}
 
 	public static boolean structureIsHidden(ServerWorld world, Structure structure) {

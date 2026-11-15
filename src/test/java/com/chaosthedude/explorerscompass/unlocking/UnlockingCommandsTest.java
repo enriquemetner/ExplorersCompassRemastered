@@ -33,10 +33,10 @@ class UnlockingCommandsTest {
             assertEquals(Set.of(fortress), UnlockingCommands.commandStructures(registry));
             for (Identifier id : List.of(city, grave)) {
                 CommandSyntaxException error = assertThrows(CommandSyntaxException.class,
-                        () -> UnlockingCommands.requireNotBlacklisted(id));
+                        () -> UnlockingCommands.requireNotExcluded(id));
                 assertEquals("Unknown structure: " + id, error.getRawMessage().getString());
             }
-            assertDoesNotThrow(() -> UnlockingCommands.requireNotBlacklisted(fortress));
+            assertDoesNotThrow(() -> UnlockingCommands.requireNotExcluded(fortress));
             assertEquals(3, registry.size());
             ExplorersCompassConfig.structureBlacklist = List.of();
             assertEquals(registry, UnlockingCommands.commandStructures(registry));

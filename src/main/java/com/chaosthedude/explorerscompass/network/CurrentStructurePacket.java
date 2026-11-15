@@ -29,7 +29,7 @@ public final class CurrentStructurePacket {
             var accessor = world.getStructureAccessor();
             Set<Identifier> matches = new LinkedHashSet<>();
             for (var start : accessor.getStructureStarts(new ChunkPos(pos), structure ->
-                    !StructureUtils.structureIsBlacklisted(world, structure) && !StructureUtils.structureIsHidden(world, structure))) {
+                    !StructureUtils.structureIsExcluded(world, structure) && !StructureUtils.structureIsHidden(world, structure))) {
                 if (start.hasChildren() && accessor.structureContains(pos, start)) {
                     var id = StructureUtils.getIDForStructure(world, start.getStructure());
                     if (id != null) matches.add(id);
