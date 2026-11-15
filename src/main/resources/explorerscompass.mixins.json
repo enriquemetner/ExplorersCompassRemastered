@@ -12,6 +12,7 @@
     "ChunkSaveIndexMixin",
     "RegionBasedStorageAccessor",
     "StructureChunkStorageAccessor",
+    "SearchChunkManagerAccessor",
     "StructurePlacementAccessor"
   ],
   "client": [

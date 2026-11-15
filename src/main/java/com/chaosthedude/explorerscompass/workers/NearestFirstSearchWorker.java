@@ -1,5 +1,9 @@
 package com.chaosthedude.explorerscompass.workers;
 
+import com.chaosthedude.explorerscompass.mixins.SearchChunkManagerAccessor;
+import java.util.concurrent.CompletableFuture;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.ChunkStatus;
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.mixins.StructureChunkStorageAccessor;
 import com.chaosthedude.explorerscompass.storage.EmptyChunkStorage;
@@ -149,12 +153,46 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
                 level.getRegistryKey().getValue(), error);
     }
 
+    private Target pendingTarget;
+    private CompletableFuture<Chunk> pendingChunk;
+
+    @Override
+    protected void requestCandidateChunk(ChunkPos pos) {
+        pendingChunk = ((SearchChunkManagerAccessor) level.getChunkManager())
+                .explorerscompass$requestChunk(pos.x, pos.z, ChunkStatus.STRUCTURE_STARTS, true)
+                .handle((result, error) -> {
+                    if (error != null) {
+                        ExplorersCompass.LOGGER.warn("Could not load structure starts at {}", pos, error);
+                        return null;
+                    }
+                    return result.left().orElse(null);
+                });
+    }
+
+    @Override public CompletableFuture<?> pendingWork() { return pendingChunk; }
+
+    @Override public void stop() {
+        pendingTarget = null;
+        pendingChunk = null;
+        super.stop();
+    }
+
     @Override public boolean hasWork() { return !finished; }
     @Override public boolean canWorkAt(int radius) {
         return !finished && queue.nextDistanceSquared() < (long) radius * radius;
     }
     @Override public boolean doWork() {
         if (!hasWork()) return false;
+        if (pendingChunk != null) {
+            if (!pendingChunk.isDone()) return false;
+            Chunk loaded = pendingChunk.getNow(null);
+            Target target = pendingTarget;
+            pendingChunk = null;
+            pendingTarget = null;
+            Match match = getStructureGeneratingAt(target.chunk, loaded, true);
+            if (match != null) succeed(match);
+            return hasWork();
+        }
         if (!canWorkAt(radiusLimit)) {
             finished = true;
             fail();
@@ -178,7 +216,11 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
                         ? StructureDestination.readStart(level, target.chunk, structure) : null;
                 result = start == null ? null : new Match(structure, target.chunk, start);
             } else {
-                result = getStructureGeneratingAt(target.chunk);
+                result = getStructureGeneratingAt(target.chunk, null, false);
+                if (pendingChunk != null) {
+                    pendingTarget = target;
+                    return false;
+                }
             }
             if (result != null) succeed(result);
         }

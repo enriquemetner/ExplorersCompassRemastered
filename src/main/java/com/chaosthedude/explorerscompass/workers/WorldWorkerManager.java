@@ -34,5 +34,7 @@ public final class WorldWorkerManager {
         boolean hasWork();
 
         boolean doWork();
+
+        default java.util.concurrent.CompletableFuture<?> pendingWork() { return null; }
     }
 }

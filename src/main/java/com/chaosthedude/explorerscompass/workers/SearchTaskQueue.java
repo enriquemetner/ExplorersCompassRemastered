@@ -47,6 +47,16 @@ final class SearchTaskQueue {
         enqueue.accept(this::runSlice);
     }
 
+    private void resume(WorldWorkerManager.IWorker worker) {
+        if (closed) return;
+        if (worker.hasWork()) {
+            workers.addLast(worker);
+            schedule();
+        } else {
+            enqueued.remove(worker);
+        }
+    }
+
     private void runSlice() {
         if (closed) return;
         try {
@@ -61,7 +71,9 @@ final class SearchTaskQueue {
                 }
                 boolean again = worker.doWork();
                 if (!closed && worker.hasWork()) {
-                    workers.addLast(worker);
+                    var pending = worker.pendingWork();
+                    if (pending == null) workers.addLast(worker);
+                    else pending.whenComplete((result, error) -> enqueue.accept(() -> resume(worker)));
                 } else {
                     enqueued.remove(worker);
                 }

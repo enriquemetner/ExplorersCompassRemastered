@@ -21,7 +21,6 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.ChunkSectionPos;
 import net.minecraft.world.StructurePresence;
 import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.ChunkStatus;
 import net.minecraft.world.gen.chunk.placement.StructurePlacement;
 import net.minecraft.world.gen.structure.Structure;
 
@@ -102,7 +101,7 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 		return false;
 	}
 
-	protected Match getStructureGeneratingAt(ChunkPos chunkPos) {
+	protected Match getStructureGeneratingAt(ChunkPos chunkPos, Chunk loaded, boolean requested) {
 		for (Structure structure : structureSet) {
             Identifier id = StructureUtils.getIDForStructure(level, structure);
             if (id == null || (!(creativeBypass && player.getAbilities().creativeMode)
@@ -113,10 +112,17 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 			if (result != StructurePresence.START_NOT_PRESENT) {
 				if (result == StructurePresence.START_PRESENT) {
 					if (wasVisited(structure, chunkPos)) continue;
-					return new Match(structure, chunkPos, null);
+					StructureStart start = loaded == null ? null
+                            : level.getStructureAccessor().getStructureStart(ChunkSectionPos.from(loaded), structure, loaded);
+                    return new Match(structure, chunkPos, start != null && start.hasChildren() ? start : null);
 				}
 
-				Chunk chunk = level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.STRUCTURE_STARTS);
+				if (!requested) {
+                    requestCandidateChunk(chunkPos);
+                    return null;
+                }
+                if (loaded == null) continue;
+                Chunk chunk = loaded;
 				StructureStart structureStart = level.getStructureAccessor().getStructureStart(ChunkSectionPos.from(chunk), structure, chunk);
 				if (structureStart != null && structureStart.hasChildren() && !wasVisited(structure, structureStart.getPos())) {
 					return new Match(structure, structureStart.getPos(), structureStart);
@@ -126,6 +132,8 @@ public abstract class StructureSearchWorker<T extends StructurePlacement> implem
 
 		return null;
 	}
+
+    protected abstract void requestCandidateChunk(ChunkPos pos);
 
 	protected boolean wasVisited(Structure structure, ChunkPos startChunk) {
 		if (!excludeVisited) return false;

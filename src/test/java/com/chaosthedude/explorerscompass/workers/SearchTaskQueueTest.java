@@ -18,6 +18,36 @@ class SearchTaskQueueTest {
     private final SearchTaskQueue queue = new SearchTaskQueue(serverTasks::addLast,
             validations::incrementAndGet, clock::get);
 
+    @Test void pendingCandidateLetsOtherServerWorkRunAndResumesOnlyAfterCompletion() {
+        var chunk = new java.util.concurrent.CompletableFuture<String>();
+        var order = new ArrayList<String>();
+        queue.add(new WorldWorkerManager.IWorker() {
+            private int steps;
+
+            @Override public boolean hasWork() { return steps < 2; }
+
+            @Override public boolean doWork() {
+                if (steps++ == 0) {
+                    order.add("requested");
+                    return false;
+                }
+                order.add(chunk.getNow("unexpected"));
+                return false;
+            }
+
+            @Override public java.util.concurrent.CompletableFuture<?> pendingWork() { return chunk; }
+        });
+        queue.add(new Worker(1, () -> order.add("other search")));
+        serverTasks.addLast(() -> order.add("server work"));
+        drain();
+        assertEquals(List.of("requested", "server work", "other search"), order);
+        assertTrue(serverTasks.isEmpty(), "Pending work must not keep polling the server queue");
+        chunk.complete("found");
+        assertEquals(3, order.size(), "Completion must defer the search to the server queue");
+        drain();
+        assertEquals(List.of("requested", "server work", "other search", "found"), order);
+    }
+
     @Test void finishesInOrderUsingOnlyQueuedTasksWithoutWorldTicks() {
         List<Integer> candidates = new ArrayList<>();
         Worker worker = new Worker(12, () -> {
