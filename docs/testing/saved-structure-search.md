@@ -1,7 +1,7 @@
 # Test saved structure searches on Fabric 1.20.1
 
 
-Set `[search]` → `findOldStructures = true` in `config/explorerscompass/common.toml`, then restart the game or server before testing.
+Set `[search]` → `findOldStructures = true` in `config/explorerscompass/server/settings.toml`, then restart the game or server before testing.
 
 1. Create a disposable creative world with structures enabled and cheats on. Leave the test pack out for the initial generation.
 2. Run `/locate structure minecraft:desert_pyramid`, teleport to the result, and load the pyramid. Confirm the compass can find it. Disable **Exclude visited** and make sure Desert Pyramid is unlocked.

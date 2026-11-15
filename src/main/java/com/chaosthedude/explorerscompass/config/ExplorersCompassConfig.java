@@ -25,14 +25,14 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.api.EnvType;
 
 public class ExplorersCompassConfig {
-	public static final String UNLOCKING_RULES = "unlocking_rules.json";
+	public static final String UNLOCKING_RULES = "server/unlocking_rules.json";
 	private static final String DEFAULT_UNLOCKING_RULES = "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n";
-	private static final String COMMON = "common.toml";
-	private static final String CLIENT = "client.toml";
-	private static final String COMMON_WHITELIST = "common_whitelist.toml";
+	private static final String SERVER_SETTINGS = "server/settings.toml";
+	private static final String CLIENT_SETTINGS = "client/settings.toml";
+	private static final String WHITELIST = "server/whitelist.toml";
 	private static final String WHITELIST_PRECEDENCE = "When the structure whitelist contains any entries, the blacklist is ignored.";
-	private static final String COMMON_BLACKLIST = "common_blacklist.toml";
-	private static final String HIDDEN_STRUCTURES = "hidden_structures.toml";
+	private static final String BLACKLIST = "server/blacklist.toml";
+	private static final String HIDDEN_STRUCTURES = "client/hidden_structures.toml";
 	private static final String SEARCH_SAVED_STRUCTURES = "search.findOldStructures";
 	private static final String SEARCH_RADIUS = "search.maxSearchRadius";
 	private static final int DEFAULT_SEARCH_RADIUS = 30_000;
@@ -120,10 +120,12 @@ public class ExplorersCompassConfig {
 
 	public static void load() {
 		try {
+			archiveLegacyConfig();
 			ensureServerDefaults();
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
-				CommentedConfig clientConfig = readOrCreate(CLIENT);
+				Files.createDirectories(directory().resolve("client"));
+				CommentedConfig clientConfig = readOrCreate(CLIENT_SETTINGS);
 				boolean migrateClient = clientConfig.get("behavior.searchTechnicalNames") != null
 						|| clientConfig.get("view.showTechnicalNames") != null
 						|| clientConfig.get("behavior.allowIdSearches") == null
@@ -137,7 +139,7 @@ public class ExplorersCompassConfig {
 				if (loadClient(clientConfig) || migrateClient) {
 					clientConfig.remove("behavior.pauseGameWhenOpen");
 					writeClient(clientConfig);
-					write(directory().resolve(CLIENT), clientConfig);
+					write(directory().resolve(CLIENT_SETTINGS), clientConfig);
 				}
 				hiddenStructures = strings(readOrCreate(HIDDEN_STRUCTURES), "hiddenStructures", hiddenStructures);
 			}
@@ -146,10 +148,20 @@ public class ExplorersCompassConfig {
 		}
 	}
 
+	private static void archiveLegacyConfig() throws IOException {
+		Path configDirectory = directory().getParent();
+		Path legacy = configDirectory.resolve("explorerscompass.json");
+		Path archive = configDirectory.resolve("explorerscompass-old.json");
+		if (Files.isRegularFile(legacy) && Files.notExists(archive)) {
+			Files.move(legacy, archive);
+			ExplorersCompass.LOGGER.info("Renamed explorerscompass.json to explorerscompass-old.json");
+		}
+	}
+
 	private static void ensureServerDefaults() throws IOException {
 		Path defaults = directory();
-		Files.createDirectories(defaults);
-		for (String name : List.of(COMMON, COMMON_BLACKLIST, COMMON_WHITELIST)) {
+		Files.createDirectories(defaults.resolve("server"));
+		for (String name : List.of(SERVER_SETTINGS, BLACKLIST, WHITELIST)) {
 			if (Files.notExists(defaults.resolve(name))) readOrCreate(name);
 		}
 		Path rules = defaults.resolve(UNLOCKING_RULES);
@@ -158,15 +170,15 @@ public class ExplorersCompassConfig {
 
 	public static Path serverConfigFile(net.minecraft.server.MinecraftServer server, String name) {
 		Path override = server.getSavePath(net.minecraft.util.WorldSavePath.ROOT)
-				.resolve(ExplorersCompass.MODID).resolve(name);
+				.resolve(ExplorersCompass.MODID).resolve(Path.of(name).getFileName());
 		return Files.exists(override) ? override : directory().resolve(name);
 	}
 
 	public static void loadServer(net.minecraft.server.MinecraftServer server) {
 		try {
 			ensureServerDefaults();
-			Path commonFile = serverConfigFile(server, COMMON);
-			Path blacklistFile = serverConfigFile(server, COMMON_BLACKLIST);
+			Path commonFile = serverConfigFile(server, SERVER_SETTINGS);
+			Path blacklistFile = serverConfigFile(server, BLACKLIST);
 			CommentedConfig common = parse(commonFile);
 			loadCommon(common);
 			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
@@ -179,7 +191,7 @@ public class ExplorersCompassConfig {
 				writeCommon(common);
 				write(commonFile, common);
 			}
-			structureWhitelist = strings(parse(serverConfigFile(server, COMMON_WHITELIST)), "structureWhitelist", List.of());
+			structureWhitelist = strings(parse(serverConfigFile(server, WHITELIST)), "structureWhitelist", List.of());
 			CommentedConfig blacklist = parse(blacklistFile);
 			structureBlacklist = strings(blacklist, "structureBlacklist", List.of());
 			String comment = blacklist.getComment("structureBlacklist");
@@ -202,10 +214,10 @@ public class ExplorersCompassConfig {
 		if (Files.exists(path)) return parse(path);
 		CommentedConfig config = TomlFormat.newConfig(LinkedHashMap::new);
 		switch (name) {
-			case COMMON -> writeCommon(config);
-			case CLIENT -> writeClient(config);
-			case COMMON_WHITELIST -> writeCommonWhitelist(config);
-			case COMMON_BLACKLIST -> writeCommonBlacklist(config);
+			case SERVER_SETTINGS -> writeCommon(config);
+			case CLIENT_SETTINGS -> writeClient(config);
+			case WHITELIST -> writeCommonWhitelist(config);
+			case BLACKLIST -> writeCommonBlacklist(config);
 			case HIDDEN_STRUCTURES -> writeHiddenStructures(config);
 			default -> throw new IllegalArgumentException(name);
 		}
@@ -403,7 +415,7 @@ public class ExplorersCompassConfig {
 	}
 
 	public static void saveClient() {
-		saveFile(CLIENT, ExplorersCompassConfig::writeClient);
+		saveFile(CLIENT_SETTINGS, ExplorersCompassConfig::writeClient);
 	}
 
 	public static void saveHiddenStructures() {

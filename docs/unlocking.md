@@ -1,6 +1,6 @@
 # Structure unlocking
 
-The server reads `config/explorerscompass/unlocking_rules.json` at startup. A new file contains:
+The server reads `config/explorerscompass/server/unlocking_rules.json` at startup. A new file contains:
 
 ```json
 {

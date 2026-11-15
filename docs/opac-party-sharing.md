@@ -1,6 +1,6 @@
 # Optional OPAC party sharing
 
-`unlocking.opacPartySharing = true` in `common.toml` enables sharing when Open
+`unlocking.opacPartySharing = true` in `config/explorerscompass/server/settings.toml` enables sharing when Open
 Parties and Claims is installed. Restart the server after changing the setting.
 OPAC is an optional compile-only dependency; it is not bundled with the compass.
 For local testing, install OPAC Fabric 1.20.1 (tested with 0.33.0) and its Forge

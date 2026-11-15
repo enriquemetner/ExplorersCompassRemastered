@@ -29,7 +29,7 @@ are introduced. Cancellation, ownership validation, pause support, unlock/visite
 filters and search costs continue using existing code.
 
 Interactive searches run once to the exclusive horizontal radius set by
-`search.maxSearchRadius` in `common.toml`. The default is 30,000 blocks and the
+`search.maxSearchRadius` in `config/explorerscompass/server/settings.toml`. The default is 30,000 blocks and the
 maximum is 50,000.
 There is no candidate-count limit or intermediate continuation prompt. Progress
 reports the lower bound of remaining work, not the farthest candidate prepared.
