@@ -232,25 +232,23 @@ public class ExplorersCompassItem extends Item {
 
 	@Override
 	public TypedActionResult<ItemStack> use(World world, PlayerEntity player, Hand hand) {
-        if (!world.isClient) ensureHolder((ServerPlayerEntity) player, player.getStackInHand(hand));
-		if (!player.isSneaking()) {
-			if (isBroken(player.getStackInHand(hand))) {
-				return TypedActionResult.pass(player.getStackInHand(hand));
-			}
-
-			if (world.isClient) {
-				final ItemStack stack = ItemUtils.getHeldItem(player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
-				GuiWrapper.openGUI(world, player, stack);
-			} else {
-				syncScreen((ServerPlayerEntity) player);
-			}
-		} else {
+		ItemStack stack = player.getStackInHand(hand);
+		if (!world.isClient) ensureHolder((ServerPlayerEntity) player, stack);
+		if (player.isSneaking()) {
 			cancelSearch(player, -1);
-			ItemStack stack = player.getStackInHand(hand);
 			clearSearchData(stack);
+			return TypedActionResult.pass(stack);
+		}
+		if (isBroken(stack)) {
+			return TypedActionResult.pass(stack);
 		}
 
-		return TypedActionResult.pass(player.getStackInHand(hand));
+		if (world.isClient) {
+			GuiWrapper.openGUI(world, player, stack);
+		} else {
+			syncScreen((ServerPlayerEntity) player);
+		}
+		return TypedActionResult.success(stack, world.isClient);
 	}
 
 	/** Re-evaluate and synchronize the compass when opened or returned to from the Quest Book. */
