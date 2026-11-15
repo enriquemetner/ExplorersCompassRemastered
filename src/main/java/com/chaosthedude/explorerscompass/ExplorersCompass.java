@@ -117,7 +117,8 @@ public class ExplorersCompass implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
 				com.chaosthedude.explorerscompass.unlocking.UnlockReloads.left(handler.player.getUuid()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-				RepairDurabilityPacket.send(handler.player, ExplorersCompassConfig.compassDurability));
+				RepairDurabilityPacket.send(handler.player, ExplorersCompassConfig.compassDurability,
+                        ExplorersCompassConfig.showNetherEquivalent));
         // Also validate idle sessions awaiting "Keep searching" during normal gameplay.
         // Active searches validate ownership in every queued slice, including while paused.
         ServerTickEvents.START_SERVER_TICK.register(EXPLORERS_COMPASS_ITEM::tickSearchOwnership);

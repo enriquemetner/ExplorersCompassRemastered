@@ -29,6 +29,7 @@ public final class ClientPacketHandlers {
     public static Identifier trackedStructureId;
     public static boolean showNewlyUnlockedFilter;
     public static boolean whitelistActive;
+    public static boolean showNetherEquivalent;
     public static java.util.Set<Identifier> excludedStructures = java.util.Set.of();
     public static Map<Identifier, RequirementNode> partyRequirements = Map.of();
     public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
@@ -127,7 +128,11 @@ public final class ClientPacketHandlers {
 
     public static void applyRepairDurability(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         int durability = buf.readVarInt();
-        client.execute(() -> CompassRepairRecipe.setServerDurability(durability));
+        boolean equivalent = buf.isReadable() && buf.readBoolean();
+        client.execute(() -> {
+            CompassRepairRecipe.setServerDurability(durability);
+            showNetherEquivalent = equivalent;
+        });
     }
 
     public static void applySync(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender responseSender) {

@@ -1,5 +1,8 @@
 package com.chaosthedude.explorerscompass.client;
 
+import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
+import com.chaosthedude.explorerscompass.util.CompassProjection;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -40,12 +43,16 @@ public final class CompassNeedle implements ClampedModelPredicateProvider {
                 if (dimensions.stream().distinct().count() == 1) dimension = dimensions.get(0);
             }
         }
+        var currentDimension = world.getRegistryKey().getValue();
+        CompassProjection projection = ClientPacketHandlers.showNetherEquivalent && data != null
+                ? CompassProjection.between(dimension, currentDimension, data.getInt("FoundX"), data.getInt("FoundZ"))
+                : null;
         boolean pointing = context != null && data != null && data.getInt("State") == CompassState.FOUND.getID()
-                && dimension != null && dimension.equals(world.getRegistryKey().getValue());
+                && (currentDimension.equals(dimension) || projection != null);
         double angle;
         if (pointing) {
-            double targetX = data.getInt("FoundX") + 0.5;
-            double targetZ = data.getInt("FoundZ") + 0.5;
+            double targetX = projection == null ? data.getInt("FoundX") + 0.5 : projection.x();
+            double targetZ = projection == null ? data.getInt("FoundZ") + 0.5 : projection.z();
             double target = Math.atan2(targetZ - context.position().z, targetX - context.position().x);
             angle = (Math.PI - ((context.yaw() - 90) * Math.PI / 180 - target)) / (Math.PI * 2);
         } else {

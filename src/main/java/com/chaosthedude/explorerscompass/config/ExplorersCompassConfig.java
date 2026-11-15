@@ -48,6 +48,7 @@ public class ExplorersCompassConfig {
     public static boolean opacPartySharing = true;
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
+	public static boolean showNetherEquivalent = false;
 	public static int compassDurability = 0;
 	public static int defaultXpCost = 0;
 	public static boolean allowSearchWithoutEnoughXp = false;
@@ -185,7 +186,7 @@ public class ExplorersCompassConfig {
 					|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
 					|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
 					|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
-                    || common.get(SEARCH_SAVED_STRUCTURES) == null
+                    || common.get(SEARCH_SAVED_STRUCTURES) == null || common.get("compass.showNetherEquivalent") == null
                     || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 				common.remove("permissions.allowTeleport");
 				writeCommon(common);
@@ -286,6 +287,7 @@ public class ExplorersCompassConfig {
 		relockOnReload = bool(config, "unlocking.relockOnReload", false);
 		displayCoordinates = bool(config, "compass.displayCoordinates", true);
 		displayDistance = bool(config, "compass.displayDistance", true);
+		showNetherEquivalent = bool(config, "compass.showNetherEquivalent", false);
 		compassDurability = number(config, "compass.compassDurability", 0, 0);
 		defaultXpCost = number(config, "search.defaultXpCost", 0, 0);
 		allowSearchWithoutEnoughXp = bool(config, "search.allowSearchWithoutEnoughXp", false);
@@ -356,6 +358,7 @@ public class ExplorersCompassConfig {
 		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
 		put(config, "compass.displayDistance", displayDistance, "Show distance to located structures.");
+		put(config, "compass.showNetherEquivalent", showNetherEquivalent, "Point to equivalent coordinates when tracking a structure across the Overworld and Nether.");
         config.remove("search.maxSamples"); // Retired: searches are bounded by radius.
 		put(config, "compass.compassDurability", compassDurability, "Successful searches before the compass breaks; 0 disables durability.");
 		put(config, "search.defaultXpCost", defaultXpCost, "XP levels consumed after a successful search.");

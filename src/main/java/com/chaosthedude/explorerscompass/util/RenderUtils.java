@@ -50,11 +50,15 @@ public class RenderUtils {
 	}
 
 	public static void drawConfiguredStringOnHUD(DrawContext context, String string, TextRenderer textRenderer, int xOffset, int yOffset, int color, int relLineOffset) {
+		drawConfiguredStringOnHUD(context, Text.literal(string), textRenderer, xOffset, yOffset, color, relLineOffset);
+	}
+
+	public static void drawConfiguredStringOnHUD(DrawContext context, Text text, TextRenderer textRenderer, int xOffset, int yOffset, int color, int relLineOffset) {
 		yOffset += (relLineOffset + ExplorersCompassConfig.overlayLineOffset) * 9;
 		if (ExplorersCompassConfig.overlaySide == OverlaySide.LEFT) {
-			drawStringLeft(context, string, textRenderer, xOffset + 2, yOffset + 2, color);
+			context.drawTextWithShadow(textRenderer, text, xOffset + 2, yOffset + 2, color);
 		} else {
-			drawStringRight(context, string, textRenderer, mc.getWindow().getScaledWidth() - xOffset - 2, yOffset + 2, color);
+			context.drawTextWithShadow(textRenderer, text, mc.getWindow().getScaledWidth() - xOffset - 2 - textRenderer.getWidth(text), yOffset + 2, color);
 		}
 	}
 
