@@ -22,12 +22,12 @@ public class SearchWorkerManager {
 
 	private final String id = RandomStringUtils.random(8, "0123456789abcdef");
 
-	private List<StructureSearchWorker<?>> workers;
+	private List<SearchWorker> workers;
 	// Keep workers and their cursors across radius stages; index advances within the current stage.
 	private int index;
 
 	public SearchWorkerManager() {
-		workers = new ArrayList<StructureSearchWorker<?>>();
+		workers = new ArrayList<SearchWorker>();
 	}
 
 	public void createWorkers(ServerWorld world, PlayerEntity player, ItemStack stack, List<Structure> structures, List<Structure> savedStructures, Identifier structureOrSetId, boolean excludeVisited, boolean creativeBypass, BlockPos startPos) {
@@ -45,7 +45,7 @@ public class SearchWorkerManager {
 		}
 
         if (!placementToStructuresMap.isEmpty() || !savedStructures.isEmpty()) {
-            StructureSearchWorker<?> worker = new NearestFirstSearchWorker(world, player, stack, startPos,
+            SearchWorker worker = new SearchWorker(world, player, stack, startPos,
                     placementToStructuresMap, savedStructures, structureOrSetId, excludeVisited, id);
             worker.setCreativeBypass(creativeBypass);
             workers.add(worker);
@@ -53,14 +53,14 @@ public class SearchWorkerManager {
 	}
 
 	public void setRadiusLimit(int radiusLimit) {
-		for (StructureSearchWorker<?> worker : workers) worker.setRadiusLimit(radiusLimit);
+		for (SearchWorker worker : workers) worker.setRadiusLimit(radiusLimit);
 		index = 0;
 	}
 
 	// Returns true if a worker starts, false otherwise
 	public boolean start() {
 		while (index < workers.size()) {
-			StructureSearchWorker<?> worker = workers.get(index);
+			SearchWorker worker = workers.get(index);
 			if (worker.hasWork()) {
 				worker.start();
 				return true;
@@ -74,12 +74,12 @@ public class SearchWorkerManager {
 		index++;
 	}
 
-    public boolean ownsWorker(StructureSearchWorker<?> worker) {
+    public boolean ownsWorker(SearchWorker worker) {
         return workers.contains(worker);
     }
 
 	public void stop() {
-		for (StructureSearchWorker<?> worker : workers) {
+		for (SearchWorker worker : workers) {
 			worker.stop();
 		}
 	}

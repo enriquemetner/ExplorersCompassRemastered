@@ -1,32 +1,179 @@
 package com.chaosthedude.explorerscompass.workers;
 
-import com.chaosthedude.explorerscompass.mixins.SearchChunkManagerAccessor;
-import java.util.concurrent.CompletableFuture;
-import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.chunk.ChunkStatus;
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
+import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
+import com.chaosthedude.explorerscompass.mixins.SearchChunkManagerAccessor;
 import com.chaosthedude.explorerscompass.mixins.StructureChunkStorageAccessor;
+import com.chaosthedude.explorerscompass.storage.EmptyChunkCache;
 import com.chaosthedude.explorerscompass.storage.EmptyChunkStorage;
 import com.chaosthedude.explorerscompass.storage.SavedStructureIndex;
 import com.chaosthedude.explorerscompass.storage.SavedStructureReader;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
 import com.chaosthedude.explorerscompass.util.StructureDestination;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
+import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.structure.StructureStart;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
+import net.minecraft.util.math.ChunkSectionPos;
+import net.minecraft.world.StructurePresence;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.ChunkStatus;
 import net.minecraft.world.gen.chunk.placement.*;
+import net.minecraft.world.gen.chunk.placement.StructurePlacement;
 import net.minecraft.world.gen.structure.Structure;
 
-/** One coordinator orders all placement grids, including searches for multiple structures, by horizontal locate distance. */
-final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlacement> {
+public final class SearchWorker implements WorldWorkerManager.IWorker {
+
+    private record Match(Structure structure, ChunkPos startChunk, StructureStart start) {}
+
+	private static final int PROGRESS_INTERVAL_BLOCKS = 100;
+
+	private String managerId;
+    private final EmptyChunkCache storageCache = new EmptyChunkCache();
+	private ServerWorld level;
+	private PlayerEntity player;
+	private ItemStack stack;
+	private BlockPos startPos;
+	private BlockPos currentPos;
+	private StructurePlacement placement;
+	private List<Structure> structureSet;
+	private Identifier structureOrSetId;
+	private boolean excludeVisited;
+	private boolean creativeBypass;
+	private int samples;
+	private boolean finished;
+	private int lastRadiusThreshold;
+	private int radiusLimit = ExplorersCompassConfig.maxSearchRadius;
+
+
+	public void start() {
+		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
+			ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker starting with " + radiusLimit + " radius limit, no candidate limit");
+			WorldWorkerManager.addWorker(level.getServer(), this);
+		}
+	}
+
+	public void setRadiusLimit(int radiusLimit) {
+		this.radiusLimit = radiusLimit;
+	}
+
+	public void setCreativeBypass(boolean creativeBypass) {
+		this.creativeBypass = creativeBypass;
+	}
+
+	private void reportProgress() {
+		int radius = getRadius();
+		int threshold = radius / PROGRESS_INTERVAL_BLOCKS;
+		if (threshold > lastRadiusThreshold) {
+			if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
+				((ExplorersCompassItem) stack.getItem()).reportSearchProgress(player, stack, roundRadius(radius, PROGRESS_INTERVAL_BLOCKS));
+			}
+			lastRadiusThreshold = threshold;
+		}
+	}
+
+	private Match getStructureGeneratingAt(ChunkPos chunkPos, Chunk loaded, boolean requested) {
+		for (Structure structure : structureSet) {
+            Identifier id = StructureUtils.getIDForStructure(level, structure);
+            if (id == null || (!(creativeBypass && player.getAbilities().creativeMode)
+					&& !com.chaosthedude.explorerscompass.unlocking.UnlockingRules.isUnlocked(level.getServer(), player.getUuid(), id))) continue;
+			StructurePresence result = SearchPlacementFilter.lookup(chunkPos.toLong(), structure,
+                    () -> placement.shouldGenerate(level.getChunkManager().getStructurePlacementCalculator(), chunkPos.x, chunkPos.z),
+                    storageCache, () -> level.getStructureAccessor().getStructurePresence(chunkPos, structure, false));
+			if (result != StructurePresence.START_NOT_PRESENT) {
+				if (result == StructurePresence.START_PRESENT) {
+					if (wasVisited(structure, chunkPos)) continue;
+					StructureStart start = loaded == null ? null
+                            : level.getStructureAccessor().getStructureStart(ChunkSectionPos.from(loaded), structure, loaded);
+                    return new Match(structure, chunkPos, start != null && start.hasChildren() ? start : null);
+				}
+
+				if (!requested) {
+                    requestCandidateChunk(chunkPos);
+                    return null;
+                }
+                if (loaded == null) continue;
+                Chunk chunk = loaded;
+				StructureStart structureStart = level.getStructureAccessor().getStructureStart(ChunkSectionPos.from(chunk), structure, chunk);
+				if (structureStart != null && structureStart.hasChildren() && !wasVisited(structure, structureStart.getPos())) {
+					return new Match(structure, structureStart.getPos(), structureStart);
+				}
+			}
+		}
+
+		return null;
+	}
+
+
+	private boolean wasVisited(Structure structure, ChunkPos startChunk) {
+		if (!excludeVisited) return false;
+		Identifier structureId = StructureUtils.getIDForStructure(level, structure);
+		return structureId != null && VisitedStructures.hasEffectiveVisit(level.getServer(), player.getUuid(),
+			level.getRegistryKey().getValue(), structureId, startChunk);
+	}
+
+	private void succeed(Match match) {
+        storageCache.clear();
+		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker succeeded with " + getRadius() + " radius, " + samples + " samples");
+		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
+            StructureStart start = match.start() != null ? match.start()
+                    : StructureDestination.readStart(level, match.startChunk(), match.structure());
+            var pieces = StructureDestination.pieces(start);
+            BlockPos pos = StructureDestination.refine(pieces, placement == null ? match.startChunk().getStartPos() : placement.getLocatePos(match.startChunk())).pos();
+			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, match.structure()),
+                    match.startChunk(), pos.getX(), pos.getZ(), BlockBox.encompass(pieces).orElse(null), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
+		} else {
+			ExplorersCompass.LOGGER.error("SearchWorkerManager " + managerId + ": SearchWorker found invalid compass after successful search");
+		}
+		finished = true;
+	}
+
+	private void fail() {
+        storageCache.clear();
+		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker failed with " + getRadius() + " radius, " + samples + " samples");
+		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
+			((ExplorersCompassItem) stack.getItem()).fail(player, stack, structureOrSetId, getRadius(), samples);
+		} else {
+			ExplorersCompass.LOGGER.error("SearchWorkerManager " + managerId + ": SearchWorker found invalid compass after failed search");
+			finished = true;
+		}
+	}
+
+    @Override
+    public void onSearchError(RuntimeException exception) {
+        ExplorersCompass.LOGGER.error("Compass search {} for {} in {} failed at radius {}",
+                managerId, structureOrSetId, level.getRegistryKey().getValue(), getRadius(), exception);
+        ExplorersCompass.EXPLORERS_COMPASS_ITEM.abortFailedSearch(player, this);
+    }
+
+	public void stop() {
+        pendingTarget = null;
+        pendingChunk = null;
+        storageCache.clear();
+		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker stopped with " + getRadius() + " radius, " + samples + " samples");
+		finished = true;
+	}
+
+	private int getRadius() {
+		return StructureUtils.getHorizontalDistanceToLocation(startPos, currentPos.getX(), currentPos.getZ());
+	}
+
+	private int roundRadius(int radius, int roundTo) {
+		return ((int) radius / roundTo) * roundTo;
+	}
+
     private record Target(StructurePlacement placement, List<Structure> structures, ChunkPos chunk, boolean saved) {}
     private final Map<Identifier, Structure> savedTargets = new HashMap<>();
     private final Map<Structure, List<StructurePlacement>> locateRules = new HashMap<>();
@@ -35,10 +182,20 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
     private boolean warnedReadFailure;
     private final NearestFirstQueue<Target> queue;
 
-    NearestFirstSearchWorker(ServerWorld world, PlayerEntity player, ItemStack stack, BlockPos origin,
+    SearchWorker(ServerWorld world, PlayerEntity player, ItemStack stack, BlockPos origin,
             Map<StructurePlacement, List<Structure>> placements, List<Structure> searchStructures, Identifier searchId,
             boolean excludeVisited, String managerId) {
-        super(world, player, stack, origin, null, List.of(), searchId, excludeVisited, managerId);
+        this.level = world;
+        this.player = player;
+        this.stack = stack;
+        this.startPos = origin;
+        this.structureSet = List.of();
+        this.structureOrSetId = searchId;
+        this.excludeVisited = excludeVisited && ExplorersCompassConfig.allowExcludeVisited;
+        this.managerId = managerId;
+        currentPos = origin;
+        samples = 0;
+        finished = !level.getServer().getSaveProperties().getGeneratorOptions().shouldGenerateStructures();
         queue = new NearestFirstQueue<>(origin.getX(), origin.getZ());
         boolean generate = !finished;
         if (!searchStructures.isEmpty()) finished = false;
@@ -156,8 +313,7 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
     private Target pendingTarget;
     private CompletableFuture<Chunk> pendingChunk;
 
-    @Override
-    protected void requestCandidateChunk(ChunkPos pos) {
+    private void requestCandidateChunk(ChunkPos pos) {
         pendingChunk = ((SearchChunkManagerAccessor) level.getChunkManager())
                 .explorerscompass$requestChunk(pos.x, pos.z, ChunkStatus.STRUCTURE_STARTS, true)
                 .handle((result, error) -> {
@@ -171,14 +327,8 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
 
     @Override public CompletableFuture<?> pendingWork() { return pendingChunk; }
 
-    @Override public void stop() {
-        pendingTarget = null;
-        pendingChunk = null;
-        super.stop();
-    }
-
     @Override public boolean hasWork() { return !finished; }
-    @Override public boolean canWorkAt(int radius) {
+    private boolean canWorkAt(int radius) {
         return !finished && queue.nextDistanceSquared() < (long) radius * radius;
     }
     @Override public boolean doWork() {
@@ -201,7 +351,7 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
         // This lower bound is the radius proven clear so far, not the farthest prepared candidate.
         int radius = (int) Math.sqrt(queue.nextDistanceSquared());
         currentPos = new BlockPos(startPos.getX() + radius, 0, startPos.getZ());
-        super.doWork();
+        reportProgress();
         var candidate = queue.advance();
         if (candidate != null) {
             Target target = candidate.value();
@@ -226,6 +376,4 @@ final class NearestFirstSearchWorker extends StructureSearchWorker<StructurePlac
         }
         return hasWork();
     }
-    @Override protected String getName() { return "NearestFirstSearchWorker"; }
-    @Override protected boolean shouldLogRadius() { return true; }
 }
