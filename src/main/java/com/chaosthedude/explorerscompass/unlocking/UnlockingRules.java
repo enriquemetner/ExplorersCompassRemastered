@@ -1,5 +1,7 @@
 package com.chaosthedude.explorerscompass.unlocking;
 
+import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
+
 import java.io.IOException;
 import java.io.StringReader;
 import java.nio.file.Files;
@@ -27,7 +29,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
-import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.advancement.Advancement;
 import net.minecraft.advancement.AdvancementFrame;
 import net.minecraft.registry.RegistryKeys;
@@ -108,10 +109,8 @@ public final class UnlockingRules {
     public static String definition() { return activeDefinition; }
 
     public static int reload(MinecraftServer server) {
-        Path file = FabricLoader.getInstance().getConfigDir().resolve("explorerscompass/unlocking_rules.json");
+        Path file = ExplorersCompassConfig.serverConfigFile(server, ExplorersCompassConfig.UNLOCKING_RULES);
         try {
-            Files.createDirectories(file.getParent());
-            if (!Files.exists(file)) Files.writeString(file, "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n");
             String source = Files.readString(file);
             UnlockingRules loaded = parse(source, catalog(server));
             active = loaded;

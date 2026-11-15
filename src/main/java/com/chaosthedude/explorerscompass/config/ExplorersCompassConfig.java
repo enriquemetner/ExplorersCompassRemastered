@@ -25,6 +25,8 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.api.EnvType;
 
 public class ExplorersCompassConfig {
+	public static final String UNLOCKING_RULES = "unlocking_rules.json";
+	private static final String DEFAULT_UNLOCKING_RULES = "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n";
 	private static final String COMMON = "common.toml";
 	private static final String CLIENT = "client.toml";
 	private static final String COMMON_WHITELIST = "common_whitelist.toml";
@@ -118,7 +120,7 @@ public class ExplorersCompassConfig {
 
 	public static void load() {
 		try {
-			Files.createDirectories(directory());
+			ensureServerDefaults();
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
 				CommentedConfig clientConfig = readOrCreate(CLIENT);
@@ -144,10 +146,28 @@ public class ExplorersCompassConfig {
 		}
 	}
 
-	public static void loadServer() {
+	private static void ensureServerDefaults() throws IOException {
+		Path defaults = directory();
+		Files.createDirectories(defaults);
+		for (String name : List.of(COMMON, COMMON_BLACKLIST, COMMON_WHITELIST)) {
+			if (Files.notExists(defaults.resolve(name))) readOrCreate(name);
+		}
+		Path rules = defaults.resolve(UNLOCKING_RULES);
+		if (Files.notExists(rules)) Files.writeString(rules, DEFAULT_UNLOCKING_RULES);
+	}
+
+	public static Path serverConfigFile(net.minecraft.server.MinecraftServer server, String name) {
+		Path override = server.getSavePath(net.minecraft.util.WorldSavePath.ROOT)
+				.resolve(ExplorersCompass.MODID).resolve(name);
+		return Files.exists(override) ? override : directory().resolve(name);
+	}
+
+	public static void loadServer(net.minecraft.server.MinecraftServer server) {
 		try {
-			Files.createDirectories(directory());
-			CommentedConfig common = readOrCreate(COMMON);
+			ensureServerDefaults();
+			Path commonFile = serverConfigFile(server, COMMON);
+			Path blacklistFile = serverConfigFile(server, COMMON_BLACKLIST);
+			CommentedConfig common = parse(commonFile);
 			loadCommon(common);
 			if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
 					|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
@@ -157,16 +177,16 @@ public class ExplorersCompassConfig {
                     || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 				common.remove("permissions.allowTeleport");
 				writeCommon(common);
-				write(directory().resolve(COMMON), common);
+				write(commonFile, common);
 			}
-			structureWhitelist = strings(readOrCreate(COMMON_WHITELIST), "structureWhitelist", List.of());
-			CommentedConfig blacklist = readOrCreate(COMMON_BLACKLIST);
+			structureWhitelist = strings(parse(serverConfigFile(server, COMMON_WHITELIST)), "structureWhitelist", List.of());
+			CommentedConfig blacklist = parse(blacklistFile);
 			structureBlacklist = strings(blacklist, "structureBlacklist", List.of());
 			String comment = blacklist.getComment("structureBlacklist");
 			if (comment == null || !comment.contains(WHITELIST_PRECEDENCE)) {
 				if (comment == null) writeCommonBlacklist(blacklist);
 				else blacklist.setComment("structureBlacklist", comment + "\n" + WHITELIST_PRECEDENCE);
-				write(directory().resolve(COMMON_BLACKLIST), blacklist);
+				write(blacklistFile, blacklist);
 			}
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass server configuration", e);
@@ -384,14 +404,6 @@ public class ExplorersCompassConfig {
 
 	public static void saveClient() {
 		saveFile(CLIENT, ExplorersCompassConfig::writeClient);
-	}
-
-	public static void saveCommon() {
-		saveFile(COMMON, ExplorersCompassConfig::writeCommon);
-	}
-
-	public static void saveCommonBlacklist() {
-		saveFile(COMMON_BLACKLIST, ExplorersCompassConfig::writeCommonBlacklist);
 	}
 
 	public static void saveHiddenStructures() {
