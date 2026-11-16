@@ -28,6 +28,13 @@ class StructureSearchQueryTest {
     }
 
     @Test
+    void allowsPrefixesOnBothEndsOfAnOrderedPhrase() {
+        assertTrue(matches("Village Plains @example $over &settle", false, false, SET));
+        assertTrue(matches("@example Village Plains $over &settle", false, false, SET));
+        assertFalse(matches("@example Plains Village $over", false, false, SET));
+    }
+
+    @Test
     void barePrefixesMatchAnyAvailableId() {
         assertTrue(matches("@ $ & Village Plains", false, false, SET));
         assertFalse(matches("&", false, false, null));
@@ -37,7 +44,8 @@ class StructureSearchQueryTest {
     @Test
     void rejectsMalformedQueries() {
         assertNull(StructureSearchQuery.parse("@example @other", true));
-        assertNull(StructureSearchQuery.parse("Village &settle", false));
+        assertNull(StructureSearchQuery.parse("Village &settle Plains", false));
+        assertNull(StructureSearchQuery.parse("@example Village @other", false));
     }
 
     private boolean matches(String query, boolean anyOrder, boolean allowIds, Identifier set) {

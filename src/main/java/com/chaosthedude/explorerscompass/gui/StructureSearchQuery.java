@@ -27,12 +27,14 @@ record StructureSearchQuery(String source, String dimension, String set, String 
         var tokens = TOKEN.matcher(query);
         String source = null, dimension = null, set = null;
         int firstPlain = -1;
+        int lastPlainEnd = -1;
+        boolean reachedTrailingPrefix = false;
         StringBuilder plain = new StringBuilder();
         while (tokens.find()) {
             String token = tokens.group();
             char prefix = token.charAt(0);
             if (prefix == '@' || prefix == '$' || prefix == '&') {
-                if (!anyOrder && firstPlain >= 0) return null;
+                if (firstPlain >= 0) reachedTrailingPrefix = true;
                 String value = token.substring(1);
                 switch (prefix) {
                     case '@' -> {
@@ -49,12 +51,13 @@ record StructureSearchQuery(String source, String dimension, String set, String 
                     }
                 }
             } else {
+                if (!anyOrder && reachedTrailingPrefix) return null;
                 if (firstPlain < 0) firstPlain = tokens.start();
+                lastPlainEnd = tokens.end();
                 if (anyOrder) plain.append(token).append(' ');
             }
         }
-        boolean prefixed = source != null || dimension != null || set != null;
-        String phrase = !prefixed ? query : firstPlain < 0 ? "" : query.substring(firstPlain);
+        String phrase = firstPlain < 0 ? "" : query.substring(firstPlain, lastPlainEnd);
         return new StructureSearchQuery(source, dimension, set, phrase,
                 anyOrder ? SettingsSearch.fragments(plain.toString()) : null);
     }
