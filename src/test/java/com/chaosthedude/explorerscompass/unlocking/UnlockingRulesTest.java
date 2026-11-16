@@ -425,9 +425,11 @@ class UnlockingRulesTest {
                 "    ], \"condition\": {\"type\": \"advancement\", \"advancements\": [\"minecraft:story/mine_stone\"]}}\n" +
                 "  }\n" +
                 "}\n";
-        assertEquals(4, UnlockingRules.unlockLines(source).get("first").get(0));
-        assertEquals(7, UnlockingRules.unlockLines(source).get("second").get(0));
         UnlockingRules rules = rules(source);
+        var warnings = rules.diagnostics(UnlockingRules.Severity.WARNING);
+        assertEquals(1, warnings.size());
+        assertTrue(warnings.get(0).message().contains("minecraft:fortress"));
+        assertTrue(warnings.get(0).message().contains("lines 4, 7"));
         Progress progress = new Progress();
         progress.visits.add(A);
         assertTrue(rules.earnedOnOpen(STRUCTURES, progress).contains(A));
@@ -458,12 +460,32 @@ class UnlockingRulesTest {
         assertEquals("Visit Structure:", rules.requirements(B, progress).label().getString());
     }
 
-    @Test void unavailableRequirementsNeverSatisfyAllVacuously() {
-        Progress p = new Progress(); p.visits.add(A);
-        assertFalse(condition("{\"type\":\"visit\",\"structures\":[\"missing:set\"],\"match\":\"all\"}").earnedOnOpen(STRUCTURES, p).contains(B));
-        assertFalse(condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\",\"missing:type\"],\"match\":\"all\"}").earnedOnOpen(STRUCTURES, p).contains(B));
-        p.advancements.add(new Identifier("missing:advancement"));
-        assertFalse(condition("{\"type\":\"advancement\",\"advancements\":[\"missing:advancement\"]}").earnedOnOpen(STRUCTURES, p).contains(B));
+    @Test void unknownSelectorsRejectOnlyTheirOwnRuleAndReportTheSelectorLine() {
+        UnlockingRules parsed = rules("""
+                {
+                  "default": "lockedUntilVisited",
+                  "rules": {
+                    "valid": {"unlocks": ["fortress"], "condition": {"type": "visit", "structures": ["ancient_city"]}},
+                    "typo": {"unlocks": ["stronghold"], "condition": {"type": "visit", "structures": [
+                      "ancient_citys"
+                    ]}},
+                    "unmatched": {"unlocks": ["fortress", "missing:*"], "condition": {"type": "visit", "structures": ["ancient_city"]}},
+                    "missingAdvancement": {"unlocks": ["fortress"], "condition": {"type": "advancement", "advancements": ["missing:advancement"]}},
+                    "missingCondition":
+                    {"unlocks": ["fortress"]}
+                  }
+                }
+                """);
+        assertEquals(Set.of("valid"), parsed.ruleNames());
+        var errors = parsed.diagnostics(UnlockingRules.Severity.ERROR);
+        assertEquals(4, errors.size());
+        assertTrue(errors.get(0).message().contains("line 6"));
+        assertTrue(errors.get(0).message().contains("ancient_citys"));
+        assertTrue(errors.get(1).message().contains("missing:*"));
+        assertTrue(errors.get(2).message().contains("missing:advancement"));
+        assertTrue(errors.get(3).message().contains("line 10"));
+        assertEquals(errors, parsed.diagnostics(null));
+        assertTrue(parsed.diagnostics(UnlockingRules.Severity.WARNING).isEmpty());
     }
 
     @Test void ruleDescriptionIsRejectedAndRequirementsAreGenerated() {
@@ -595,6 +617,63 @@ class UnlockingRulesTest {
         saved.remove(player, Set.of(A, B));
         assertEquals(2, saved.add(player, rules.earnedOnOpen(STRUCTURES, progress)));
         assertEquals(0, saved.add(player, rules.earnedOnOpen(STRUCTURES, progress)));
+    }
+
+    @Test void rejectsMalformedDocumentsAndInvalidRootFields(@TempDir Path directory) throws Exception {
+        Path file = directory.resolve("unlocking_rules.json");
+        for (String source : List.of(
+                "{\n  \"rules\": {}",
+                "{\n  // comment\n  \"rules\": {}\n}",
+                "{\n  \"default\": \"bad\nvalue\"\n}",
+                "{\n  \"default\": \"missing\"\n}",
+                "{\n  \"rules\": []\n}",
+                "[]",
+                "{} {}")) {
+            Files.writeString(file, source);
+            UnlockingRules loaded = UnlockingRules.loadFile(file, catalog);
+            assertEquals(STRUCTURES, loaded.earnedOnOpen(STRUCTURES, new Progress()));
+            assertEquals(source, Files.readString(file));
+            var diagnostic = loaded.diagnostics(UnlockingRules.Severity.ERROR).get(0);
+            assertTrue(diagnostic.message().startsWith("Could not load unlocking_rules.json:"));
+            assertFalse(diagnostic.message().contains(file.toString()));
+            assertTrue(diagnostic.message().contains("line"), diagnostic.message());
+        }
+        Files.writeString(file, "{}");
+        assertTrue(UnlockingRules.loadFile(file, catalog).diagnostics(null).isEmpty());
+    }
+
+    @Test void latestReloadReportIncludesFallbackAndClearsAfterCleanLoad(@TempDir Path directory) throws Exception {
+        Path file = directory.resolve("unlocking_rules.json");
+        try {
+            Files.writeString(file, """
+                    {"default":"lockedUntilVisited","rules":{
+                        "first":{"unlocks":["fortress*"],"condition":{"type":"visit","structures":["ancient_city"]}},
+                        "invalid":{"unlocks":["fortress"],"condition":{"type":"visit","structures":["typo"]}},
+                        "last":{"unlocks":["test_set"],"condition":{"type":"visit","structures":["ancient_city"]}}
+                    }}
+                    """);
+            assertEquals(2, UnlockingRules.reload(file, catalog));
+            var errors = UnlockingRules.report(UnlockingRules.Severity.ERROR);
+            var warnings = UnlockingRules.report(UnlockingRules.Severity.WARNING);
+            assertEquals(1, errors.size());
+            assertEquals(1, warnings.size());
+            assertEquals(List.of(errors.get(0), warnings.get(0)), UnlockingRules.report(null));
+
+            Files.writeString(file, "{");
+            assertEquals(-1, UnlockingRules.reload(file, catalog));
+            assertEquals(1, UnlockingRules.report(UnlockingRules.Severity.ERROR).size());
+            assertTrue(UnlockingRules.report(UnlockingRules.Severity.WARNING).isEmpty());
+            assertTrue(UnlockingRules.get().ruleNames().isEmpty());
+            var unclaimed = new FtbStructureRewards.Snapshot(
+                    java.util.Map.of(B, List.of(new FtbStructureRewards.Quest(1L, Text.literal("Quest")))), java.util.Map.of(), Set.of());
+            assertFalse(UnlockingRules.get().earnedOnOpen(STRUCTURES, new Progress(), unclaimed).contains(B));
+
+            Files.writeString(file, "{}");
+            assertEquals(0, UnlockingRules.reload(file, catalog));
+            assertTrue(UnlockingRules.report(null).isEmpty());
+        } finally {
+            UnlockingRules.clear();
+        }
     }
 
     @Test void loadingAndMalformedFileDoNotTouchPlayerData(@TempDir Path directory) throws Exception {

@@ -3,7 +3,6 @@ package com.chaosthedude.explorerscompass.unlocking;
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 
 import java.io.IOException;
-import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -17,6 +16,8 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Function;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.regex.Pattern;
 
@@ -24,11 +25,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonToken;
+import com.google.gson.JsonPrimitive;
 import net.minecraft.advancement.Advancement;
 import net.minecraft.advancement.AdvancementFrame;
 import net.minecraft.registry.RegistryKeys;
@@ -41,10 +41,34 @@ import net.minecraft.util.Identifier;
 
 /** Server-owned rule definitions. Reloading replaces definitions without touching player data. */
 public final class UnlockingRules {
+    private static final String DEFAULT_DEFINITION = new UnlockingRuleDocument(ExplorersCompassConfig.DEFAULT_UNLOCKING_RULES).root.toString();
     private static final Logger LOGGER = LogManager.getLogger("explorerscompass");
     private static UnlockingRules active = new UnlockingRules();
     private static String activeDefinition = "";
     private enum DefaultMode { UNLOCKED, LOCKED_UNTIL_VISITED, LOCKED_UNTIL_VISITED_SET }
+
+    enum Severity { ERROR, WARNING }
+    record Diagnostic(Severity severity, String message) {}
+
+    private final List<Diagnostic> diagnostics = new ArrayList<>();
+
+    static List<Diagnostic> report(Severity severity) {
+        return active.diagnostics(severity);
+    }
+
+    List<Diagnostic> diagnostics(Severity severity) {
+        return diagnostics.stream().filter(entry -> severity == null || severity == entry.severity()).toList();
+    }
+
+    private void diagnose(Severity severity, Path file, String message) {
+        diagnose(severity, (file == null ? "unlocking_rules.json" : file.getFileName().toString()) + ": " + message);
+    }
+
+    private void diagnose(Severity severity, String text) {
+        diagnostics.add(new Diagnostic(severity, text));
+        if (severity == Severity.ERROR) LOGGER.error(text);
+        else LOGGER.warn(text);
+    }
 
     private DefaultMode defaultMode = DefaultMode.UNLOCKED;
     private final Map<String, Rule> rules = new LinkedHashMap<>();
@@ -110,62 +134,96 @@ public final class UnlockingRules {
 
     public static int reload(MinecraftServer server) {
         Path file = ExplorersCompassConfig.serverConfigFile(server, ExplorersCompassConfig.UNLOCKING_RULES);
+        return reload(file, catalog(server));
+    }
+
+    static int reload(Path file, Catalog catalog) {
+        var loaded = readFile(file, catalog);
+        active = loaded.rules();
+        activeDefinition = loaded.definition();
+        PartySharing.changed();
+        LOGGER.info("Loaded {} structure unlocking rules", active.rules.size());
+        return loaded.fallback() ? -1 : active.rules.size();
+    }
+
+    private record LoadedRules(UnlockingRules rules, String definition, boolean fallback) {}
+
+    private static LoadedRules readFile(Path file, Catalog catalog) {
         try {
-            String source = Files.readString(file);
-            UnlockingRules loaded = parse(source, catalog(server));
-            active = loaded;
-            activeDefinition = JsonParser.parseString(source).toString();
-            PartySharing.changed();
-            LOGGER.info("Loaded {} structure unlocking rules", active.rules.size());
-            return active.rules.size();
-        } catch (IOException | RuntimeException e) {
-            LOGGER.error("Could not reload {}. Keeping active unlocking rules.", file, e);
-            return -1;
+            var document = new UnlockingRuleDocument(Files.readString(file));
+            return new LoadedRules(parse(document, catalog, file), document.root.toString(), false);
+        } catch (IOException | IllegalArgumentException e) {
+            UnlockingRules fallback = new UnlockingRules();
+            fallback.diagnose(Severity.ERROR, "Could not load unlocking_rules.json: " + failureReason(e));
+            return new LoadedRules(fallback, DEFAULT_DEFINITION, true);
         }
+    }
+
+    private static String failureReason(Exception error) {
+        if (error instanceof java.nio.file.FileSystemException failure) {
+            return java.util.Objects.requireNonNullElse(failure.getReason(), failure.getClass().getSimpleName());
+        }
+        return error.getMessage();
     }
 
     static UnlockingRules loadFile(Path file, Catalog catalog) {
         try {
             Files.createDirectories(file.getParent());
-            if (!Files.exists(file)) Files.writeString(file, "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n");
-            String source = Files.readString(file);
-            return parse(source, catalog);
-        } catch (IOException | RuntimeException e) {
-            LOGGER.error("Cannot load {}. Using default unlocked with no rules.", file, e);
-            return new UnlockingRules();
+            if (!Files.exists(file)) Files.writeString(file, ExplorersCompassConfig.DEFAULT_UNLOCKING_RULES);
+        } catch (IOException e) {
+            UnlockingRules fallback = new UnlockingRules();
+            fallback.diagnose(Severity.ERROR, file, "Could not create rules: " + failureReason(e));
+            return fallback;
         }
+        return readFile(file, catalog).rules();
     }
 
     static UnlockingRules parse(JsonObject root, Catalog catalog) {
-        return parse(root, catalog, Map.of());
+        return parse(root.toString(), catalog);
     }
 
     static UnlockingRules parse(String source, Catalog catalog) {
-        return parse(JsonParser.parseString(source).getAsJsonObject(), catalog, unlockLines(source));
+        return parse(new UnlockingRuleDocument(source), catalog, null);
     }
 
-    private static UnlockingRules parse(JsonObject root, Catalog catalog, Map<String, List<Integer>> lines) {
+    private static UnlockingRules parse(UnlockingRuleDocument document, Catalog catalog, Path file) {
         UnlockingRules result = new UnlockingRules();
         Map<Identifier, List<Integer>> declarationLines = new LinkedHashMap<>();
         Set<Identifier> duplicates = new LinkedHashSet<>();
-        String mode = root.has("default") ? string(root, "default") : "unlocked";
-        result.defaultMode = switch (mode) {
-            case "unlocked" -> DefaultMode.UNLOCKED;
-            case "lockedUntilVisited" -> DefaultMode.LOCKED_UNTIL_VISITED;
-            case "lockedUntilVisitedSet" -> DefaultMode.LOCKED_UNTIL_VISITED_SET;
-            default -> throw invalid("Unknown default: " + mode);
-        };
+        if (!(document.root instanceof JsonObject root))
+            throw invalid("Expected a JSON object at line " + document.line(document.root));
+        if (root.has("default")) {
+            result.defaultMode = at(document, root.get("default"), () -> {
+                String mode = string(root, "default");
+                return switch (mode) {
+                    case "unlocked" -> DefaultMode.UNLOCKED;
+                    case "lockedUntilVisited" -> DefaultMode.LOCKED_UNTIL_VISITED;
+                    case "lockedUntilVisitedSet" -> DefaultMode.LOCKED_UNTIL_VISITED_SET;
+                    default -> throw invalid("Unknown \"default\": " + mode);
+                };
+            });
+        }
         if (result.defaultMode == DefaultMode.LOCKED_UNTIL_VISITED_SET) result.indexVisitSets(catalog);
-        JsonObject entries = root.has("rules") ? root.getAsJsonObject("rules") : new JsonObject();
+        JsonObject entries = new JsonObject();
+        if (root.has("rules")) {
+            if (!(root.get("rules") instanceof JsonObject rules))
+                throw invalid("Expected \"rules\" to be an object at line " + document.line(root.get("rules")));
+            entries = rules;
+        }
         for (Map.Entry<String, JsonElement> entry : entries.entrySet()) {
             try {
-                JsonObject value = entry.getValue().getAsJsonObject();
+                if (!(entry.getValue() instanceof JsonObject value)) throw invalid("Expected a rule object");
                 for (String key : value.keySet())
-                    if (!Set.of("unlocks", "condition").contains(key)) throw invalid("Unknown rule field: " + key);
+                    if (!Set.of("unlocks", "condition").contains(key)) throw located(document, value.get(key), "Unknown rule field: " + quoted(key));
                 Map<Identifier, List<Integer>> targetLines = new LinkedHashMap<>();
-                Set<Identifier> targets = targets(catalog, value.get("unlocks"),
-                        lines.getOrDefault(entry.getKey(), List.of()), targetLines);
-                Condition condition = condition(catalog, value.getAsJsonObject("condition"));
+                Set<Identifier> targets = resolveRuleStructures(catalog, document, value, "unlocks",
+                        (id, line) -> targetLines.computeIfAbsent(id, ignored -> new ArrayList<>()).add(line),
+                        message -> result.diagnose(Severity.WARNING, file, message));
+                JsonElement conditionValue = value.get("condition");
+                if (conditionValue == null) throw new MissingField("condition");
+                Condition condition = at(document, conditionValue,
+                        () -> condition(catalog, conditionValue.getAsJsonObject(),
+                                document, message -> result.diagnose(Severity.WARNING, file, message)));
                 Rule rule = new Rule(targets, condition);
                 result.rules.put(entry.getKey(), rule);
                 for (Identifier id : targets) {
@@ -173,15 +231,17 @@ public final class UnlockingRules {
                     declarationLines.computeIfAbsent(id, ignored -> new ArrayList<>())
                             .addAll(targetLines.getOrDefault(id, List.of()));
                 }
-            } catch (RuntimeException e) {
-                LOGGER.error("Skipping invalid rule '{}' in unlocking_rules.json: {}", entry.getKey(), e.getMessage());
+            } catch (IllegalArgumentException e) {
+                String message = e instanceof LocatedError ? e.getMessage()
+                        : "line " + document.fieldLine(entries, entry.getKey()) + ": " + e.getMessage();
+                result.diagnose(Severity.ERROR, file, "Ignored invalid rule " + quoted(entry.getKey()) + " at " + message);
             }
         }
         for (Identifier id : duplicates) {
             List<Integer> positions = declarationLines.get(id);
-            String listed = positions.isEmpty() ? "unknown" : positions.stream()
-                    .map(UnlockingRules::line).collect(Collectors.joining(", "));
-            warn("Structure " + id + " is listed under unlocks on lines " + listed
+            String listed = positions.isEmpty() ? "unknown" : positions.stream().distinct()
+                    .map(String::valueOf).collect(Collectors.joining(", "));
+            result.diagnose(Severity.WARNING, file, id + " is listed more than once under \"unlocks\" on lines " + listed
                     + "; the last condition takes precedence");
         }
         return result;
@@ -343,28 +403,15 @@ public final class UnlockingRules {
     static Set<Identifier> resolveRewardTargets(Catalog catalog, List<String> structures, List<String> sets) {
         Set<Identifier> result = new LinkedHashSet<>();
         for (String selector : structures) {
-            if (!selector.isBlank()) result.addAll(resolvePattern(selector.trim(), catalog.structures(), false));
+            if (!selector.isBlank()) result.addAll(resolvePattern(selector.trim(), catalog.structures()));
         }
         for (String selector : sets) {
             if (selector.isBlank()) continue;
-            for (Identifier id : resolvePattern(selector.trim(), catalog.structureSets(), false))
+            for (Identifier id : resolvePattern(selector.trim(), catalog.structureSets()))
                 result.addAll(catalog.structureSet(id));
         }
         result.removeIf(id -> !catalog.structures().contains(id) || StructureUtils.structureIdIsExcluded(id));
         return result;
-    }
-
-    private static Set<Identifier> targets(Catalog catalog, JsonElement json, List<Integer> lines,
-                                           Map<Identifier, List<Integer>> targetLines) {
-        Set<Identifier> ids = resolveStructures(catalog, patterns(json), false,
-                (id, index) -> targetLines.computeIfAbsent(id, ignored -> new ArrayList<>())
-                        .add(index < lines.size() ? lines.get(index) : null));
-        Set<Identifier> known = catalog.structures();
-        return ids.stream().filter(id -> {
-            if (known.contains(id)) return true;
-            warn("Unavailable structure target " + id);
-            return false;
-        }).collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     public static Set<Identifier> setMembers(MinecraftServer server, Identifier id) {
@@ -374,20 +421,20 @@ public final class UnlockingRules {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private static Condition condition(Catalog catalog, JsonObject json) {
-        if (json == null) throw invalid("Missing condition");
-        if (json.has("any") || json.has("all")) throw invalid("Condition groups are no longer supported; use one condition per rule");
-        String type = string(json, "type");
+    private static Condition condition(Catalog catalog, JsonObject json, UnlockingRuleDocument document, Consumer<String> warning) {
+        if (json.has("any") || json.has("all")) throw located(document, json.get(json.has("any") ? "any" : "all"),
+                "Condition groups are no longer supported; use one condition per rule");
+        String type = atField(document, json, "type", () -> string(json, "type"));
         if (type.equals("advancement")) {
             for (String key : json.keySet())
-                if (!Set.of("type", "advancements", "match").contains(key)) throw invalid("Unknown advancement condition field: " + key);
-            if (!json.has("advancements") || !json.get("advancements").isJsonArray() || json.has("id"))
-                throw invalid("Advancement conditions require an advancements array");
-            Set<Identifier> required = ids(json.get("advancements"));
-            String match = json.has("match") ? string(json, "match") : "any";
-            if (!match.equals("any") && !match.equals("all")) throw invalid("Unknown advancement match " + match);
-            boolean all = match.equals("all");
-            for (Identifier id : required) if (!catalog.advancementExists(id)) warn("Unavailable advancement " + id);
+                if (!Set.of("type", "advancements", "match").contains(key)) throw located(document, json.get(key), "Unknown advancement condition field: " + quoted(key));
+            Set<Identifier> required = new LinkedHashSet<>();
+            for (JsonElement element : selectorArray(document, json, "advancements")) {
+                Identifier id = at(document, element, () -> identifier(selectorString(element)));
+                if (!catalog.advancementExists(id)) throw located(document, element, "Unknown advancement " + id);
+                required.add(id);
+            }
+            boolean all = matchAll(document, json);
             return new Condition(progress -> all ? required.stream().allMatch(id -> catalog.advancementExists(id) && progress.completed(id))
                     : required.stream().anyMatch(id -> catalog.advancementExists(id) && progress.completed(id)),
                     progress -> {
@@ -405,15 +452,13 @@ public final class UnlockingRules {
                         return new RequirementNode(Text.literal(label), checked, leaves);
                     }, Set.of(), required);
         }
-        if (!type.equals("visit")) throw invalid("Unknown condition type " + type);
+        if (!type.equals("visit")) throw located(document, json.get("type"), "Unknown condition type " + type);
         for (String key : json.keySet())
-            if (!Set.of("type", "structures", "match").contains(key)) throw invalid("Unknown visit condition field: " + key);
-        String match = json.has("match") ? string(json, "match") : "any";
-        if (!match.equals("any") && !match.equals("all")) throw invalid("Unknown visit match " + match);
-        Set<Identifier> required = resolveStructures(catalog, json, true);
+            if (!Set.of("type", "structures", "match").contains(key))
+                throw located(document, json.get(key), "Unknown visit condition field: " + quoted(key));
+        boolean all = matchAll(document, json);
+        Set<Identifier> required = resolveRuleStructures(catalog, document, json, "structures", (id, line) -> {}, warning);
         Set<Identifier> known = catalog.structures();
-        for (Identifier id : required) if (!known.contains(id)) warn("Unavailable visit requirement " + id);
-        boolean all = match.equals("all");
         return new Condition(player -> {
             Predicate<Identifier> visited = id -> known.contains(id)
                     && player.visited(id);
@@ -432,135 +477,117 @@ public final class UnlockingRules {
         return new RequirementNode(Text.literal(label), checked, children);
     }
 
-    private static Set<Identifier> resolveStructures(Catalog catalog, JsonObject json, boolean visit) {
-        if (json == null || !json.has("structures")) throw invalid("Specify structures");
-        return resolveStructures(catalog, patterns(json.get("structures")), visit, (id, index) -> {});
+    private static boolean matchAll(UnlockingRuleDocument document, JsonObject json) {
+        if (!json.has("match")) return false;
+        return atField(document, json, "match", () -> switch (string(json, "match")) {
+            case "all" -> true;
+            case "any" -> false;
+            default -> throw invalid("Expected \"match\" to be any or all");
+        });
     }
 
-    private static Set<Identifier> resolveStructures(Catalog catalog, List<String> patterns, boolean visit,
-                                                      BiConsumer<Identifier, Integer> origin) {
+    private static Set<Identifier> resolveRuleStructures(Catalog catalog, UnlockingRuleDocument document,
+            JsonObject object, String field, BiConsumer<Identifier, Integer> origin,
+            Consumer<String> warning) {
         Set<Identifier> result = new LinkedHashSet<>();
         Set<Identifier> structures = catalog.structures();
-        Set<Identifier> structureSets = catalog.structureSets();
+        Set<Identifier> sets = catalog.structureSets();
         Set<Identifier> available = new LinkedHashSet<>(structures);
-        available.addAll(structureSets);
-        for (int index = 0; index < patterns.size(); index++) {
-            String pattern = patterns.get(index);
-            for (Identifier id : resolvePattern(pattern, available, visit)) {
+        available.addAll(sets);
+        for (JsonElement element : selectorArray(document, object, field)) {
+            String selector = at(document, element, () -> selectorString(element));
+            Set<Identifier> matches = at(document, element, () -> matchPattern(selector, available));
+            Set<Identifier> resolved = new LinkedHashSet<>();
+            for (Identifier id : matches) {
                 if (structures.contains(id)) {
-                    if (structureSets.contains(id))
-                        warn("Both a structure and structure set use " + id + "; treating it as a single structure");
-                    result.add(id);
-                    origin.accept(id, index);
-                } else if (structureSets.contains(id)) {
+                    if (sets.contains(id)) warning.accept("Line " + document.line(element)
+                            + ": Both a structure and structure set use " + id + "; treating it as a single structure");
+                    resolved.add(id);
+                } else {
                     for (Identifier member : catalog.structureSet(id)) {
-                        result.add(member);
-                        origin.accept(member, index);
+                        if (!structures.contains(member))
+                            throw located(document, element, "Unknown structure " + member + " in structure set " + id);
+                        resolved.add(member);
                     }
-                } else if (visit) {
-                    result.add(id);
-                    origin.accept(id, index);
                 }
             }
+            if (resolved.isEmpty()) throw located(document, element, "No structures match selector " + selector);
+            for (Identifier id : resolved) origin.accept(id, document.line(element));
+            result.addAll(resolved);
         }
         return result;
     }
 
-    private static String line(Integer value) { return value == null ? "unknown" : value.toString(); }
-
-    /** Read source locations separately because Gson's JSON tree does not retain them. */
-    static Map<String, List<Integer>> unlockLines(String source) {
-        Map<String, List<Integer>> result = new LinkedHashMap<>();
-        try (JsonReader reader = new JsonReader(new StringReader(source))) {
-            reader.setLenient(true);
-            reader.beginObject();
-            while (reader.hasNext()) {
-                if (!reader.nextName().equals("rules") || reader.peek() != JsonToken.BEGIN_OBJECT) {
-                    reader.skipValue();
-                    continue;
-                }
-                reader.beginObject();
-                while (reader.hasNext()) {
-                    String ruleName = reader.nextName();
-                    List<Integer> positions = new ArrayList<>();
-                    result.put(ruleName, positions);
-                    if (reader.peek() != JsonToken.BEGIN_OBJECT) { reader.skipValue(); continue; }
-                    reader.beginObject();
-                    while (reader.hasNext()) {
-                        if (!reader.nextName().equals("unlocks") || reader.peek() != JsonToken.BEGIN_ARRAY) {
-                            reader.skipValue();
-                            continue;
-                        }
-                        reader.beginArray();
-                        while (reader.hasNext()) {
-                            if (reader.peek() == JsonToken.STRING) {
-                                reader.nextString();
-                                var location = Pattern.compile("line (\\d+)").matcher(reader.toString());
-                                positions.add(location.find() ? Integer.parseInt(location.group(1)) : null);
-                            } else {
-                                reader.skipValue();
-                                positions.add(null);
-                            }
-                        }
-                        reader.endArray();
-                    }
-                    reader.endObject();
-                }
-                reader.endObject();
-            }
-            reader.endObject();
-        } catch (IOException | RuntimeException e) {
-            LOGGER.warn("Could not read unlock selector line numbers", e);
-        }
-        return result;
+    private static JsonArray selectorArray(UnlockingRuleDocument document, JsonObject object, String field) {
+        return atField(document, object, field, () -> {
+            if (!(object.get(field) instanceof JsonArray array) || array.isEmpty())
+                throw invalid("Expected a nonempty " + quoted(field) + " array");
+            return array;
+        });
     }
 
-    private static List<String> patterns(JsonElement json) {
-        if (json == null || !json.isJsonArray() || json.getAsJsonArray().isEmpty())
-            throw invalid("Structure selector must be a nonempty array of IDs or patterns");
-        List<String> result = new ArrayList<>();
-        for (JsonElement value : json.getAsJsonArray()) {
-            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
-                throw invalid("Structure IDs and patterns must be strings");
-            result.add(value.getAsString());
-        }
-        return result;
+    private static String selectorString(JsonElement value) {
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString())
+            throw invalid("IDs and patterns must be strings");
+        return value.getAsString();
     }
 
-    private static Set<Identifier> resolvePattern(String value, Set<Identifier> available, boolean keepMissing) {
+    private static final class MissingField extends IllegalArgumentException {
+        MissingField(String field) { super("Missing " + quoted(field)); }
+    }
+
+    private static final class LocatedError extends IllegalArgumentException {
+        LocatedError(String message) { super(message); }
+    }
+
+    private static LocatedError located(UnlockingRuleDocument document, JsonElement value, String message) {
+        return new LocatedError("line " + document.line(value) + ": " + message);
+    }
+
+    private static <T> T atField(UnlockingRuleDocument document, JsonObject object, String field,
+                                 Supplier<T> action) {
+        if (!object.has(field)) throw new MissingField(field);
+        return at(document, object.get(field), action);
+    }
+
+    private static <T> T at(UnlockingRuleDocument document, JsonElement value, Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (LocatedError | MissingField e) {
+            throw e;
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            throw located(document, value, e.getMessage());
+        }
+    }
+
+    private static Set<Identifier> resolvePattern(String value, Set<Identifier> available) {
+        Set<Identifier> matches = matchPattern(value, available);
+        if (matches.isEmpty()) {
+            if (value.contains("*")) warn("No structure or structure set matches pattern " + value);
+            else warn("Unavailable structure or structure set " + identifier(value));
+        }
+        return matches;
+    }
+
+    private static Set<Identifier> matchPattern(String value, Set<Identifier> available) {
         String normalized = value.contains(":") ? value : "minecraft:" + value;
         Identifier validated = Identifier.tryParse(normalized.replace('*', 'a'));
         if (validated == null || normalized.indexOf(':') != normalized.lastIndexOf(':'))
             throw invalid("Invalid structure ID or pattern " + value);
-        if (!normalized.contains("*")) {
-            Identifier id = identifier(normalized);
-            if (available.contains(id)) return Set.of(id);
-            warn("Unavailable structure or structure set " + id);
-            return keepMissing ? Set.of(id) : Set.of();
-        }
+        if (!normalized.contains("*")) return available.contains(validated) ? Set.of(validated) : Set.of();
         StringBuilder regex = new StringBuilder("^");
         for (char c : normalized.toCharArray()) {
             if (c == '*') regex.append(".*");
             else regex.append(Pattern.quote(String.valueOf(c)));
         }
         Pattern compiled = Pattern.compile(regex.append('$').toString());
-        Set<Identifier> matches = available.stream().filter(id -> compiled.matcher(id.toString()).matches())
+        return available.stream().filter(id -> compiled.matcher(id.toString()).matches())
                 .sorted().collect(Collectors.toCollection(LinkedHashSet::new));
-        if (matches.isEmpty()) warn("No structure or structure set matches pattern " + value);
-        return matches;
     }
-    private static Set<Identifier> ids(JsonElement json) {
-        Set<Identifier> result = new LinkedHashSet<>();
-        for (JsonElement value : json.getAsJsonArray()) {
-            if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) throw invalid("IDs must be strings");
-            result.add(identifier(value.getAsString()));
-        }
-        if (result.isEmpty()) throw invalid("ID list cannot be empty");
-        return result;
-    }
+
     private static String string(JsonObject json, String key) {
         JsonElement value = json.get(key);
-        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) throw invalid("Expected string for " + key);
+        if (value == null || !value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) throw invalid("Expected string for " + quoted(key));
         return value.getAsString();
     }
     private static Identifier identifier(String value) {
@@ -573,6 +600,7 @@ public final class UnlockingRules {
         path = path.substring(path.lastIndexOf('/') + 1).replace('_', ' ');
         return path.isEmpty() ? id.toString() : Character.toUpperCase(path.charAt(0)) + path.substring(1);
     }
+    private static String quoted(String name) { return new JsonPrimitive(name).toString(); }
     private static IllegalArgumentException invalid(String message) { return new IllegalArgumentException(message); }
     private static void warn(String message) { LOGGER.warn("Unlocking rules: {}", message); }
 }

@@ -41,18 +41,30 @@ import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 public final class UnlockingCommands {
+    private static final java.util.regex.Pattern REPORT_DETAILS = java.util.regex.Pattern.compile(
+            "(?i)(?<=\\bline )\\d+|(?<=\\blines )\\d+(?:, \\d+)*|(?<=\\bcolumn )\\d+"
+            + "|(?<=\\bpath )\\$[^\\r\\n]*|\\bunlocking_rules\\.json\\b"
+            + "|\"(?:\\\\.|[^\"\\\\])*\""
+            + "|(?<=Unknown \"default\": )[^\\r\\n]+|(?<=condition type )[^\\r\\n]+"
+            + "|(?<=match selector )[^\\r\\n]+|(?<=ID or pattern )[^\\r\\n]+"
+            + "|(?<=Invalid identifier )[^\\r\\n]+|(?<=Unknown advancement )[^\\s]+"
+            + "|(?<=Unknown structure )[^\\s]+|(?<=structure set )[^\\s]+(?=$)"
+            + "|(?<=: )[^\\s]+(?= is listed more than once)|(?<=Both a structure and structure set use )[^;]+");
+
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         var command = dispatcher.register(literal("explorerscompass").requires(source -> source.hasPermissionLevel(2))
                 .then(literal("reload").executes(context -> {
                     int count = UnlockingRules.reload(context.getSource().getServer());
-                    if (count < 0) throw error("Could not reload Explorer's Compass unlocking rules. See the server log; active rules and player data were kept.");
                     UnlockReloads.commandReload(context.getSource().getServer());
                     context.getSource().sendFeedback(() -> Text.literal(com.chaosthedude.explorerscompass.config.ExplorersCompassConfig.relockOnReload
                             ? "Reloaded Explorer's Compass unlocking rules from file and relocked all structures."
                             : "Reloaded Explorer's Compass unlocking rules from file."), false);
                     context.getSource().sendFeedback(() -> Text.literal("Note: reloading Explorer's Compass data is a developer convenience tool and not recommended for use on live servers.").formatted(Formatting.GOLD), false);
-                    return count;
+                    return Math.max(0, count);
                 }))
+                .then(literal("report").executes(c -> report(c.getSource(), null))
+                        .then(literal("error").executes(c -> report(c.getSource(), UnlockingRules.Severity.ERROR)))
+                        .then(literal("warning").executes(c -> report(c.getSource(), UnlockingRules.Severity.WARNING))))
                 .then(literal("lock").then(structureTargets(false)))
                 .then(literal("unlock").then(structureTargets(true)))
                 .then(literal("tp").executes(c -> {
@@ -75,6 +87,40 @@ public final class UnlockingCommands {
                         .then(literal("structure").then(visitRanges(false)))
                         .then(literal("structureSet").then(visitRanges(true)))))));
         dispatcher.register(literal("ecomp").requires(command::canUse).redirect(command));
+    }
+
+    private static int report(ServerCommandSource source, UnlockingRules.Severity severity) {
+        var diagnostics = UnlockingRules.report(severity);
+        if (diagnostics.isEmpty()) {
+            String kind = severity == null ? "errors or warnings"
+                    : severity == UnlockingRules.Severity.ERROR ? "errors" : "warnings";
+            source.sendFeedback(() -> Text.literal("No unlocking rule " + kind + "."), false);
+        }
+        for (var diagnostic : diagnostics) {
+            source.sendFeedback(() -> formatDiagnostic(diagnostic), false);
+        }
+        return diagnostics.size();
+    }
+
+    static Text formatDiagnostic(UnlockingRules.Diagnostic diagnostic) {
+        boolean error = diagnostic.severity() == UnlockingRules.Severity.ERROR;
+        var text = Text.literal("").formatted(Formatting.WHITE);
+        text.append(Text.literal(error ? "[ERROR]" : "[WARNING]").formatted(error ? Formatting.RED : Formatting.GOLD));
+        text.append(" ");
+        String message = diagnostic.message();
+        var details = REPORT_DETAILS.matcher(message);
+        int offset = 0;
+        while (details.find()) {
+            text.append(message.substring(offset, details.start()));
+            String detail = details.group();
+            if (detail.startsWith("\"")) {
+                text.append("\"").append(Text.literal(detail.substring(1, detail.length() - 1)).formatted(Formatting.YELLOW)).append("\"");
+            } else {
+                text.append(Text.literal(detail).formatted(Formatting.YELLOW));
+            }
+            offset = details.end();
+        }
+        return text.append(message.substring(offset));
     }
 
     private static RequiredArgumentBuilder<ServerCommandSource, String> playerArgument() {

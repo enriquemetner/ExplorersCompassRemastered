@@ -1,7 +1,7 @@
 {
-  "default": "lockedUntilVisited",
+  "default": "lockedUntilVisitedSet",
   "rules": {
-    "visit_any_set": {
+    "visit_any": {
       "unlocks": [
         "minecraft:ancient_city"
       ],
@@ -9,22 +9,22 @@
         "type": "visit",
         "match": "any",
         "structures": [
-          "minecraft:villages"
+          "minecraft:villages",
+          "minecraft:pillager_outpost"
         ]
       }
     },
-    "visit_all_combined": {
+    "visit_all": {
       "unlocks": [
-        "minecraft:desert_pyramid",
-        "minecraft:desert_pyramids"
+        "minecraft:desert_pyramid"
       ],
       "condition": {
         "type": "visit",
+        "match": "any",
         "structures": [
           "minecraft:ancient_city",
           "minecraft:strongholds"
-        ],
-        "match": "all"
+        ]
       }
     },
     "advancement_any": {
@@ -33,39 +33,36 @@
       ],
       "condition": {
         "type": "advancement",
+        "match": "any",
         "advancements": [
-          "minecraft:story/mine_stone",
+          "minecraft:story/enter_the_nether",
           "minecraft:story/mine_diamond"
-        ],
-        "match": "any"
+        ]
       }
     },
-    "advancement_all_and_wildcards": {
+    "advancement_all": {
       "unlocks": [
-        "minecraft:village_*",
-        "minecraft:stronghold",
-        "minecraft:ancient_cit*"
+        "minecraft:village_*"
       ],
       "condition": {
         "type": "advancement",
+        "match": "all",
         "advancements": [
           "minecraft:story/mine_stone",
-          "minecraft:story/mine_diamond"
-        ],
-        "match": "all"
+          "minecraft:story/smelt_iron"
+        ]
       }
     },
-    "visit_wildcards": {
+    "visit_default_match": {
       "unlocks": [
         "minecraft:shipwreck"
       ],
       "condition": {
         "type": "visit",
         "structures": [
-          "minecraft:fortres*",
-          "minecraft:ocean_ruin*"
-        ],
-        "match": "any"
+          "fortress",
+          "minecraft:ocean_ruin_*"
+        ]
       }
     }
   }

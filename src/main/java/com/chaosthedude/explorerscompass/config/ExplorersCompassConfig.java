@@ -26,7 +26,7 @@ import net.fabricmc.api.EnvType;
 
 public class ExplorersCompassConfig {
 	public static final String UNLOCKING_RULES = "server/unlocking_rules.json";
-	private static final String DEFAULT_UNLOCKING_RULES = "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n";
+	public static final String DEFAULT_UNLOCKING_RULES = "{\n  \"default\": \"unlocked\",\n  \"rules\": {}\n}\n";
 	private static final String SERVER_SETTINGS = "server/settings.toml";
 	private static final String CLIENT_SETTINGS = "client/settings.toml";
 	private static final String WHITELIST = "server/whitelist.toml";

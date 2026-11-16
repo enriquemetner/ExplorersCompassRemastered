@@ -90,7 +90,7 @@ public final class UnlockReloads {
         }
     }
 
-    /** Called only after JSON parsing succeeds. */
+    /** Called after a reload activates rules or generated defaults. */
     public static void commandReload(MinecraftServer server) {
         String current = definition();
         if (current != null) {
