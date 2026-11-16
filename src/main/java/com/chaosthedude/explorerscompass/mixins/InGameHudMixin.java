@@ -59,18 +59,18 @@ public class InGameHudMixin {
         }
         Text suffix = projection == null ? Text.empty()
                 : Text.literal(" (" + projection.dimensionLabel() + ")").formatted(Formatting.GRAY);
-        if (compass.shouldDisplayDistance(stack)) {
-            int distance = projection == null ? StructureUtils.getHorizontalDistanceToLocation(player, x, z)
-                    : projection.distanceFrom(player.getX(), player.getZ());
-            RenderUtils.drawConfiguredStringOnHUD(context, Text.literal("Distance").append(suffix), client.textRenderer, 5, 5, 0xFFFFFF, nextLine++);
-            RenderUtils.drawConfiguredStringOnHUD(context, String.valueOf(distance), client.textRenderer, 5, 5, 0xAAAAAA, nextLine++);
-            nextLine++;
-        }
         if (compass.shouldDisplayCoordinates(stack)) {
             int displayX = projection == null ? x : projection.blockX();
             int displayZ = projection == null ? z : projection.blockZ();
             RenderUtils.drawConfiguredStringOnHUD(context, Text.literal("Coordinates").append(suffix), client.textRenderer, 5, 5, 0xFFFFFF, nextLine++);
-            RenderUtils.drawConfiguredStringOnHUD(context, displayX + ", " + displayZ, client.textRenderer, 5, 5, 0xAAAAAA, nextLine);
+            RenderUtils.drawConfiguredStringOnHUD(context, displayX + ", " + displayZ, client.textRenderer, 5, 5, 0xAAAAAA, nextLine++);
+            nextLine++;
+        }
+        if (compass.shouldDisplayDistance(stack)) {
+            int distance = projection == null ? StructureUtils.getHorizontalDistanceToLocation(player, x, z)
+                    : projection.distanceFrom(player.getX(), player.getZ());
+            RenderUtils.drawConfiguredStringOnHUD(context, Text.literal("Distance").append(suffix), client.textRenderer, 5, 5, 0xFFFFFF, nextLine++);
+            RenderUtils.drawConfiguredStringOnHUD(context, String.valueOf(distance), client.textRenderer, 5, 5, 0xAAAAAA, nextLine);
         }
     }
 }

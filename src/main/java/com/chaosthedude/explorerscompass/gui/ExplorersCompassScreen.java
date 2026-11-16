@@ -2243,13 +2243,13 @@ public class ExplorersCompassScreen extends Screen {
 
     private List<FoundLine> foundLocationLines() {
         List<FoundLine> lines = new ArrayList<>();
-        if (showFoundDistance) {
-            int distance = client.player == null ? 0 : StructureUtils.getHorizontalDistanceToLocation(client.player, foundX, foundZ);
-            lines.add(new FoundLine("Distance: ", Text.literal(Integer.toString(distance))));
-        }
         if (showFoundCoordinates) {
             lines.add(new FoundLine("Coordinates:", Text.empty()));
             lines.add(new FoundLine("", Text.literal(foundX + ", " + foundZ)));
+        }
+        if (showFoundDistance) {
+            int distance = client.player == null ? 0 : StructureUtils.getHorizontalDistanceToLocation(client.player, foundX, foundZ);
+            lines.add(new FoundLine("Distance: ", Text.literal(Integer.toString(distance))));
         }
         if (foundVisited != null) {
             lines.add(new FoundLine("Visited: ", Text.literal(foundVisited ? "Yes" : "No")));
