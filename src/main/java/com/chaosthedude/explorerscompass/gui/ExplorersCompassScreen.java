@@ -358,6 +358,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void removed() {
+        if (openingRequirementAdvancement) return;
 		currentStructureRequest = null;
 		currentStructurePopup = null;
 		clearCurrentStructureReveal();
@@ -475,13 +476,12 @@ public class ExplorersCompassScreen extends Screen {
 				var partyRequirements = ClientPacketHandlers.partyRequirements.get(lockedRequirementsId);
 				var updated = partyRequirements != null ? partyRequirements : ExplorersCompass.lockedRequirements.get(lockedRequirementsId);
 				if (updated == null) {
-					dialog = Dialog.NONE;
-					lockedRequirementsView = null;
-					lockedRequirementsId = null;
-				} else {
-					lockedRequirementsView = new LockedRequirementsView(textRenderer, updated,
-							this::rememberQuestBookReturn, partyRequirements != null);
-				}
+                    backLockedPopup();
+                } else if (!lockedRequirementsView.shows(updated)) {
+                    double popupScroll = lockedRequirementsView.scrollPosition();
+                    setLockedPopup(lockedRequirementsId, updated, null);
+                    lockedRequirementsView.restoreScroll(popupScroll);
+                }
 			}
 			entryFiltersId = null;
 			boolean focusTrackedStructure = awaitingOpeningSync && !restoreQuestListAfterSync;
@@ -521,6 +521,7 @@ public class ExplorersCompassScreen extends Screen {
                 dialog = Dialog.INFO;
                 entryFiltersId = null;
                 sortMenuOpen = false;
+                lockedHistory.clear();
                 lockedRequirementsView = null;
                 lockedRequirementsId = null;
                 com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRevision = 0;
@@ -1428,7 +1429,7 @@ public class ExplorersCompassScreen extends Screen {
 			return ButtonPress.at(mouseX, mouseY, sortMenuX() + (sortMenuWidth() - 70) / 2, sortBackY(), 70, 20,
 					ButtonLayer.SORT, "back", this::closeSortMenu);
 		}
-		if (dialog == Dialog.LOCKED) return lockedRequirementsView.buttonAt(mouseX, mouseY, width, height, this::dismissDialog);
+		if (dialog == Dialog.LOCKED) return lockedRequirementsView.buttonAt(mouseX, mouseY, width, height, this::backLockedPopup, this::dismissDialog);
 		if (dialog != Dialog.NONE) return dialogButtonAt(mouseX, mouseY);
 		for (var child : children()) {
 			if (child instanceof TransparentButton widget && widget.active && widget.visible && widget.isMouseOver(mouseX, mouseY)) {
@@ -1527,7 +1528,7 @@ public class ExplorersCompassScreen extends Screen {
 		if (entryFiltersId != null) return clickEntryFilters(mouseX, mouseY, button);
 		if (sortMenuOpen) return clickSortMenu(mouseX, mouseY, button);
         if (dialog == Dialog.LOCKED) {
-            if (lockedRequirementsView.click(mouseX, mouseY, button, width, height)) dismissDialog();
+            if (lockedRequirementsView.click(mouseX, mouseY, button, width, height)) backLockedPopup();
             return true;
         }
         if (dialog == Dialog.SEARCHING && !searchConfirmed) return true;
@@ -1684,7 +1685,8 @@ public class ExplorersCompassScreen extends Screen {
 		}
         if (dialog != Dialog.NONE) {
             if (par1 == 256) {
-                if (dialog != Dialog.LOCKED || !lockedRequirementsView.closeQuestPopup()) dismissDialog();
+                if (dialog != Dialog.LOCKED) dismissDialog();
+                else if (!lockedRequirementsView.closeQuestPopup()) backLockedPopup();
             }
             else if (dialog == Dialog.LOCKED) lockedRequirementsView.keyPressed(par1);
             else if (dialog == Dialog.DISABLED && (par1 == 264 || par1 == 265 || par1 == 266 || par1 == 267))
@@ -2026,6 +2028,7 @@ public class ExplorersCompassScreen extends Screen {
     }
 
 	private void dismissDialog() {
+        lockedHistory.clear();
         if (dialog == Dialog.DISABLED || dialog == Dialog.NOT_FOUND) {
             finalizePendingHides();
             disabledView = null;
@@ -2393,10 +2396,91 @@ public class ExplorersCompassScreen extends Screen {
         questReturnScroll = selectionList.getScrollAmount();
     }
 
+    private record LockedPopup(Identifier id, LockedRequirementsView view) {}
+    private final java.util.Deque<LockedPopup> lockedHistory = new java.util.ArrayDeque<>();
+    private boolean openingRequirementAdvancement;
+
     private void showLockedRequirements(Identifier id, RequirementNode requirements) {
+        lockedHistory.clear();
+        setLockedPopup(id, requirements, null);
+    }
+
+    private void setLockedPopup(Identifier id, RequirementNode requirements, String title) {
         lockedRequirementsId = id;
-        lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements, this::rememberQuestBookReturn, isUnlockedThroughParty(id));
+        lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements, this::rememberQuestBookReturn,
+                id != null && isUnlockedThroughParty(id), !lockedHistory.isEmpty(), title, this::openRequirementLink, this::canOpenRequirementLink);
         dialog = Dialog.LOCKED;
+    }
+
+    private void backLockedPopup() {
+        if (lockedHistory.isEmpty()) {
+            dismissDialog();
+            return;
+        }
+        LockedPopup previous = lockedHistory.pop();
+        lockedRequirementsId = previous.id();
+        lockedRequirementsView = previous.view();
+    }
+
+    private boolean canOpenRequirementLink(RequirementNode node) {
+        return node.advancementId() != null || node.structureId() != null && isStructureLocked(node.structureId());
+    }
+
+    private void openRequirementLink(RequirementNode node) {
+        Identifier structure = node.structureId();
+        if (structure != null && isStructureLocked(structure)) {
+            RequirementNode requirements = ExplorersCompass.lockedRequirements.get(structure);
+            if (requirements == null) return;
+            lockedHistory.push(new LockedPopup(lockedRequirementsId, lockedRequirementsView));
+            setLockedPopup(structure, requirements, null);
+        } else if (node.advancementId() != null) {
+            openRequirementAdvancement(node);
+        }
+    }
+
+    private void openRequirementAdvancement(RequirementNode node) {
+        var manager = client.getNetworkHandler() == null ? null : client.getNetworkHandler().getAdvancementHandler();
+        var advancement = manager == null ? null : manager.getManager().get(node.advancementId());
+        var tab = advancement != null ? advancement.getRoot()
+                : manager == null || node.advancementTab() == null ? null : manager.getManager().get(node.advancementTab());
+        boolean canOpenTab = tab != null && tab.getDisplay() != null;
+        if (!node.advancementHasDisplay() || advancement == null || advancement.getDisplay() == null
+                || advancement.getDisplay().isHidden() || !canOpenTab) {
+            boolean offerTab = node.advancementHasDisplay() && canOpenTab;
+            String message = !node.advancementHasDisplay()
+                    ? "This advancement has no display in the Advancements screen."
+                    : "This advancement is hidden until you progress further."
+                        + (offerTab ? "\nOpen Advancement tab instead?" : "");
+            lockedHistory.push(new LockedPopup(lockedRequirementsId, lockedRequirementsView));
+            setLockedPopup(null, new RequirementNode(Text.literal(message), false, List.of()), "Advancement Unavailable");
+            if (offerTab) lockedRequirementsView.offerOpenTab(() -> {
+                backLockedPopup();
+                openAdvancementTab(manager, tab);
+            });
+            return;
+        }
+        openAdvancementTab(manager, tab);
+    }
+
+    private void openAdvancementTab(net.minecraft.client.network.ClientAdvancementManager manager,
+                                    net.minecraft.advancement.Advancement tab) {
+        openingRequirementAdvancement = true;
+        try {
+            client.setScreen(new net.minecraft.client.gui.screen.advancement.AdvancementsScreen(manager) {
+                @Override public void close() { client.setScreen(ExplorersCompassScreen.this); }
+                @Override public boolean shouldPause() { return ExplorersCompassScreen.this.shouldPause(); }
+                @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+                    if (client.options.advancementsKey.matchesKey(keyCode, scanCode)) {
+                        close();
+                        return true;
+                    }
+                    return super.keyPressed(keyCode, scanCode, modifiers);
+                }
+            });
+            manager.selectTab(tab, true);
+        } finally {
+            openingRequirementAdvancement = false;
+        }
     }
 
     private void renderSearchDialog(DrawContext context, int mouseX, int mouseY) {

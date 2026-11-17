@@ -88,6 +88,8 @@ public final class UnlockingRules {
         Set<Identifier> structureSets();
         Set<Identifier> structureSet(Identifier id);
         boolean advancementExists(Identifier id);
+        default Identifier advancementTab(Identifier id) { return null; }
+        default boolean advancementHasDisplay(Identifier id) { return true; }
         Text advancementTitle(Identifier id);
         Text advancementDescription(Identifier id);
         Formatting advancementColor(Identifier id);
@@ -104,6 +106,14 @@ public final class UnlockingRules {
             public Set<Identifier> structureSets() { return server.getRegistryManager().get(RegistryKeys.STRUCTURE_SET).getIds(); }
             public Set<Identifier> structureSet(Identifier id) { return setMembers(server, id); }
             public boolean advancementExists(Identifier id) { return server.getAdvancementLoader().get(id) != null; }
+            public Identifier advancementTab(Identifier id) {
+                Advancement advancement = server.getAdvancementLoader().get(id);
+                return advancement == null ? null : advancement.getRoot().getId();
+            }
+            public boolean advancementHasDisplay(Identifier id) {
+                Advancement advancement = server.getAdvancementLoader().get(id);
+                return advancement != null && advancement.getDisplay() != null;
+            }
             public Text advancementTitle(Identifier id) {
                 Advancement advancement = server.getAdvancementLoader().get(id);
                 return advancement != null && advancement.getDisplay() != null ? advancement.getDisplay().getTitle() : Text.literal(readable(id));
@@ -460,12 +470,12 @@ public final class UnlockingRules {
         var gate = prerequisites.get(id);
         if (gate == null || gate.satisfied(unlocked::contains)) return null;
         List<RequirementNode> children = gate.required().keySet().stream()
-                .map(required -> new RequirementNode(Text.literal(readable(required)).formatted(Formatting.AQUA),
-                        unlocked.contains(required), List.of()))
+                .map(required -> RequirementNode.structure(Text.literal(readable(required)).formatted(Formatting.AQUA),
+                        unlocked.contains(required), required))
                 .toList();
         String label = children.size() == 1 ? "Unlock Structure:"
                 : gate.all() ? "Unlock all Structures:" : "Unlock any Structure:";
-        return new RequirementNode(Text.literal(label), false, children);
+        return new RequirementNode(Text.literal(label), false, gate.all(), children);
     }
 
     RequirementNode requirements(Identifier id, Progress progress) {
@@ -540,15 +550,16 @@ public final class UnlockingRules {
                         List<RequirementNode> leaves = required.stream().map(id -> {
                             Formatting color = catalog.advancementColor(id);
                             Text description = catalog.advancementDescription(id);
-                            return new RequirementNode(catalog.advancementTitle(id).copy().formatted(color),
-                                    catalog.advancementExists(id) && progress.completed(id), false, List.of(),
-                                    description == null ? null : description.copy().formatted(color));
+                            return RequirementNode.advancement(catalog.advancementTitle(id).copy().formatted(color),
+                                    catalog.advancementExists(id) && progress.completed(id),
+                                    description == null ? null : description.copy().formatted(color),
+                                    id, catalog.advancementHasDisplay(id), catalog.advancementTab(id));
                         }).toList();
                         boolean checked = all ? leaves.stream().allMatch(RequirementNode::checked)
                                 : leaves.stream().anyMatch(RequirementNode::checked);
                         String label = required.size() == 1 ? "Complete Advancement:"
                                 : all ? "Complete all Advancements:" : "Complete any Advancements:";
-                        return new RequirementNode(Text.literal(label), checked, leaves);
+                        return new RequirementNode(Text.literal(label), checked, all, leaves);
                     }, Set.of(), required);
         }
         Set<Identifier> required = resolveRequirementStructures(catalog, document, json, "requiredVisits",
@@ -562,14 +573,14 @@ public final class UnlockingRules {
     }
 
     private static RequirementNode visitNode(Set<Identifier> required, boolean all, Set<Identifier> known, Progress progress) {
-        List<RequirementNode> children = required.stream().map(id -> new RequirementNode(
+        List<RequirementNode> children = required.stream().map(id -> RequirementNode.structure(
                 Text.literal(readable(id)).formatted(Formatting.AQUA),
-                known.contains(id) && progress.visited(id), List.of())).toList();
+                known.contains(id) && progress.visited(id), id)).toList();
         boolean checked = !children.isEmpty() && (all ? children.stream().allMatch(RequirementNode::checked)
                 : children.stream().anyMatch(RequirementNode::checked));
         String label = required.size() == 1 ? "Visit Structure:"
                 : all ? "Visit all Structures:" : "Visit any Structure:";
-        return new RequirementNode(Text.literal(label), checked, children);
+        return new RequirementNode(Text.literal(label), checked, all, children);
     }
 
     private static boolean matchAll(UnlockingRuleDocument document, JsonObject json) {

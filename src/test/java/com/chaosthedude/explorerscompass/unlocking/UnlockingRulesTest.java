@@ -39,6 +39,8 @@ class UnlockingRulesTest {
                 """);
         var popup = parsed.prerequisiteNode(B, Set.of(A));
         assertEquals("Unlock all Structures:", popup.label().getString());
+        assertTrue(popup.logicalGroup());
+        assertEquals(A, popup.children().get(0).structureId());
         assertEquals(List.of(true, false), popup.children().stream().map(RequirementNode::checked).toList());
         assertEquals("Unlock Structure:", parsed.prerequisiteNode(C, Set.of()).label().getString());
         assertNull(parsed.prerequisiteNode(B, Set.of(A, C)));
@@ -575,7 +577,7 @@ class UnlockingRulesTest {
         progress.visits.add(A);
         RequirementNode root = rules.requirements(B, progress);
         assertEquals("Visit all Structures:", root.label().getString());
-        assertFalse(root.logicalGroup());
+        assertTrue(root.logicalGroup());
         assertFalse(root.checked());
         assertTrue(root.children().get(0).checked() || root.children().get(1).checked());
         assertEquals(Formatting.AQUA.getColorValue(), root.children().get(0).label().getStyle().getColor().getRgb());
@@ -595,7 +597,8 @@ class UnlockingRulesTest {
         original.write(packet);
         RequirementNode copy = RequirementNode.read(packet);
         assertFalse(copy.checked());
-        assertFalse(copy.logicalGroup());
+        assertTrue(copy.logicalGroup());
+        assertEquals(A, copy.children().get(0).structureId());
         assertTrue(copy.children().get(0).checked());
         assertFalse(copy.children().get(1).checked());
         assertEquals(Formatting.AQUA.getColorValue(), copy.children().get(0).label().getStyle().getColor().getRgb());
@@ -610,6 +613,8 @@ class UnlockingRulesTest {
         advancement.write(advancementPacket);
         RequirementNode advancementCopy = RequirementNode.read(advancementPacket);
         assertEquals("The Next Generation", advancementCopy.label().getString());
+        assertEquals(DRAGON_EGG, advancementCopy.advancementId());
+        assertTrue(advancementCopy.advancementHasDisplay());
         assertEquals("Hold the Dragon Egg", advancementCopy.tooltipDescription().getString());
         assertEquals(Formatting.DARK_PURPLE.getColorValue(), advancementCopy.label().getStyle().getColor().getRgb());
     }
