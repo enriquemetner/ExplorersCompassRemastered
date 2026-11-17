@@ -14,6 +14,20 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 class UnlockingCommandsTest {
+    @Test void usesRequirementAndEverythingForBothUnlockCommands() {
+        var dispatcher = new com.mojang.brigadier.CommandDispatcher<net.minecraft.server.command.ServerCommandSource>();
+        UnlockingCommands.register(dispatcher);
+        var root = dispatcher.getRoot().getChild("explorerscompass");
+        assertSame(root, dispatcher.getRoot().getChild("ecomp").getRedirect());
+        for (String action : List.of("lock", "unlock")) {
+            var player = root.getChild(action).getChild("player");
+            assertNotNull(player.getChild("requirement").getChild("requirement").getCommand());
+            assertNotNull(player.getChild("everything").getCommand());
+            assertNull(player.getChild("rule"));
+            assertNull(player.getChild("all"));
+        }
+    }
+
     @Test void reportHighlightsDetailsWithoutColoringTheMessage() {
         var error = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.ERROR,
                 "Could not load unlocking_rules.json: Malformed JSON at line 2 column 39 path $.default"));
@@ -22,12 +36,12 @@ class UnlockingCommandsTest {
         assertEquals(List.of("unlocking_rules.json", "2", "39", "$.default"), yellowParts(error));
 
         var warning = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.WARNING,
-                "unlocking_rules.json: minecraft:fortress is listed more than once under \"unlocks\" on lines 4, 7"));
+                "unlocking_rules.json: minecraft:fortress is listed more than once under \"unlockedStructures\" on lines 4, 7"));
         assertEquals(TextColor.fromFormatting(Formatting.GOLD), warning.getSiblings().get(0).getStyle().getColor());
-        assertEquals(List.of("unlocking_rules.json", "minecraft:fortress", "unlocks", "4, 7"), yellowParts(warning));
+        assertEquals(List.of("unlocking_rules.json", "minecraft:fortress", "unlockedStructures", "4, 7"), yellowParts(warning));
 
         var rule = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.ERROR,
-                "unlocking_rules.json: Ignored invalid rule \"typo\" at line 6: No structures match selector ancient_citys"));
+                "unlocking_rules.json: Ignored invalid requirement \"typo\" at line 6: No structures match selector ancient_citys"));
         assertEquals(List.of("unlocking_rules.json", "typo", "6", "ancient_citys"), yellowParts(rule));
     }
 

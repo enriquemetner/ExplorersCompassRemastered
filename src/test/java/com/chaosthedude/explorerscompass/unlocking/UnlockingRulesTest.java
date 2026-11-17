@@ -32,7 +32,7 @@ class UnlockingRulesTest {
         assertFalse(rules("{}").hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
         assertTrue(rules("{\"default\":\"lockedUntilVisited\"}")
                 .hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
-        assertTrue(condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}")
+        assertTrue(condition("{\"requiredVisits\":[\"minecraft:ancient_city\"]}")
                 .hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
         assertTrue(rules("{}").hasUnlockingRequirements(new FtbStructureRewards.Snapshot(
                 java.util.Map.of(), java.util.Map.of(1L, Set.of()), Set.of())));
@@ -95,10 +95,27 @@ class UnlockingRulesTest {
     }
     private UnlockingRules rules(String json) { return UnlockingRules.parse(json, catalog); }
     private String rule(String condition) {
-        return "{\"unlocks\":[\"minecraft:fortress\"],\"condition\":" + condition + "}";
+        return "{\"unlockedStructures\":[\"minecraft:fortress\"]," + condition.strip().substring(1);
     }
     private UnlockingRules condition(String condition) {
-        return rules("{\"default\":\"lockedUntilVisited\",\"rules\":{\"test\":" + rule(condition) + "}}");
+        return rules("{\"default\":\"lockedUntilVisited\",\"requirements\":{\"test\":" + rule(condition) + "}}");
+    }
+
+    @Test void alwaysUnlockedOverridesTheDefaultAndStillYieldsToFtb() {
+        UnlockingRules parsed = rules("""
+                {"default":"lockedUntilVisited","requirements":{
+                    "free":{"unlockedStructures":["fortress"],"alwaysUnlocked":true},
+                    "off":{"unlockedStructures":["stronghold"],"alwaysUnlocked":false},
+                    "string":{"unlockedStructures":["stronghold"],"alwaysUnlocked":"true"},
+                    "match":{"unlockedStructures":["stronghold"],"alwaysUnlocked":true,"match":"any"},
+                    "both":{"unlockedStructures":["stronghold"],"requiredVisits":["fortress"],
+                            "requiredAdvancements":["minecraft:story/mine_stone"]}
+                }}
+                """);
+        assertEquals(Set.of("free"), parsed.requirementNames());
+        assertEquals(Set.of(B), parsed.earnedOnOpen(STRUCTURES, new Progress()));
+        assertTrue(parsed.earnedOnOpen(STRUCTURES, new Progress(), Set.of(B)).isEmpty());
+        assertEquals(4, parsed.diagnostics(UnlockingRules.Severity.ERROR).size());
     }
 
     @Test void defaultsAndExplicitRules() {
@@ -107,7 +124,7 @@ class UnlockingRulesTest {
         assertTrue(rules("{\"default\":\"lockedUntilVisited\"}").earnedOnOpen(STRUCTURES, p).isEmpty());
         p.visits.add(A);
         assertEquals(Set.of(A), rules("{\"default\":\"lockedUntilVisited\"}").earnedOnOpen(STRUCTURES, p));
-        UnlockingRules rules = rules("{\"default\":\"unlocked\",\"rules\":{\"test\":" + rule("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}") + "}}");
+        UnlockingRules rules = rules("{\"default\":\"unlocked\",\"requirements\":{\"test\":" + rule("{\"requiredAdvancements\":[\"minecraft:story/mine_stone\"]}") + "}}");
         assertEquals(Set.of(A, C), rules.earnedOnOpen(STRUCTURES, p));
     }
 
@@ -136,8 +153,8 @@ class UnlockingRulesTest {
     }
 
     @Test void visitedSetDefaultRespectsExplicitRulesAndFtbRewards() {
-        var rules = rules("{\"default\":\"lockedUntilVisitedSet\",\"rules\":{\"test\":"
-                + rule("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}") + "}}");
+        var rules = rules("{\"default\":\"lockedUntilVisitedSet\",\"requirements\":{\"test\":"
+                + rule("{\"requiredAdvancements\":[\"minecraft:story/mine_stone\"]}") + "}}");
         Progress progress = new Progress();
         progress.visits.add(A);
         assertEquals(Set.of(A), rules.earnedOnProgress(progress, A, null, Set.of(C)));
@@ -153,8 +170,8 @@ class UnlockingRulesTest {
     }
 
     @Test void ftbRewardsTakePrecedenceWithoutRelockingSavedStructures() {
-        UnlockingRules rules = rules("{\"default\":\"unlocked\",\"rules\":{\"visit\":"
-                + rule("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}") + "}}");
+        UnlockingRules rules = rules("{\"default\":\"unlocked\",\"requirements\":{\"visit\":"
+                + rule("{\"requiredVisits\":[\"minecraft:ancient_city\"]}") + "}}");
         Progress progress = new Progress();
         progress.visits.add(A);
         assertFalse(rules.earnedOnOpen(STRUCTURES, progress, Set.of(B, C)).contains(B));
@@ -268,11 +285,11 @@ class UnlockingRulesTest {
     }
 
     @Test void conditionGroupsAreRejectedAndVisitProgressUnlocksImmediately() {
-        assertTrue(condition("{\"all\":[{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}]}"
-                ).ruleNames().isEmpty());
-        assertTrue(condition("{\"any\":[{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}]}"
-                ).ruleNames().isEmpty());
-        UnlockingRules rules = condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}");
+        assertTrue(condition("{\"all\":[{\"requiredVisits\":[\"minecraft:ancient_city\"]}]}"
+                ).requirementNames().isEmpty());
+        assertTrue(condition("{\"any\":[{\"requiredVisits\":[\"minecraft:ancient_city\"]}]}"
+                ).requirementNames().isEmpty());
+        UnlockingRules rules = condition("{\"requiredVisits\":[\"minecraft:ancient_city\"]}");
         Progress p = new Progress();
         p.visits.add(A);
         assertTrue(rules.earnedOnProgress(p, A, null).contains(B));
@@ -281,12 +298,12 @@ class UnlockingRulesTest {
 
     @Test void visitListsAndSetsRespectAnyAll() {
         Progress p = new Progress(); p.visits.add(A);
-        UnlockingRules any = condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\",\"minecraft:stronghold\"]}");
+        UnlockingRules any = condition("{\"requiredVisits\":[\"minecraft:ancient_city\",\"minecraft:stronghold\"]}");
         assertTrue(any.earnedOnOpen(STRUCTURES, p).contains(B));
         assertEquals("Visit any Structure:", any.requirements(B, p).label().getString());
-        assertFalse(condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\",\"minecraft:stronghold\"],\"match\":\"all\"}").earnedOnOpen(STRUCTURES, p).contains(B));
-        assertTrue(condition("{\"type\":\"visit\",\"structures\":[\"minecraft:test_set\"],\"match\":\"any\"}").earnedOnOpen(STRUCTURES, p).contains(B));
-        UnlockingRules all = condition("{\"type\":\"visit\",\"structures\":[\"minecraft:test_set\"],\"match\":\"all\"}");
+        assertFalse(condition("{\"requiredVisits\":[\"minecraft:ancient_city\",\"minecraft:stronghold\"],\"match\":\"all\"}").earnedOnOpen(STRUCTURES, p).contains(B));
+        assertTrue(condition("{\"requiredVisits\":[\"minecraft:test_set\"],\"match\":\"any\"}").earnedOnOpen(STRUCTURES, p).contains(B));
+        UnlockingRules all = condition("{\"requiredVisits\":[\"minecraft:test_set\"],\"match\":\"all\"}");
         assertFalse(all.earnedOnOpen(STRUCTURES, p).contains(B));
         p.visits.add(B);
         assertTrue(all.earnedOnOpen(STRUCTURES, p).contains(B));
@@ -294,8 +311,8 @@ class UnlockingRulesTest {
 
     @Test void advancementListsRespectAnyAllAndKeepIndividualChecks() {
         String ids = "[\"minecraft:story/mine_stone\",\"minecraft:end/dragon_egg\"]";
-        UnlockingRules any = condition("{\"type\":\"advancement\",\"advancements\":" + ids + ",\"match\":\"any\"}");
-        UnlockingRules all = condition("{\"type\":\"advancement\",\"advancements\":" + ids + ",\"match\":\"all\"}");
+        UnlockingRules any = condition("{\"requiredAdvancements\":" + ids + ",\"match\":\"any\"}");
+        UnlockingRules all = condition("{\"requiredAdvancements\":" + ids + ",\"match\":\"all\"}");
         Progress progress = new Progress();
         assertFalse(any.earnedOnOpen(STRUCTURES, progress).contains(B));
         progress.advancements.add(ADVANCEMENT);
@@ -312,33 +329,33 @@ class UnlockingRulesTest {
         assertTrue(all.earnedOnProgress(progress, null, DRAGON_EGG).contains(B));
         assertTrue(all.requirements(B, progress).checked());
         assertEquals("Complete any Advancements:", any.requirements(B, progress).label().getString());
-        assertTrue(condition("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}")
+        assertTrue(condition("{\"requiredAdvancements\":[\"minecraft:story/mine_stone\"]}")
                 .earnedOnOpen(STRUCTURES, progress).contains(B));
     }
 
     @Test void advancementConditionRequiresArrayAndValidMatch() {
-        assertTrue(condition("{\"type\":\"advancement\",\"id\":\"minecraft:story/mine_stone\"}").ruleNames().isEmpty());
-        assertTrue(condition("{\"type\":\"advancement\",\"advancements\":[]}").ruleNames().isEmpty());
-        assertTrue(condition("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"],\"match\":\"neither\"}").ruleNames().isEmpty());
+        assertTrue(condition("{\"id\":\"minecraft:story/mine_stone\"}").requirementNames().isEmpty());
+        assertTrue(condition("{\"requiredAdvancements\":[]}").requirementNames().isEmpty());
+        assertTrue(condition("{\"requiredAdvancements\":[\"minecraft:story/mine_stone\"],\"match\":\"neither\"}").requirementNames().isEmpty());
     }
 
     @Test void targetsSupportStructureSets() {
         UnlockingRules rules = rules("""
-            {"rules":{
-              "set":{"unlocks":["minecraft:test_set"],"condition":{"type":"visit","structures":["minecraft:stronghold"]}}
+            {"requirements":{
+              "set":{"unlockedStructures":["minecraft:test_set"],"requiredVisits":["minecraft:stronghold"]}
             }}
             """);
-        assertEquals(Set.of(A, B), rules.ruleTargets("set"));
+        assertEquals(Set.of(A, B), rules.requirementTargets("set"));
     }
 
     @Test void selectorsCombineDirectStructuresAndMultipleSetsWithoutDuplicates() {
         UnlockingRules rules = rules("""
-            {"rules":{"combined":{
-              "unlocks":["minecraft:ancient_city","minecraft:*_set"],
-              "condition":{"type":"visit","structures":["minecraft:ancient_city","minecraft:*_set"],"match":"all"}
+            {"requirements":{"combined":{
+              "unlockedStructures":["minecraft:ancient_city","minecraft:*_set"],
+              "requiredVisits":["minecraft:ancient_city","minecraft:*_set"],"match":"all"
             }}}
             """);
-        assertEquals(STRUCTURES, rules.ruleTargets("combined"));
+        assertEquals(STRUCTURES, rules.requirementTargets("combined"));
         Progress progress = new Progress();
         progress.visits.add(A);
         RequirementNode requirement = rules.requirements(B, progress);
@@ -350,18 +367,18 @@ class UnlockingRulesTest {
 
     @Test void wildcardStarMatchesZeroOrMoreAndQuestionMarkIsInvalid() {
         UnlockingRules rules = rules("""
-            {"default":"lockedUntilVisited","rules":{"patterns":{
-              "unlocks":["minecraft:fortress*","minecraft:test_*set"],
-              "condition":{"type":"visit","structures":["ancient_cit*"],"match":"any"}
+            {"default":"lockedUntilVisited","requirements":{"patterns":{
+              "unlockedStructures":["minecraft:fortress*","minecraft:test_*set"],
+              "requiredVisits":["ancient_cit*"],"match":"any"
             }}}
             """);
-        assertEquals(Set.of(A, B), rules.ruleTargets("patterns"));
+        assertEquals(Set.of(A, B), rules.requirementTargets("patterns"));
         Progress progress = new Progress();
         progress.visits.add(A);
         assertEquals(Set.of(A, B), rules.earnedOnOpen(STRUCTURES, progress));
-        assertTrue(condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_cit?\"]}").ruleNames().isEmpty());
-        assertTrue(rules("{\"rules\":{\"invalid\":{\"unlocks\":[\"minecraft:fortres?\"],"
-                + "\"condition\":{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}}}}").ruleNames().isEmpty());
+        assertTrue(condition("{\"requiredVisits\":[\"minecraft:ancient_cit?\"]}").requirementNames().isEmpty());
+        assertTrue(rules("{\"requirements\":{\"invalid\":{\"unlockedStructures\":[\"minecraft:fortres?\"],"
+                + "\"requiredVisits\":[\"minecraft:ancient_city\"]}}}").requirementNames().isEmpty());
     }
 
     @Test void structureWinsWhenItsIdAlsoNamesASet() {
@@ -375,12 +392,12 @@ class UnlockingRulesTest {
             public Formatting advancementColor(Identifier id) { return Formatting.WHITE; }
         };
         UnlockingRules rules = UnlockingRules.parse(JsonParser.parseString("""
-            {"default":"lockedUntilVisited","rules":{"collision":{
-              "unlocks":["minecraft:fortress"],
-              "condition":{"type":"visit","structures":["minecraft:fortress"]}
+            {"default":"lockedUntilVisited","requirements":{"collision":{
+              "unlockedStructures":["minecraft:fortress"],
+              "requiredVisits":["minecraft:fortress"]
             }}}
             """).getAsJsonObject(), collision);
-        assertEquals(Set.of(B), rules.ruleTargets("collision"));
+        assertEquals(Set.of(B), rules.requirementTargets("collision"));
         Progress progress = new Progress();
         progress.visits.add(A);
         assertFalse(rules.earnedOnOpen(STRUCTURES, progress).contains(B));
@@ -390,18 +407,18 @@ class UnlockingRulesTest {
 
     @Test void selectorsRequireNonemptyArraysAndRejectOldFields() {
         for (String selector : new String[]{"{}", "[]", "null", "\"minecraft:fortress\"",
-                "{\"structures\":[\"minecraft:fortress\"]}", "{\"structureSet\":\"minecraft:test_set\"}"}) {
-            assertTrue(rules("{\"rules\":{\"bad\":{\"unlocks\":" + selector
-                    + ",\"condition\":{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}}}}").ruleNames().isEmpty());
+                "{\"requiredVisits\":[\"minecraft:fortress\"]}", "{\"structureSet\":\"minecraft:test_set\"}"}) {
+            assertTrue(rules("{\"requirements\":{\"bad\":{\"unlockedStructures\":" + selector
+                    + ",\"requiredVisits\":[\"minecraft:ancient_city\"]}}}").requirementNames().isEmpty());
         }
-        assertTrue(condition("{\"type\":\"visit\",\"structures\":[]}").ruleNames().isEmpty());
-        assertTrue(condition("{\"type\":\"visit\",\"structureSet\":\"minecraft:test_set\"}").ruleNames().isEmpty());
+        assertTrue(condition("{\"requiredVisits\":[]}").requirementNames().isEmpty());
+        assertTrue(condition("{\"structureSet\":\"minecraft:test_set\"}").requirementNames().isEmpty());
     }
 
     @Test void laterRuleReplacesEarlierConditionAndInvalidRuleDoesNotOverrideDefault() {
-        UnlockingRules rules = rules("{\"rules\":{\"a\":" + rule("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}")
-                + ",\"b\":" + rule("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}")
-                + ",\"invalid\":{\"unlocks\":[\"minecraft:stronghold\"],\"condition\":{\"all\":[]}}}}");
+        UnlockingRules rules = rules("{\"requirements\":{\"a\":" + rule("{\"requiredVisits\":[\"minecraft:ancient_city\"]}")
+                + ",\"b\":" + rule("{\"requiredAdvancements\":[\"minecraft:story/mine_stone\"]}")
+                + ",\"invalid\":{\"unlockedStructures\":[\"minecraft:stronghold\"],\"all\":[]}}}");
         Progress p = new Progress();
         assertFalse(rules.earnedOnOpen(STRUCTURES, p).contains(B));
         assertTrue(rules.earnedOnOpen(STRUCTURES, p).contains(C));
@@ -411,18 +428,18 @@ class UnlockingRulesTest {
         p.advancements.add(ADVANCEMENT);
         assertTrue(rules.earnedOnOpen(STRUCTURES, p).contains(B));
         assertTrue(rules.earnedOnProgress(p, null, ADVANCEMENT).contains(B));
-        assertEquals(Set.of("a", "b"), rules.ruleNames());
+        assertEquals(Set.of("a", "b"), rules.requirementNames());
     }
 
     @Test void duplicateTargetLinesReferToSelectorsIncludingExpandedSets() {
         String source = "{\n" +
-                "  \"rules\": {\n" +
-                "    \"first\": {\"unlocks\": [\n" +
+                "  \"requirements\": {\n" +
+                "    \"first\": {\"unlockedStructures\": [\n" +
                 "      \"minecraft:test_set\"\n" +
-                "    ], \"condition\": {\"type\": \"visit\", \"structures\": [\"minecraft:ancient_city\"]}},\n" +
-                "    \"second\": {\"unlocks\": [\n" +
+                "    ], \"requiredVisits\": [\"minecraft:ancient_city\"]},\n" +
+                "    \"second\": {\"unlockedStructures\": [\n" +
                 "      \"minecraft:fortress\"\n" +
-                "    ], \"condition\": {\"type\": \"advancement\", \"advancements\": [\"minecraft:story/mine_stone\"]}}\n" +
+                "    ], \"requiredAdvancements\": [\"minecraft:story/mine_stone\"]}\n" +
                 "  }\n" +
                 "}\n";
         UnlockingRules rules = rules(source);
@@ -443,10 +460,10 @@ class UnlockingRulesTest {
         String source = """
             {
               "default": "lockedUntilVisited",
-              "rules": {
-                "first": {"unlocks": ["minecraft:fortress"], "condition": {"type": "visit", "structures": ["minecraft:ancient_city"]}},
-                "second": {"unlocks": ["minecraft:fortress"], "condition": {"type": "advancement", "advancements": ["minecraft:story/mine_stone"]}},
-                "third": {"unlocks": ["minecraft:fortress"], "condition": {"type": "visit", "structures": ["minecraft:stronghold"]}}
+              "requirements": {
+                "first": {"unlockedStructures": ["minecraft:fortress"], "requiredVisits": ["minecraft:ancient_city"]},
+                "second": {"unlockedStructures": ["minecraft:fortress"], "requiredAdvancements": ["minecraft:story/mine_stone"]},
+                "third": {"unlockedStructures": ["minecraft:fortress"], "requiredVisits": ["minecraft:stronghold"]}
               }
             }
             """;
@@ -464,19 +481,19 @@ class UnlockingRulesTest {
         UnlockingRules parsed = rules("""
                 {
                   "default": "lockedUntilVisited",
-                  "rules": {
-                    "valid": {"unlocks": ["fortress"], "condition": {"type": "visit", "structures": ["ancient_city"]}},
-                    "typo": {"unlocks": ["stronghold"], "condition": {"type": "visit", "structures": [
+                  "requirements": {
+                    "valid": {"unlockedStructures": ["fortress"], "requiredVisits": ["ancient_city"]},
+                    "typo": {"unlockedStructures": ["stronghold"], "requiredVisits": [
                       "ancient_citys"
-                    ]}},
-                    "unmatched": {"unlocks": ["fortress", "missing:*"], "condition": {"type": "visit", "structures": ["ancient_city"]}},
-                    "missingAdvancement": {"unlocks": ["fortress"], "condition": {"type": "advancement", "advancements": ["missing:advancement"]}},
+                    ]},
+                    "unmatched": {"unlockedStructures": ["fortress", "missing:*"], "requiredVisits": ["ancient_city"]},
+                    "missingAdvancement": {"unlockedStructures": ["fortress"], "requiredAdvancements": ["missing:advancement"]},
                     "missingCondition":
-                    {"unlocks": ["fortress"]}
+                    {"unlockedStructures": ["fortress"]}
                   }
                 }
                 """);
-        assertEquals(Set.of("valid"), parsed.ruleNames());
+        assertEquals(Set.of("valid"), parsed.requirementNames());
         var errors = parsed.diagnostics(UnlockingRules.Severity.ERROR);
         assertEquals(4, errors.size());
         assertTrue(errors.get(0).message().contains("line 6"));
@@ -490,11 +507,11 @@ class UnlockingRulesTest {
 
     @Test void ruleDescriptionIsRejectedAndRequirementsAreGenerated() {
         UnlockingRules rules = rules("""
-            {"rules":{"hint":{"unlocks":["minecraft:ancient_city"],
-              "description":"Follow the lanterns.","condition":{"type":"advancement","advancements":["minecraft:story/mine_stone"]}}}}
+            {"requirements":{"hint":{"unlockedStructures":["minecraft:ancient_city"],
+              "description":"Follow the lanterns.","requiredAdvancements":["minecraft:story/mine_stone"]}}}
             """);
-        assertTrue(rules.ruleNames().isEmpty());
-        RequirementNode advancement = condition("{\"type\":\"advancement\",\"advancements\":[\"minecraft:story/mine_stone\"]}").requirements(B, new Progress());
+        assertTrue(rules.requirementNames().isEmpty());
+        RequirementNode advancement = condition("{\"requiredAdvancements\":[\"minecraft:story/mine_stone\"]}").requirements(B, new Progress());
         assertEquals("Complete Advancement:", advancement.label().getString());
         assertEquals("Stone Age", advancement.children().get(0).label().getString());
         assertEquals(Formatting.GREEN.getColorValue(), advancement.children().get(0).label().getStyle().getColor().getRgb());
@@ -503,7 +520,7 @@ class UnlockingRulesTest {
 
     @Test void requirementTreeShowsEachSatisfiedVisitAndCombinedState() {
         UnlockingRules rules = condition("""
-            {"type":"visit","structures":["minecraft:ancient_city","minecraft:stronghold"],"match":"all"}
+            {"requiredVisits":["minecraft:ancient_city","minecraft:stronghold"],"match":"all"}
             """);
         Progress progress = new Progress();
         progress.visits.add(A);
@@ -523,7 +540,7 @@ class UnlockingRulesTest {
     @Test void requirementPacketPreservesChecksAndColors() {
         Progress progress = new Progress();
         progress.visits.add(A);
-        RequirementNode original = condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\",\"minecraft:stronghold\"],\"match\":\"all\"}")
+        RequirementNode original = condition("{\"requiredVisits\":[\"minecraft:ancient_city\",\"minecraft:stronghold\"],\"match\":\"all\"}")
                 .requirements(B, progress);
         PacketByteBuf packet = new PacketByteBuf(Unpooled.buffer());
         original.write(packet);
@@ -538,7 +555,7 @@ class UnlockingRulesTest {
         RequirementNode groupCopy = RequirementNode.read(groupPacket);
         assertTrue(groupCopy.logicalGroup());
         assertTrue(groupCopy.checked());
-        RequirementNode advancement = condition("{\"type\":\"advancement\",\"advancements\":[\"minecraft:end/dragon_egg\"]}")
+        RequirementNode advancement = condition("{\"requiredAdvancements\":[\"minecraft:end/dragon_egg\"]}")
                 .requirements(B, new Progress()).children().get(0);
         PacketByteBuf advancementPacket = new PacketByteBuf(Unpooled.buffer());
         advancement.write(advancementPacket);
@@ -549,14 +566,14 @@ class UnlockingRulesTest {
     }
 
     @Test void invalidMatchSkipsRule() {
-        assertTrue(condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"],\"match\":\"typo\"}").ruleNames().isEmpty());
+        assertTrue(condition("{\"requiredVisits\":[\"minecraft:ancient_city\"],\"match\":\"typo\"}").requirementNames().isEmpty());
     }
 
     @Test void latchingSurvivesRequirementLossRuleChangesAndNbtRoundTrip() {
         UUID player = UUID.randomUUID(), other = UUID.randomUUID();
         UnlockedStructures saved = new UnlockedStructures();
         Progress p = new Progress(); p.visits.add(A);
-        UnlockingRules original = condition("{\"type\":\"visit\",\"structures\":[\"minecraft:ancient_city\"]}");
+        UnlockingRules original = condition("{\"requiredVisits\":[\"minecraft:ancient_city\"]}");
         saved.add(player, original.earnedOnOpen(STRUCTURES, p));
         p.visits.clear();
         saved.add(player, original.earnedOnOpen(STRUCTURES, p));
@@ -622,12 +639,13 @@ class UnlockingRulesTest {
     @Test void rejectsMalformedDocumentsAndInvalidRootFields(@TempDir Path directory) throws Exception {
         Path file = directory.resolve("unlocking_rules.json");
         for (String source : List.of(
-                "{\n  \"rules\": {}",
-                "{\n  // comment\n  \"rules\": {}\n}",
+                "{\n  \"requirements\": {}",
+                "{\n  // comment\n  \"requirements\": {}\n}",
                 "{\n  \"default\": \"bad\nvalue\"\n}",
                 "{\n  \"default\": \"missing\"\n}",
-                "{\n  \"rules\": []\n}",
+                "{\n  \"requirements\": []\n}",
                 "[]",
+                "{\n  \"rules\": {}\n}",
                 "{} {}")) {
             Files.writeString(file, source);
             UnlockingRules loaded = UnlockingRules.loadFile(file, catalog);
@@ -646,10 +664,10 @@ class UnlockingRulesTest {
         Path file = directory.resolve("unlocking_rules.json");
         try {
             Files.writeString(file, """
-                    {"default":"lockedUntilVisited","rules":{
-                        "first":{"unlocks":["fortress*"],"condition":{"type":"visit","structures":["ancient_city"]}},
-                        "invalid":{"unlocks":["fortress"],"condition":{"type":"visit","structures":["typo"]}},
-                        "last":{"unlocks":["test_set"],"condition":{"type":"visit","structures":["ancient_city"]}}
+                    {"default":"lockedUntilVisited","requirements":{
+                        "first":{"unlockedStructures":["fortress*"],"requiredVisits":["ancient_city"]},
+                        "invalid":{"unlockedStructures":["fortress"],"requiredVisits":["typo"]},
+                        "last":{"unlockedStructures":["test_set"],"requiredVisits":["ancient_city"]}
                     }}
                     """);
             assertEquals(2, UnlockingRules.reload(file, catalog));
@@ -663,7 +681,7 @@ class UnlockingRulesTest {
             assertEquals(-1, UnlockingRules.reload(file, catalog));
             assertEquals(1, UnlockingRules.report(UnlockingRules.Severity.ERROR).size());
             assertTrue(UnlockingRules.report(UnlockingRules.Severity.WARNING).isEmpty());
-            assertTrue(UnlockingRules.get().ruleNames().isEmpty());
+            assertTrue(UnlockingRules.get().requirementNames().isEmpty());
             var unclaimed = new FtbStructureRewards.Snapshot(
                     java.util.Map.of(B, List.of(new FtbStructureRewards.Quest(1L, Text.literal("Quest")))), java.util.Map.of(), Set.of());
             assertFalse(UnlockingRules.get().earnedOnOpen(STRUCTURES, new Progress(), unclaimed).contains(B));

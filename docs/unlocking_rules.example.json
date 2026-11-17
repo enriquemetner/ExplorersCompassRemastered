@@ -1,69 +1,60 @@
 {
   "default": "lockedUntilVisitedSet",
-  "rules": {
+  "requirements": {
     "visit_any": {
-      "unlocks": [
+      "unlockedStructures": [
         "minecraft:ancient_city"
       ],
-      "condition": {
-        "type": "visit",
-        "match": "any",
-        "structures": [
-          "minecraft:villages",
-          "minecraft:pillager_outpost"
-        ]
-      }
+      "requiredVisits": [
+        "minecraft:villages",
+        "minecraft:pillager_outpost"
+      ],
+      "match": "any"
     },
     "visit_all": {
-      "unlocks": [
+      "unlockedStructures": [
         "minecraft:desert_pyramid"
       ],
-      "condition": {
-        "type": "visit",
-        "match": "any",
-        "structures": [
-          "minecraft:ancient_city",
-          "minecraft:strongholds"
-        ]
-      }
+      "requiredVisits": [
+        "minecraft:ancient_city",
+        "minecraft:strongholds"
+      ],
+      "match": "any"
     },
     "advancement_any": {
-      "unlocks": [
+      "unlockedStructures": [
         "minecraft:nether_complexes"
       ],
-      "condition": {
-        "type": "advancement",
-        "match": "any",
-        "advancements": [
-          "minecraft:story/enter_the_nether",
-          "minecraft:story/mine_diamond"
-        ]
-      }
+      "requiredAdvancements": [
+        "minecraft:story/enter_the_nether",
+        "minecraft:story/mine_diamond"
+      ],
+      "match": "any"
     },
     "advancement_all": {
-      "unlocks": [
+      "unlockedStructures": [
         "minecraft:village_*"
       ],
-      "condition": {
-        "type": "advancement",
-        "match": "all",
-        "advancements": [
-          "minecraft:story/mine_stone",
-          "minecraft:story/smelt_iron"
-        ]
-      }
+      "requiredAdvancements": [
+        "minecraft:story/mine_stone",
+        "minecraft:story/smelt_iron"
+      ],
+      "match": "all"
     },
     "visit_default_match": {
-      "unlocks": [
+      "unlockedStructures": [
         "minecraft:shipwreck"
       ],
-      "condition": {
-        "type": "visit",
-        "structures": [
-          "fortress",
-          "minecraft:ocean_ruin_*"
-        ]
-      }
+      "requiredVisits": [
+        "fortress",
+        "minecraft:ocean_ruin_*"
+      ]
+    },
+    "always_unlocked": {
+      "unlockedStructures": [
+        "minecraft:ruined_portal"
+      ],
+      "alwaysUnlocked": true
     }
   }
 }

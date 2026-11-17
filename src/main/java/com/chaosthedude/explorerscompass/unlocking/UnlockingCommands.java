@@ -135,15 +135,15 @@ public final class UnlockingCommands {
 
     private static RequiredArgumentBuilder<ServerCommandSource, String> structureTargets(boolean unlock) {
         return playerArgument()
-                .then(literal("all").executes(context -> change(context, unlock, "all")))
+                .then(literal("everything").executes(context -> change(context, unlock, "everything")))
                 .then(literal("structure").then(structureArgument().executes(context -> change(context, unlock, "structure"))))
                 .then(literal("structureSet").then(argument("id", IdentifierArgumentType.identifier())
                         .suggests((context, builder) -> CommandSource.suggestIdentifiers(
                                 context.getSource().getRegistryManager().get(RegistryKeys.STRUCTURE_SET).getIds(), builder))
                         .executes(context -> change(context, unlock, "structureSet"))))
-                .then(literal("rule").then(argument("rule", StringArgumentType.string())
-                        .suggests((context, builder) -> CommandSource.suggestMatching(UnlockingRules.get().ruleNames(), builder))
-                        .executes(context -> change(context, unlock, "rule"))));
+                .then(literal("requirement").then(argument("requirement", StringArgumentType.string())
+                        .suggests((context, builder) -> CommandSource.suggestMatching(UnlockingRules.get().requirementNames(), builder))
+                        .executes(context -> change(context, unlock, "requirement"))));
     }
 
     private static int change(CommandContext<ServerCommandSource> context, boolean unlock, String selector) throws CommandSyntaxException {
@@ -152,10 +152,10 @@ public final class UnlockingCommands {
         UnlockedStructures state = UnlockedStructures.get(server);
         Set<Identifier> targets;
         switch (selector) {
-            case "all" -> targets = unlock ? server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds() : state.getStructures(player);
-            case "rule" -> {
-                targets = UnlockingRules.get().ruleTargets(StringArgumentType.getString(context, "rule"));
-                if (targets == null) throw error("Unknown rule");
+            case "everything" -> targets = unlock ? server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds() : state.getStructures(player);
+            case "requirement" -> {
+                targets = UnlockingRules.get().requirementTargets(StringArgumentType.getString(context, "requirement"));
+                if (targets == null) throw error("Unknown requirement");
             }
             case "structureSet" -> {
                 Identifier id = IdentifierArgumentType.getIdentifier(context, "id");
