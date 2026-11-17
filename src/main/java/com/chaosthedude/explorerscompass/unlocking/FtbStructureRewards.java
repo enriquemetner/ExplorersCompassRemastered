@@ -33,7 +33,7 @@ public final class FtbStructureRewards {
     }
 
     public static void claimed(ServerPlayerEntity player, Set<Identifier> targets) {
-        UnlockedStructures state = UnlockedStructures.get(player.getServer());
-        UnlockNotifications.newlyAdded(player, state.add(player.getUuid(), targets));
+        UnlockingRules rules = UnlockingRules.get();
+        UnlockNotifications.newlyAdded(player, rules.evaluateClaimedReward(player, targets));
     }
 }

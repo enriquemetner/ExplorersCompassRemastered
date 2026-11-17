@@ -28,6 +28,55 @@ class UnlockingRulesTest {
     private static final Identifier DRAGON_EGG = new Identifier("minecraft:end/dragon_egg");
     private static final Identifier SET = new Identifier("minecraft:test_set");
 
+    @Test void prerequisitesHideRequirementsAndAllowCascadingUnlocks() {
+        UnlockingRules parsed = rules("""
+                {"default":"lockedUntilVisited",
+                 "prerequisites":{
+                    "fortress":{"appliesTo":["fortress"],"requiresUnlocked":["ancient_city","stronghold"],"match":"all"},
+                    "stronghold":{"appliesTo":["stronghold"],"requiresUnlocked":["ancient_city"]}
+                 },
+                 "requirements":{"fortress":{"unlockedStructures":["fortress"],"alwaysUnlocked":true}}}
+                """);
+        var popup = parsed.prerequisiteNode(B, Set.of(A));
+        assertEquals("Unlock all Structures:", popup.label().getString());
+        assertEquals(List.of(true, false), popup.children().stream().map(RequirementNode::checked).toList());
+        assertEquals("Unlock Structure:", parsed.prerequisiteNode(C, Set.of()).label().getString());
+        assertNull(parsed.prerequisiteNode(B, Set.of(A, C)));
+
+        Progress progress = new Progress();
+        assertTrue(parsed.earnedOnOpen(STRUCTURES, progress).isEmpty());
+        progress.visits.addAll(Set.of(A, C));
+        assertEquals(STRUCTURES, parsed.earnedOnOpen(STRUCTURES, progress));
+        assertEquals(Set.of(B), parsed.applyPrerequisites(Set.of(B), Set.of(A, C)));
+    }
+
+    @Test void anyPrerequisiteExpandsStructureSets() {
+        UnlockingRules parsed = rules("""
+                {"prerequisites":{"gate":{"appliesTo":["stronghold"],"requiresUnlocked":["test_set"],"match":"any"}}}
+                """);
+        assertEquals("Unlock any Structure:", parsed.prerequisiteNode(C, Set.of()).label().getString());
+        assertNull(parsed.prerequisiteNode(C, Set.of(B)));
+        assertEquals(Set.of(C), parsed.applyPrerequisites(Set.of(C), Set.of(B)));
+    }
+
+    @Test void eachLoopIsReportedAndEvenUnrelatedGatesAreIgnored() {
+        UnlockingRules parsed = rules("""
+                {"default":"lockedUntilVisited",
+                 "prerequisites":{
+                    "first":{"appliesTo":["ancient_city"],"requiresUnlocked":["fortress"]},
+                    "second":{"appliesTo":["fortress"],"requiresUnlocked":["ancient_city","fortress"]},
+                    "unrelated":{"appliesTo":["stronghold"],"requiresUnlocked":["ancient_city"]}
+                 },
+                 "requirements":{"free":{"unlockedStructures":["stronghold"],"alwaysUnlocked":true}}}
+                """);
+        var errors = parsed.diagnostics(UnlockingRules.Severity.ERROR);
+        assertEquals(2, errors.size());
+        assertTrue(errors.get(0).message().contains("lines 3, 4"));
+        assertTrue(errors.get(1).message().contains("lines 4:"));
+        assertNull(parsed.prerequisiteNode(C, Set.of()));
+        assertEquals(Set.of(C), parsed.earnedOnOpen(STRUCTURES, new Progress()));
+    }
+
     @Test void newlyUnlockedFilterDependsOnConfiguredRequirementsRatherThanCurrentLocks() {
         assertFalse(rules("{}").hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
         assertTrue(rules("{\"default\":\"lockedUntilVisited\"}")

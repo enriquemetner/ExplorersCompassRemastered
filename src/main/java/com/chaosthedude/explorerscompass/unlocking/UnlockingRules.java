@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -71,6 +72,7 @@ public final class UnlockingRules {
     }
 
     private DefaultMode defaultMode = DefaultMode.UNLOCKED;
+    private final Map<Identifier, UnlockPrerequisites.Gate> prerequisites = new LinkedHashMap<>();
     private final Map<String, Requirement> rules = new LinkedHashMap<>();
     private final Map<Identifier, Requirement> byStructure = new LinkedHashMap<>();
     private final Map<Identifier, List<Set<Identifier>>> visitSetsByStructure = new LinkedHashMap<>();
@@ -243,7 +245,42 @@ public final class UnlockingRules {
             result.diagnose(Severity.WARNING, file, id + " is listed more than once under \"unlockedStructures\" on lines " + listed
                     + "; the last requirement takes precedence");
         }
+        result.loadPrerequisites(root, document, catalog, file);
         return result;
+    }
+
+    private void loadPrerequisites(JsonObject root, UnlockingRuleDocument document, Catalog catalog, Path file) {
+        if (!root.has("prerequisites")) return;
+        if (!(root.get("prerequisites") instanceof JsonObject entries)) {
+            diagnose(Severity.ERROR, file, "Ignored \"prerequisites\" at line "
+                    + document.line(root.get("prerequisites")) + ": Expected an object");
+            return;
+        }
+        Consumer<String> warning = message -> diagnose(Severity.WARNING, file, message);
+        for (var entry : entries.entrySet()) {
+            try {
+                if (!(entry.getValue() instanceof JsonObject value)) throw invalid("Expected a prerequisite object");
+                for (String key : value.keySet()) {
+                    if (!Set.of("appliesTo", "requiresUnlocked", "match").contains(key))
+                        throw located(document, value.get(key), "Unknown prerequisite field: " + quoted(key));
+                }
+                Map<Identifier, List<Integer>> targets = new LinkedHashMap<>();
+                Map<Identifier, List<Integer>> required = new LinkedHashMap<>();
+                resolveRequirementStructures(catalog, document, value, "appliesTo",
+                        (id, line) -> targets.computeIfAbsent(id, ignored -> new ArrayList<>()).add(line), warning);
+                resolveRequirementStructures(catalog, document, value, "requiresUnlocked",
+                        (id, line) -> required.computeIfAbsent(id, ignored -> new ArrayList<>()).add(line), warning);
+                boolean all = matchAll(document, value);
+                targets.forEach((id, lines) -> prerequisites.put(id, new UnlockPrerequisites.Gate(all, required, lines)));
+            } catch (IllegalArgumentException e) {
+                String message = e instanceof LocatedError ? e.getMessage()
+                        : "line " + document.fieldLine(entries, entry.getKey()) + ": " + e.getMessage();
+                diagnose(Severity.ERROR, file, "Ignored invalid prerequisite " + quoted(entry.getKey()) + " at " + message);
+            }
+        }
+        if (UnlockPrerequisites.reportCycles(prerequisites, message -> diagnose(Severity.ERROR, file, message))) {
+            prerequisites.clear();
+        }
     }
 
     private void indexVisitSets(Catalog catalog) {
@@ -270,7 +307,7 @@ public final class UnlockingRules {
     }
 
     boolean hasUnlockingRequirements(FtbStructureRewards.Snapshot rewards) {
-        return defaultMode != DefaultMode.UNLOCKED || byStructure.values().stream().anyMatch(requirement ->
+        return defaultMode != DefaultMode.UNLOCKED || !prerequisites.isEmpty() || byStructure.values().stream().anyMatch(requirement ->
                 !requirement.condition.visits.isEmpty() || !requirement.condition.advancements.isEmpty())
                 || !rewards.rewardTargets().isEmpty();
     }
@@ -297,9 +334,35 @@ public final class UnlockingRules {
 
     public int evaluateSilently(ServerPlayerEntity player, Set<Identifier> importedUnlocks) {
         FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
-        Set<Identifier> earned = earnedOnOpen(catalog(player.getServer()).structures(), progress(player), rewards);
-        earned.addAll(importedUnlocks);
-        return UnlockedStructures.get(player.getServer()).add(player.getUuid(), earned);
+        var state = UnlockedStructures.get(player.getServer());
+        Set<Identifier> candidates = openCandidates(catalog(player.getServer()).structures(), progress(player), rewards);
+        candidates.addAll(importedUnlocks);
+        return state.add(player.getUuid(), applyPrerequisites(candidates, state.getStructures(player.getUuid())));
+    }
+
+    int evaluateClaimedReward(ServerPlayerEntity player, Set<Identifier> targets) {
+        if (!prerequisites.isEmpty()) return evaluateSilently(player, targets);
+        return UnlockedStructures.get(player.getServer()).add(player.getUuid(), targets);
+    }
+
+    public Set<Identifier> applyPrerequisites(Set<Identifier> candidates, Set<Identifier> saved) {
+        if (prerequisites.isEmpty() || candidates.isEmpty()) return candidates;
+        Set<Identifier> unlocked = new HashSet<>(saved);
+        Set<Identifier> earned = new LinkedHashSet<>();
+        boolean changed;
+        do {
+            changed = false;
+            for (Identifier id : candidates) {
+                if (unlocked.contains(id)) continue;
+                var gate = prerequisites.get(id);
+                if (gate == null || gate.satisfied(unlocked::contains)) {
+                    unlocked.add(id);
+                    earned.add(id);
+                    changed = true;
+                }
+            }
+        } while (changed);
+        return earned;
     }
 
     Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress) {
@@ -307,12 +370,20 @@ public final class UnlockingRules {
     }
 
     Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress, FtbStructureRewards.Snapshot rewards) {
-        Set<Identifier> earned = earnedOnOpen(structures, progress, rewards.quests().keySet());
-        for (long rewardId : rewards.claimedRewardIds()) earned.addAll(rewards.targets(rewardId));
-        return earned;
+        return applyPrerequisites(openCandidates(structures, progress, rewards), Set.of());
+    }
+
+    private Set<Identifier> openCandidates(Set<Identifier> structures, Progress progress, FtbStructureRewards.Snapshot rewards) {
+        Set<Identifier> candidates = openCandidates(structures, progress, rewards.quests().keySet());
+        for (long rewardId : rewards.claimedRewardIds()) candidates.addAll(rewards.targets(rewardId));
+        return candidates;
     }
 
     Set<Identifier> earnedOnOpen(Set<Identifier> structures, Progress progress, Set<Identifier> rewardCovered) {
+        return applyPrerequisites(openCandidates(structures, progress, rewardCovered), Set.of());
+    }
+
+    private Set<Identifier> openCandidates(Set<Identifier> structures, Progress progress, Set<Identifier> rewardCovered) {
         Set<Identifier> earned = new LinkedHashSet<>();
         Predicate<Identifier> defaultSatisfied = switch (defaultMode) {
             case UNLOCKED -> id -> true;
@@ -340,6 +411,10 @@ public final class UnlockingRules {
     public void onProgress(ServerPlayerEntity player, Identifier visit, Identifier advancement) {
         MinecraftServer server = player.getServer();
         if (server == null || server.getOverworld() == null) return;
+        if (!prerequisites.isEmpty()) {
+            evaluateOnOpen(player);
+            return;
+        }
         int added = UnlockedStructures.get(server).add(player.getUuid(), earnedOnProgress(progress(player), visit, advancement,
                 FtbStructureRewards.snapshot(player).quests().keySet()));
         UnlockNotifications.newlyAdded(player, added);
@@ -370,12 +445,27 @@ public final class UnlockingRules {
         UnlockedStructures saved = UnlockedStructures.get(player.getServer());
         Progress progress = progress(player);
         FtbStructureRewards.Snapshot rewards = FtbStructureRewards.snapshot(player);
+        Set<Identifier> unlocked = saved.getStructures(player.getUuid());
         for (Identifier id : structures) {
-            if (saved.contains(player.getUuid(), id)) continue;
+            if (unlocked.contains(id)) continue;
+            RequirementNode prerequisite = prerequisiteNode(id, unlocked);
             List<FtbStructureRewards.Quest> quests = rewards.quests().get(id);
-            result.put(id, quests == null ? requirements(id, progress) : questNode(quests));
+            result.put(id, prerequisite != null ? prerequisite
+                    : quests == null ? requirements(id, progress) : questNode(quests));
         }
         return result;
+    }
+
+    RequirementNode prerequisiteNode(Identifier id, Set<Identifier> unlocked) {
+        var gate = prerequisites.get(id);
+        if (gate == null || gate.satisfied(unlocked::contains)) return null;
+        List<RequirementNode> children = gate.required().keySet().stream()
+                .map(required -> new RequirementNode(Text.literal(readable(required)).formatted(Formatting.AQUA),
+                        unlocked.contains(required), List.of()))
+                .toList();
+        String label = children.size() == 1 ? "Unlock Structure:"
+                : gate.all() ? "Unlock all Structures:" : "Unlock any Structure:";
+        return new RequirementNode(Text.literal(label), false, children);
     }
 
     RequirementNode requirements(Identifier id, Progress progress) {

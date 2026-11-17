@@ -27,6 +27,14 @@ Explicit requirements override the default. When multiple valid requirements tar
 
 With `lockedUntilVisitedSet`, a visit to any structure in a shared set satisfies the default for the other members of that set. If a structure belongs to multiple sets, a visit to a member of any of those sets counts. Structures without a set still require a visit to their own type.
 
+## Prerequisites
+
+Add named entries in the top-level `prerequisites` object. `appliesTo` selects gated structures, and `requiresUnlocked` selects the structures the player must personally unlock first. Both fields accept the same selectors as `unlockedStructures`. `match` defaults to `any` and also accepts `all`. If valid entries target the same structure, the last one wins.
+
+While a prerequisite is unmet, the Locked popup lists its structures before the player can see ordinary requirements. Prerequisites apply to default and explicit requirements, claimed FTB rewards, and unlocks copied through compass sharing. Existing personal unlocks and explicit operator grants remain valid. Temporary party and Creative access do not count toward personal prerequisite progress.
+
+If the resolved dependencies contain any loop, the server logs each loop with its selector lines and ignores the entire prerequisite section. The rest of the file still loads.
+
 ## FTB Quests rewards
 
 When FTB Quests is installed, its reward editor offers **Unlock Structures**. Its **Structures** (`structures`) list accepts only structure IDs and patterns. The **Structure Sets** (`structure_sets`) list directly below it accepts only structure-set IDs and patterns. Both support `*` anywhere and default omitted namespaces to `minecraft`. Their combined structure targets are deduplicated and displayed in the existing alphabetical order. Move any previously configured structure-set selectors from `structures` into `structure_sets`. These same two fields are available in the custom **Visit Structures** task; Any/All applies to the combined, deduplicated structure types. An SNBT reward looks like `{ id: "0123456789ABCDEF", type: "explorerscompass:unlock_structures", structures: ["minecraft:fortress"], structure_sets: ["minecraft:villages"] }`. Claiming it grants the resolved structures to the receiving player. Completing the quest alone does not grant them.

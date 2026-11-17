@@ -95,9 +95,12 @@ public class ExplorersCompassItem extends Item {
             VisitedStructures visits = VisitedStructures.get(player.getServer());
             copiedVisits = visits.addVisits(player.getUuid(), visits.savedVisits(transfer.sharingSource())) > 0;
         }
-        int added = copiedVisits
-                ? UnlockingRules.get().evaluateSilently(player, transfer.unlocks())
-                : state.add(player.getUuid(), transfer.unlocks());
+        int added = 0;
+        if (copiedVisits || !transfer.unlocks().isEmpty()) {
+            UnlockingRules rules = UnlockingRules.get();
+            added = copiedVisits ? rules.evaluateSilently(player, transfer.unlocks())
+                    : state.add(player.getUuid(), rules.applyPrerequisites(transfer.unlocks(), state.getStructures(player.getUuid())));
+        }
         if (added > 0) {
             UnlockNotifications.newlyAdded(player, added);
             com.chaosthedude.explorerscompass.network.RulesChangedPacket.send(player);

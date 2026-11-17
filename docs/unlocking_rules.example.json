@@ -56,5 +56,12 @@
       ],
       "alwaysUnlocked": true
     }
+  },
+  "prerequisites": {
+    "ancient_city_and_villages": {
+      "appliesTo": ["ancient_city", "graveyard:altar"],
+      "requiresUnlocked": ["villages"],
+      "match": "all"
+    }
   }
 }
