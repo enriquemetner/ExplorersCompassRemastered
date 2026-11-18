@@ -1,20 +1,34 @@
 {
-  "type": "crafting_shaped",
+  "type": "minecraft:crafting_shaped",
   "group": "tools",
   "pattern": [
-    "WSW",
-    "SCS",
-    "WSW"
+    "TDT",
+    "ECE",
+    "TMT"
   ],
   "key": {
-    "W": {
-      "item": "minecraft:cobweb"
+    "T": {
+      "tag": "minecraft:trim_templates"
     },
-    "S":{
-      "item": "minecraft:cracked_stone_bricks"
+    "D": {
+      "item": "minecraft:diamond"
     },
-    "C":{
+    "E": {
+      "item": "minecraft:emerald"
+    },
+    "C": {
       "item": "minecraft:compass"
+    },
+    "M": {
+      "fabric:type": "fabric:nbt",
+      "base": {
+        "item": "minecraft:filled_map"
+      },
+      "nbt": {
+        "Decorations": [
+          { "id": "+" }
+        ]
+      }
     }
   },
   "result": {
