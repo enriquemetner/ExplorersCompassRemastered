@@ -42,8 +42,8 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public final class UnlockingCommands {
     private static final java.util.regex.Pattern REPORT_DETAILS = java.util.regex.Pattern.compile(
-            "(?i)(?<=\\bline )\\d+|(?<=\\blines )\\d+(?:, \\d+)*|(?<=\\bcolumn )\\d+"
-            + "|(?<=\\bpath )\\$[^\\r\\n]*|\\bunlocking_rules\\.json\\b"
+            "(?i)(?<=\\bline )\\d+|(?<=\\blines )\\d+(?:, \\d+)*|(?<=integer >= )\\d+|(?<=\\bcolumn )\\d+"
+            + "|(?<=\\bpath )\\$[^\\r\\n]*|\\b(?:unlocking_rules|search_costs)\\.json\\b"
             + "|\"(?:\\\\.|[^\"\\\\])*\""
             + "|(?<=Unknown \"default\": )[^\\r\\n]+|(?<=condition type )[^\\r\\n]+"
             + "|(?<=match selector )[^\\r\\n]+|(?<=ID or pattern )[^\\r\\n]+"
@@ -89,12 +89,17 @@ public final class UnlockingCommands {
         dispatcher.register(literal("ecomp").requires(command::canUse).redirect(command));
     }
 
+    static java.util.List<UnlockingRules.Diagnostic> combinedReport(UnlockingRules.Severity severity) {
+        return java.util.stream.Stream.concat(UnlockingRules.report(severity).stream(),
+                com.chaosthedude.explorerscompass.config.SearchCosts.report(severity).stream()).toList();
+    }
+
     private static int report(ServerCommandSource source, UnlockingRules.Severity severity) {
-        var diagnostics = UnlockingRules.report(severity);
+        var diagnostics = combinedReport(severity);
         if (diagnostics.isEmpty()) {
             String kind = severity == null ? "errors or warnings"
                     : severity == UnlockingRules.Severity.ERROR ? "errors" : "warnings";
-            source.sendFeedback(() -> Text.literal("No unlocking rule " + kind + "."), false);
+            source.sendFeedback(() -> Text.literal("No " + kind + " in unlocking rules or search costs."), false);
         }
         for (var diagnostic : diagnostics) {
             source.sendFeedback(() -> formatDiagnostic(diagnostic), false);
@@ -115,6 +120,12 @@ public final class UnlockingCommands {
             String detail = details.group();
             if (detail.startsWith("\"")) {
                 text.append("\"").append(Text.literal(detail.substring(1, detail.length() - 1)).formatted(Formatting.YELLOW)).append("\"");
+            } else if (detail.matches("\\d+(?:, \\d+)+")) {
+                String[] lines = detail.split(", ");
+                for (int i = 0; i < lines.length; i++) {
+                    if (i > 0) text.append(", ");
+                    text.append(Text.literal(lines[i]).formatted(Formatting.YELLOW));
+                }
             } else {
                 text.append(Text.literal(detail).formatted(Formatting.YELLOW));
             }

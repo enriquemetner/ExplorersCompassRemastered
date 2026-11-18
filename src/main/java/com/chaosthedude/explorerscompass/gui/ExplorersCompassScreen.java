@@ -79,7 +79,8 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int FILTER_SECTION_GAP = 1;
 	private static final int FILTER_CHECKBOX_SIZE = 9;
 	private static final int HEADER_TITLE_MARGIN = 16;
-	private static final int BUTTON_CROSS_SIZE = 7;
+	private static final Identifier CLOSE_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/close.png");
+	private static final int CLOSE_ICON_SIZE = 7;
 	private static final Identifier CLEAR_FILTERS_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/clear_filters.png");
 	private static final int CLEAR_FILTERS_ICON_SIZE = 11;
 	private static final int HEADER_BUTTON_TEXT_PADDING = 20;
@@ -601,7 +602,7 @@ public class ExplorersCompassScreen extends Screen {
 		}
         if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY))
             drawQuestionTooltip(context, "Shows only structures unlocked in your most recent unlocking event.", mouseX, mouseY);
-		renderCrossIcon(context, cancelButton);
+		renderCloseIcon(context, cancelButton);
 		if (filtersOpen) {
 			renderFilterTooltip(context, mouseX, mouseY);
 		}
@@ -1198,18 +1199,19 @@ public class ExplorersCompassScreen extends Screen {
 		}
 	}
 
-	private void renderCrossIcon(DrawContext context, ButtonWidget button) {
-		int color = button.active ? 0xffffffff : 0xff909090;
-		context.getMatrices().push();
-		context.getMatrices().translate(
-				button.getX() + (button.getWidth() - BUTTON_CROSS_SIZE) / 2.0,
-				button.getY() + (button.getHeight() - BUTTON_CROSS_SIZE) / 2.0,
-				0.0);
-		for (int pixel = 0; pixel < BUTTON_CROSS_SIZE; pixel++) {
-			context.fill(pixel, pixel, pixel + 1, pixel + 1, color);
-			context.fill(BUTTON_CROSS_SIZE - 1 - pixel, pixel, BUTTON_CROSS_SIZE - pixel, pixel + 1, color);
-		}
-		context.getMatrices().pop();
+	private void renderCloseIcon(DrawContext context, ButtonWidget button) {
+		int x = button.getX() + (button.getWidth() - CLOSE_ICON_SIZE) / 2;
+		int y = button.getY() + (button.getHeight() - CLOSE_ICON_SIZE) / 2;
+		drawIconWithShadow(context, CLOSE_ICON, x, y, CLOSE_ICON_SIZE, button.active ? 1.0f : 144 / 255.0f);
+	}
+
+	private static void drawIconWithShadow(DrawContext context, Identifier icon, int x, int y, int size, float brightness) {
+		float shadow = brightness * 0.25f;
+		context.setShaderColor(shadow, shadow, shadow, 1.0f);
+		context.drawTexture(icon, x + 1, y + 1, 0, 0, size, size, size, size);
+		context.setShaderColor(brightness, brightness, brightness, 1.0f);
+		context.drawTexture(icon, x, y, 0, 0, size, size, size, size);
+		context.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
 	}
 
 	private int settingsRowY(int row) {
@@ -1367,8 +1369,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	private static void drawSettingsResetIcon(DrawContext context, int x, int top, int height) {
 		int y = top + (height - SETTINGS_RESET_ICON_SIZE) / 2;
-		context.drawTexture(SETTINGS_RESET_ICON, x, y, 0, 0, SETTINGS_RESET_ICON_SIZE, SETTINGS_RESET_ICON_SIZE,
-				SETTINGS_RESET_ICON_SIZE, SETTINGS_RESET_ICON_SIZE);
+		drawIconWithShadow(context, SETTINGS_RESET_ICON, x, y, SETTINGS_RESET_ICON_SIZE, 1.0f);
 	}
 
 	private void restoreSettings(Runnable reset) {
@@ -2921,9 +2922,7 @@ public class ExplorersCompassScreen extends Screen {
 				int iconX = getX() + (getWidth() - size) / 2;
 				int iconY = getY() + (getHeight() - size) / 2;
 				float brightness = active ? 1.0f : 144 / 255.0f;
-				context.setShaderColor(brightness, brightness, brightness, 1.0f);
-				context.drawTexture(CLEAR_FILTERS_ICON, iconX, iconY, 0, 0, size, size, size, size);
-				context.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
+				drawIconWithShadow(context, CLEAR_FILTERS_ICON, iconX, iconY, size, brightness);
 			}
 		};
 	}

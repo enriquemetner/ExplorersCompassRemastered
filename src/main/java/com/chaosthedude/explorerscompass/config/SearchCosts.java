@@ -3,6 +3,8 @@ package com.chaosthedude.explorerscompass.config;
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRuleDocument;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
+import com.chaosthedude.explorerscompass.unlocking.UnlockingRules.Diagnostic;
+import com.chaosthedude.explorerscompass.unlocking.UnlockingRules.Severity;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.item.ItemStack;
@@ -15,9 +17,12 @@ import net.minecraft.util.Identifier;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -28,6 +33,7 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
     public static final String DEFAULT_JSON = "{\n  \"type\": \"xpLevels\",\n  \"defaultCost\": 0,\n  \"overrides\": {}\n}\n";
     private static final String ENERGY = "SearchEnergy";
     private static final SearchCosts FREE = new SearchCosts(Type.XP_LEVELS, 0, Map.of(), 0, Map.of(), false);
+    private static List<Diagnostic> diagnostics = List.of();
     private static SearchCosts active = FREE;
     private static SearchCosts remote = FREE;
 
@@ -43,20 +49,36 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
     }
     public static void clearRemote() { remote = FREE; }
 
+    public static List<Diagnostic> report(Severity severity) {
+        return diagnostics.stream().filter(entry -> severity == null || entry.severity() == severity).toList();
+    }
+
     public static void load(MinecraftServer server) {
         var file = ExplorersCompassConfig.serverConfigFile(server, ExplorersCompassConfig.SEARCH_COSTS);
+        List<Diagnostic> attempt = new ArrayList<>();
         try {
             active = parse(Files.readString(file), selector -> UnlockingRules.resolveCostTargets(server, selector),
-                    id -> Registries.ITEM.containsId(id) && !id.equals(new Identifier("minecraft", "air")));
+                    id -> Registries.ITEM.containsId(id) && !id.equals(new Identifier("minecraft", "air")),
+                    message -> attempt.add(new Diagnostic(Severity.WARNING, file.getFileName() + ": " + message)));
         } catch (IOException | IllegalArgumentException error) {
             active = FREE;
             String reason = error instanceof java.nio.file.FileSystemException fs
                     ? java.util.Objects.requireNonNullElse(fs.getReason(), fs.getClass().getSimpleName()) : error.getMessage();
-            ExplorersCompass.LOGGER.error("Could not load search_costs.json: {}", reason);
+            attempt.add(new Diagnostic(Severity.ERROR, "Could not load " + file.getFileName() + ": " + reason));
+        }
+        diagnostics = List.copyOf(attempt);
+        for (Diagnostic diagnostic : diagnostics) {
+            if (diagnostic.severity() == Severity.ERROR) ExplorersCompass.LOGGER.error(diagnostic.message());
+            else ExplorersCompass.LOGGER.warn(diagnostic.message());
         }
     }
 
     static SearchCosts parse(String source, Function<String, Set<Identifier>> resolve, Predicate<Identifier> knownItem) {
+        return parse(source, resolve, knownItem, warning -> {});
+    }
+
+    static SearchCosts parse(String source, Function<String, Set<Identifier>> resolve, Predicate<Identifier> knownItem,
+                             Consumer<String> warn) {
         var doc = new UnlockingRuleDocument(source);
         JsonObject root = object(doc, doc.root);
         JsonElement typeValue = root.get("type");
@@ -75,20 +97,27 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
 
         int cost = number(doc, root, "defaultCost", 0);
         Map<Identifier, Integer> overrides = new LinkedHashMap<>();
+        Map<Identifier, List<Integer>> origins = new LinkedHashMap<>();
         if (root.has("overrides")) {
             var entries = object(doc, root.get("overrides"));
-            for (var entry : entries.entrySet()) {
-                int amount = number(doc, entries, entry.getKey(), 0);
+            for (var entry : doc.fields(entries)) {
+                int amount = number(doc, entry.value(), entry.value(), entry.name(), 0);
                 Set<Identifier> targets;
                 try {
-                    targets = resolve.apply(entry.getKey());
+                    targets = resolve.apply(entry.name());
                 } catch (IllegalArgumentException error) {
-                    throw invalid(doc, entry.getValue(), error.getMessage());
+                    throw new IllegalArgumentException("line " + entry.line() + ": " + error.getMessage(), error);
                 }
-                if (targets.isEmpty()) throw invalid(doc, entry.getValue(), "No structures match " + entry.getKey());
-                targets.forEach(id -> overrides.put(id, amount));
+                int line = entry.line();
+                if (targets.isEmpty()) throw new IllegalArgumentException(
+                        "line " + line + ": No structures match " + new com.google.gson.JsonPrimitive(entry.name()));
+                for (Identifier id : targets.stream().sorted().toList()) {
+                    overrides.put(id, amount);
+                    origins.computeIfAbsent(id, ignored -> new ArrayList<>()).add(line);
+                }
             }
         }
+        SearchCosts costs;
         if (type == Type.ITEMS) {
             int energy = number(doc, root, "initialEnergy", 0);
             if (!root.has("items")) throw invalid(doc, root, "Missing \"items\"");
@@ -97,15 +126,23 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
             for (var entry : fuels.entrySet()) {
                 Identifier id = Identifier.tryParse(entry.getKey());
                 if (id == null || !knownItem.test(id))
-                    throw invalid(doc, entry.getValue(), "Unknown item " + entry.getKey());
+                    throw invalid(doc, entry.getValue(), "Unknown item " + new com.google.gson.JsonPrimitive(entry.getKey()));
                 items.put(id, number(doc, fuels, entry.getKey(), 1));
             }
-            return new SearchCosts(type, cost, overrides, energy, items, false);
+            costs = new SearchCosts(type, cost, overrides, energy, items, false);
+        } else {
+            JsonElement allow = root.get("allowSearchWithoutXp");
+            if (allow != null && (!allow.isJsonPrimitive() || !allow.getAsJsonPrimitive().isBoolean()))
+                throw invalid(doc, allow, "Expected \"allowSearchWithoutXp\" to be a boolean");
+            costs = new SearchCosts(type, cost, overrides, 0, Map.of(), allow != null && allow.getAsBoolean());
         }
-        JsonElement allow = root.get("allowSearchWithoutXp");
-        if (allow != null && (!allow.isJsonPrimitive() || !allow.getAsJsonPrimitive().isBoolean()))
-            throw invalid(doc, allow, "Expected \"allowSearchWithoutXp\" to be a boolean");
-        return new SearchCosts(type, cost, overrides, 0, Map.of(), allow != null && allow.getAsBoolean());
+        origins.forEach((id, lines) -> {
+            if (lines.size() > 1) {
+                String listed = lines.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(", "));
+                warn.accept(id + " is listed more than once under \"overrides\" on lines " + listed);
+            }
+        });
+        return costs;
     }
 
     private static JsonObject object(UnlockingRuleDocument doc, JsonElement element) {
@@ -114,7 +151,10 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
     }
 
     private static int number(UnlockingRuleDocument doc, JsonObject object, String key, int min) {
-        JsonElement value = object.get(key);
+        return number(doc, object, object.get(key), key, min);
+    }
+
+    private static int number(UnlockingRuleDocument doc, JsonElement parent, JsonElement value, String key, int min) {
         if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isNumber()) {
             try {
                 int number = value.getAsBigDecimal().intValueExact();
@@ -123,7 +163,7 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
                 // Report the invalid value with its source location below.
             }
         }
-        throw invalid(doc, value == null ? object : value, "Expected an integer >= " + min + " for \"" + key + "\"");
+        throw invalid(doc, value == null ? parent : value, "Expected an integer >= " + min + " for \"" + key + "\"");
     }
 
     private static IllegalArgumentException invalid(UnlockingRuleDocument doc, JsonElement value, String reason) {

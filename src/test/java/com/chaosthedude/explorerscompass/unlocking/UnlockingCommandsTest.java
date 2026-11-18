@@ -38,7 +38,12 @@ class UnlockingCommandsTest {
         var warning = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.WARNING,
                 "unlocking_rules.json: minecraft:fortress is listed more than once under \"unlockedStructures\" on lines 4, 7"));
         assertEquals(TextColor.fromFormatting(Formatting.GOLD), warning.getSiblings().get(0).getStyle().getColor());
-        assertEquals(List.of("unlocking_rules.json", "minecraft:fortress", "unlockedStructures", "4, 7"), yellowParts(warning));
+        assertEquals(List.of("unlocking_rules.json", "minecraft:fortress", "unlockedStructures", "4", "7"), yellowParts(warning));
+
+        var costWarning = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.WARNING,
+                "search_costs.json: minecraft:fortress is listed more than once under \"overrides\" on lines 6, 9"));
+        assertEquals("[WARNING]", costWarning.getSiblings().get(0).getString());
+        assertEquals(List.of("search_costs.json", "minecraft:fortress", "overrides", "6", "9"), yellowParts(costWarning));
 
         var rule = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.ERROR,
                 "unlocking_rules.json: Ignored invalid requirement \"typo\" at line 6: No structures match selector ancient_citys"));

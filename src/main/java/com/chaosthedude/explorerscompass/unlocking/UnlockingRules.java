@@ -48,8 +48,8 @@ public final class UnlockingRules {
     private static String activeDefinition = "";
     private enum DefaultMode { UNLOCKED, LOCKED_UNTIL_VISITED, LOCKED_UNTIL_VISITED_SET }
 
-    enum Severity { ERROR, WARNING }
-    record Diagnostic(Severity severity, String message) {}
+    public enum Severity { ERROR, WARNING }
+    public record Diagnostic(Severity severity, String message) {}
 
     private final List<Diagnostic> diagnostics = new ArrayList<>();
 

@@ -31,6 +31,24 @@ class SearchCostsTest {
         assertEquals(-1, SearchCosts.energyAfterConsumingItems(Integer.MAX_VALUE, 1, 2));
     }
 
+    @Test void reportsOverlappingSelectorsOncePerStructure() {
+        var warnings = new java.util.ArrayList<String>();
+        var costs = SearchCosts.parse("""
+                {
+                  "type": "xp",
+                  "defaultCost": 0,
+                  "overrides": {
+                    "minecraft:*": 1,
+                    "minecraft:ancient_city": 2,
+                    "minecraft:ancient_city": 3
+                  }
+                }
+                """, key -> Set.of(CITY), id -> false, warnings::add);
+        assertEquals(3, costs.cost(CITY));
+        assertEquals(java.util.List.of(
+                "minecraft:ancient_city is listed more than once under \"overrides\" on lines 5, 6, 7"), warnings);
+    }
+
     @Test void validatesSettingsAndKeepsXpTypesDistinct() {
         var xp = SearchCosts.parse("{\"type\":\"xp\",\"defaultCost\":2,\"allowSearchWithoutXp\":true}",
                 key -> Set.of(), id -> false);

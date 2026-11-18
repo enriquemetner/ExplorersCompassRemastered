@@ -11,6 +11,8 @@ import com.google.gson.stream.JsonToken;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -24,7 +26,14 @@ public final class UnlockingRuleDocument {
             + "|\"(?:[^\"\\\\\\x00-\\x1f]|\\\\(?:[\"\\\\/bfnrt]|u[0-9a-fA-F]{4}))*+\"");
     private final Map<JsonElement, Integer> lines = new IdentityHashMap<>();
     private final Map<JsonObject, Map<String, Integer>> fieldLines = new IdentityHashMap<>();
+    private final Map<JsonObject, List<Field>> fields = new IdentityHashMap<>();
     public final JsonElement root;
+
+    public record Field(String name, JsonElement value, int line) {}
+
+    public List<Field> fields(JsonObject object) {
+        return List.copyOf(fields.get(object));
+    }
 
     public UnlockingRuleDocument(String source) {
         validateLexemes(source);
@@ -76,11 +85,16 @@ public final class UnlockingRuleDocument {
                 JsonObject object = new JsonObject();
                 Map<String, Integer> positions = new HashMap<>();
                 fieldLines.put(object, positions);
+                List<Field> entries = new ArrayList<>();
+                fields.put(object, entries);
                 reader.beginObject();
                 while (reader.hasNext()) {
                     String key = reader.nextName();
-                    positions.put(key, line(reader));
-                    object.add(key, read(reader, depth + 1));
+                    int fieldLine = line(reader);
+                    positions.put(key, fieldLine);
+                    JsonElement entry = read(reader, depth + 1);
+                    entries.add(new Field(key, entry, fieldLine));
+                    object.add(key, entry);
                 }
                 reader.endObject();
                 yield object;
