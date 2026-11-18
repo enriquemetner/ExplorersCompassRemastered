@@ -63,7 +63,6 @@ public class ExplorersCompassConfig {
 	public static boolean closeOnFound;
 	public static boolean checkedFiltersFirst;
 	public static boolean adjustRowsToFitView;
-	public static boolean allowIdSearches;
 	public static boolean showOnlyMatchingFilterOptions;
 	public static boolean hideSearchCost;
 	public static boolean matchSearchWordsInAnyOrder;
@@ -80,7 +79,6 @@ public class ExplorersCompassConfig {
 		CLOSE_ON_FOUND(() -> closeOnFound = true),
 		CLEAR_FILTERS_ON_CLOSE(() -> clearFiltersOnClose = true),
 		CLEAR_SEARCH_BAR_ON_CLOSE(() -> clearSearchBarOnClose = true),
-		ALLOW_ID_SEARCHES(() -> allowIdSearches = false),
 		SHOW_ONLY_MATCHING_FILTER_OPTIONS(() -> showOnlyMatchingFilterOptions = false),
 		HIDE_SEARCH_COST(() -> hideSearchCost = false),
 		MATCH_SEARCH_WORDS_IN_ANY_ORDER(() -> matchSearchWordsInAnyOrder = false),
@@ -128,9 +126,9 @@ public class ExplorersCompassConfig {
 			if (client) {
 				Files.createDirectories(directory().resolve("client"));
 				CommentedConfig clientConfig = readOrCreate(CLIENT_SETTINGS);
-				boolean migrateClient = clientConfig.get("behavior.searchTechnicalNames") != null
+				boolean migrateClient = clientConfig.get("behavior.allowIdSearches") != null
+						|| clientConfig.get("behavior.searchTechnicalNames") != null
 						|| clientConfig.get("view.showTechnicalNames") != null
-						|| clientConfig.get("behavior.allowIdSearches") == null
 						|| clientConfig.get("behavior.showOnlyMatchingFilterOptions") == null
 						|| clientConfig.get("behavior.hideSearchCost") == null
 						|| clientConfig.get("behavior.matchSearchWordsInAnyOrder") == null
@@ -313,9 +311,6 @@ public class ExplorersCompassConfig {
 		closeOnFound = bool(config, "behavior.closeOnFound", closeOnFound);
 		checkedFiltersFirst = bool(config, "view.checkedFiltersFirst", checkedFiltersFirst);
 		adjustRowsToFitView = bool(config, "view.adjustRowsToFitView", adjustRowsToFitView);
-		allowIdSearches = config.get("behavior.allowIdSearches") != null
-				? bool(config, "behavior.allowIdSearches", allowIdSearches)
-				: bool(config, "behavior.searchTechnicalNames", allowIdSearches);
 		hideSearchCost = bool(config, "behavior.hideSearchCost", hideSearchCost);
 		showOnlyMatchingFilterOptions = bool(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions);
 		matchSearchWordsInAnyOrder = bool(config, "behavior.matchSearchWordsInAnyOrder", false);
@@ -387,7 +382,7 @@ public class ExplorersCompassConfig {
 		put(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose, "Clear the search bar when the compass screen closes.");
 		config.remove("behavior.pauseGameWhenOpen");
 		config.remove("behavior.searchTechnicalNames");
-		put(config, "behavior.allowIdSearches", allowIdSearches, "Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.");
+		config.remove("behavior.allowIdSearches");
 		put(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions,
 				"Show only unchecked filter options with matching structures under the filters in the other columns.");
 		put(config, "behavior.matchSearchWordsInAnyOrder", matchSearchWordsInAnyOrder, "Match every part of the main structure search in any order.");

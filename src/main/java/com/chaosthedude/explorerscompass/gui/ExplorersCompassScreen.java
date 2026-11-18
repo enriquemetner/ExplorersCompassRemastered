@@ -95,14 +95,14 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SETTINGS_RESET_LABEL_GAP = 4;
 	private static final String SETTINGS_RESET_ALL_LABEL = "All";
 	private static final int SETTINGS_OFFSET_ROW = 2;
-	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 12;
-	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 13;
-	private static final int SETTINGS_HIDE_SEARCH_COST_ROW = 14;
-	private static final int SETTINGS_HIDDEN_ROW = 20;
+	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 11;
+	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 12;
+	private static final int SETTINGS_HIDE_SEARCH_COST_ROW = 13;
+	private static final int SETTINGS_HIDDEN_ROW = 19;
 	private static final String HIDDEN_STRUCTURES_TITLE = "Hidden Structures";
-	private static final int SETTINGS_PAUSE_ROW = 16;
-	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 17;
-	private static final int SETTINGS_TELEPORT_ROW = 18;
+	private static final int SETTINGS_PAUSE_ROW = 15;
+	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 16;
+	private static final int SETTINGS_TELEPORT_ROW = 17;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
 	private String lastSearchFieldText;
@@ -124,7 +124,6 @@ public class ExplorersCompassScreen extends Screen {
 		"Close UI when located",
 		"Clear Filters on Close",
 		"Clear Search Bar on Close",
-		"Allow ID Searches",
 		"Show Only Matching Filter Options",
 		"Match Search Words in Any Order",
 		"Hide Search Cost",
@@ -147,7 +146,6 @@ public class ExplorersCompassScreen extends Screen {
 		"Close the compass screen when a structure is located.",
 		"Clear selected structure filters when you close the compass screen.",
 		"Clears the search bar when you close the compass screen.",
-		"Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.",
 		"Show unchecked sources, dimensions, and structure sets only when they match at least one structure with the filters in the other columns. Checked options stay available so you can uncheck them.",
 		"Match every part of your search in any order, like in Settings.\nExample: 'Plains Village' or 'vil pl' match 'Village Plains'.",
 		"Hide the search cost on structure entries.\nReasonable when all structures have the same search cost.",
@@ -177,7 +175,6 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget restoreDefaultsButton;
 	private final Map<Integer, ButtonWidget> settingResetButtons = new HashMap<>();
 	private ButtonWidget chatOverlayButton;
-	private ButtonWidget allowIdSearchesButton;
 	private ButtonWidget showOnlyMatchingFilterOptionsButton;
 	private ButtonWidget matchSearchWordsButton;
 	private ButtonWidget hideSearchCostButton;
@@ -887,10 +884,8 @@ public class ExplorersCompassScreen extends Screen {
 			}).toList();
 		}
 		if (!query.isEmpty()) {
-			visible = visible.stream().filter(option -> option.label.toLowerCase(Locale.ROOT).contains(query)
-					|| (ExplorersCompassConfig.allowIdSearches
-						&& (option.source != null ? option.source : option.id.toString()).toLowerCase(Locale.ROOT).contains(query)))
-					.toList();
+			visible = visible.stream().filter(option -> StructureSearchQuery.matchesFilter(query, option.label,
+					option.source != null ? option.source : option.id == null ? null : option.id.toString())).toList();
 		}
 		if (!ExplorersCompassConfig.checkedFiltersFirst) {
 			return visible;
@@ -1338,7 +1333,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void updateSettingsButtonLabels() {
 		chatOverlayButton.setMessage(onOff(ExplorersCompassConfig.displayWithChatOpen));
-		allowIdSearchesButton.setMessage(onOff(ExplorersCompassConfig.allowIdSearches));
 		hideSearchCostButton.setMessage(onOff(ExplorersCompassConfig.hideSearchCost));
 		matchSearchWordsButton.setMessage(onOff(ExplorersCompassConfig.matchSearchWordsInAnyOrder));
 		showOnlyMatchingFilterOptionsButton.setMessage(onOff(ExplorersCompassConfig.showOnlyMatchingFilterOptions));
@@ -1374,7 +1368,6 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void restoreSettings(Runnable reset) {
 		boolean fittedRows = ExplorersCompassConfig.adjustRowsToFitView;
-		boolean allowedIdSearches = ExplorersCompassConfig.allowIdSearches;
 		double scroll = selectionList.getScrollAmount();
 		reset.run();
 		ExplorersCompassConfig.saveClient();
@@ -1388,8 +1381,7 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		processSearchTerm();
 		selectionList.setScrollAmount(scroll);
-		filterScroll = allowedIdSearches == ExplorersCompassConfig.allowIdSearches
-				? MathHelper.clamp(filterScroll, 0, filterMaxScroll()) : 0;
+		filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 	}
 
 	private static Text onOff(boolean enabled) {
@@ -2883,7 +2875,7 @@ public class ExplorersCompassScreen extends Screen {
 			String name = StructureUtils.getStructureName(id);
 			if (queries.stream().anyMatch(query -> query.matches(id, name,
 					ExplorersCompass.allowedStructureIDsToDimensionIDs.get(id),
-					ExplorersCompass.structureIDsToSetIDs.get(id), ExplorersCompassConfig.allowIdSearches))) {
+					ExplorersCompass.structureIDsToSetIDs.get(id)))) {
 				structureIDsMatchingSearch.add(id);
 			}
 		}
@@ -3008,13 +3000,6 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 		}));
-		allowIdSearchesButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(11), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.allowIdSearches = !ExplorersCompassConfig.allowIdSearches;
-			filterScroll = 0;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-			processSearchTerm();
-		}));
 		showOnlyMatchingFilterOptionsButton = addDrawableChild(new TransparentButton(controlX,
 				settingsRowY(SETTINGS_MATCHING_FILTER_OPTIONS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
 			ExplorersCompassConfig.showOnlyMatchingFilterOptions = !ExplorersCompassConfig.showOnlyMatchingFilterOptions;
@@ -3076,7 +3061,6 @@ public class ExplorersCompassScreen extends Screen {
 		addSettingResetButton(8, ClientSetting.CLOSE_ON_FOUND);
 		addSettingResetButton(9, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
 		addSettingResetButton(10, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
-		addSettingResetButton(11, ClientSetting.ALLOW_ID_SEARCHES);
 		addSettingResetButton(SETTINGS_HIDE_SEARCH_COST_ROW, ClientSetting.HIDE_SEARCH_COST);
 		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
 		addSettingResetButton(SETTINGS_MATCH_SEARCH_WORDS_ROW, ClientSetting.MATCH_SEARCH_WORDS_IN_ANY_ORDER);
@@ -3323,7 +3307,6 @@ public class ExplorersCompassScreen extends Screen {
         hiddenStructuresButton.visible = settingsOpen;
 		closeOnFoundButton.visible = settingsOpen;
 		chatOverlayButton.visible = settingsOpen;
-		allowIdSearchesButton.visible = settingsOpen;
 		offsetDecreaseButton.visible = settingsOpen;
 		offsetIncreaseButton.visible = settingsOpen;
 		overlaySideButton.visible = settingsOpen;
@@ -3349,7 +3332,6 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(chatOverlayButton, 3);
 		placeSetting(checkedFiltersFirstButton, 5);
 		placeSetting(adjustRowsToFitViewButton, 6);
-		placeSetting(allowIdSearchesButton, 11);
 		placeSetting(hideSearchCostButton, SETTINGS_HIDE_SEARCH_COST_ROW);
 		placeSetting(matchSearchWordsButton, SETTINGS_MATCH_SEARCH_WORDS_ROW);
 		placeSetting(showOnlyMatchingFilterOptionsButton, SETTINGS_MATCHING_FILTER_OPTIONS_ROW);
