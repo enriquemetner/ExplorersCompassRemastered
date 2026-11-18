@@ -288,6 +288,7 @@ public class ExplorersCompassItem extends Item {
 		ItemStack stack = player.getStackInHand(hand);
 		if (!world.isClient) ensureHolder((ServerPlayerEntity) player, stack);
 		if (player.isSneaking()) {
+			if (world.isClient && getState(stack) == CompassState.FOUND) GuiWrapper.animateTargetClear(hand);
 			cancelSearch(player, -1);
 			clearSearchData(stack);
 			return TypedActionResult.pass(stack);
@@ -298,7 +299,7 @@ public class ExplorersCompassItem extends Item {
 		} else {
 			syncScreen((ServerPlayerEntity) player);
 		}
-		return TypedActionResult.success(stack, world.isClient);
+		return TypedActionResult.consume(stack);
 	}
 
 	/** Re-evaluate and synchronize the compass when opened or returned to from the Quest Book. */
