@@ -11,7 +11,7 @@ import net.minecraft.util.Identifier;
 
 public class SearchResultPacket extends PacketByteBuf {
     public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "search_result");
-    public static final int FOUND = 0, NOT_FOUND = 1, REJECTED = 2, WRONG_DIMENSION = 3, INSUFFICIENT_XP = 4, LOCKED = 5, BLACKLISTED = 6, NOT_WHITELISTED = 7;
+    public static final int FOUND = 0, NOT_FOUND = 1, REJECTED = 2, WRONG_DIMENSION = 3, INSUFFICIENT_COST = 4, LOCKED = 5, BLACKLISTED = 6, NOT_WHITELISTED = 7, MULTI_COST = 8;
 
     public SearchResultPacket(int requestId, int result, int radius, boolean canContinue, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, int validBiomeMask, Boolean visited) {
         super(Unpooled.buffer());
@@ -35,6 +35,13 @@ public class SearchResultPacket extends PacketByteBuf {
     public static void sendExcluded(ServerPlayerEntity player, int requestId, Identifier structure, boolean whitelistActive) {
         var packet = new SearchResultPacket(requestId, whitelistActive ? NOT_WHITELISTED : BLACKLISTED, 0, false, null, 0, 0, false, false, List.of(), 0, null);
         packet.writeIdentifier(structure);
+        ServerPlayNetworking.send(player, ID, packet);
+    }
+
+    public static void sendCostFailure(ServerPlayerEntity player, int requestId, int cost, int balance, boolean multiple) {
+        var packet = new SearchResultPacket(requestId, multiple ? MULTI_COST : INSUFFICIENT_COST, cost,
+                false, null, 0, 0, false, false, List.of(), 0, null);
+        packet.writeVarInt(balance);
         ServerPlayNetworking.send(player, ID, packet);
     }
 

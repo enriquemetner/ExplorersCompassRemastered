@@ -675,6 +675,19 @@ public final class UnlockingRules {
         return matches;
     }
 
+    public static Set<Identifier> resolveCostTargets(MinecraftServer server, String selector) {
+        Catalog catalog = catalog(server);
+        Set<Identifier> structures = catalog.structures();
+        Set<Identifier> available = new LinkedHashSet<>(structures);
+        available.addAll(catalog.structureSets());
+        Set<Identifier> result = new LinkedHashSet<>();
+        for (Identifier id : matchPattern(selector, available)) {
+            if (structures.contains(id)) result.add(id);
+            else result.addAll(catalog.structureSet(id));
+        }
+        return result;
+    }
+
     private static Set<Identifier> matchPattern(String value, Set<Identifier> available) {
         String normalized = value.contains(":") ? value : "minecraft:" + value;
         Identifier validated = Identifier.tryParse(normalized.replace('*', 'a'));

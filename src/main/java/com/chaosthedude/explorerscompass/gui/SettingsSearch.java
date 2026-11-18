@@ -9,6 +9,10 @@ final class SettingsSearch {
     private SettingsSearch() {}
 
     static List<Integer> matchingRows(String[] labels, IntPredicate isDivider, String query) {
+        return matchingRows(labels, isDivider, query, row -> true);
+    }
+
+    static List<Integer> matchingRows(String[] labels, IntPredicate isDivider, String query, IntPredicate isAvailable) {
         String[] fragments = fragments(query);
         List<Integer> rows = new ArrayList<>();
         int section = -1;
@@ -21,7 +25,7 @@ final class SettingsSearch {
                 continue;
             }
             String searchable = (sectionName + " " + labels[row]).toLowerCase(Locale.ROOT);
-            if (!matches(searchable, fragments, null)) continue;
+            if (!isAvailable.test(row) || !matches(searchable, fragments, null)) continue;
             if (section != displayedSection) {
                 rows.add(section);
                 displayedSection = section;

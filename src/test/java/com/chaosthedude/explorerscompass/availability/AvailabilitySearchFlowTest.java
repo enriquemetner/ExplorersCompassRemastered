@@ -16,12 +16,13 @@ class AvailabilitySearchFlowTest {
 
         for (String name : new String[]{"searchForStructure", "searchForListedStructures"}) {
             var entry = method(node, name);
-            assertCallsInOrder(entry, "isBroken", "getAllowedStructureIDs", "startValidatedSearch");
+            assertCallsInOrder(entry, "getAllowedStructureIDs", "startValidatedSearch");
         }
 
         var search = method(node, "startValidatedSearch");
         assertCallsInOrder(search, "classify", "isEmpty", "sendLocked",
-                "rejectIfInsufficientXp", "beginSearch", "createWorkers");
+                "rejectIfUnaffordable", "beginSearch", "createWorkers");
+        assertCallsInOrder(method(node, "succeed"), "rejectIfUnaffordable", "pay", "finishSearch");
         assertCallsInOrder(method(node, "fail"), "pop", "start", "disabled", "finishSearch");
     }
 

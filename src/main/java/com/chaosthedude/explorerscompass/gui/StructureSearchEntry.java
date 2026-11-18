@@ -1,6 +1,8 @@
 package com.chaosthedude.explorerscompass.gui;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
+import com.chaosthedude.explorerscompass.config.SearchCosts;
 import com.chaosthedude.explorerscompass.compat.jes.JesThumbnails;
 import com.chaosthedude.explorerscompass.util.RenderUtils;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
@@ -20,7 +22,6 @@ import net.minecraft.util.Identifier;
 public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<StructureSearchEntry> {
 	private static final Identifier LOCK_TEXTURE = new Identifier(ExplorersCompass.MODID, "textures/gui/lock.png");
 
-	private static final String[] PARTY_LABEL = {"Unlocked", "through", "party"};
 
 	private final MinecraftClient client;
 	private final ExplorersCompassScreen parentScreen;
@@ -60,21 +61,16 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int labelOffset = (buttonHeight - 8) / 2;
         int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
         int buttonY = top + (height - actionsHeight) / 2;
-        boolean partyUnlocked = parentScreen.isUnlockedThroughParty(structureID);
         int controlsX = structuresList.rowControlsX();
-        int textRight = partyUnlocked ? partyLabelX(controlsX) : controlsX;
+        int cost = SearchCosts.remote().cost(structureID);
+        int costWidth = parentScreen.costLineWidth("", cost, "");
+        boolean showCost = SearchCosts.remote().showsSearchCosts() && !ExplorersCompassConfig.hideSearchCost;
+        int costX = controlsX - 5 - costWidth;
+        int textRight = showCost ? costX : controlsX;
         int textWidth = Math.max(1, textRight - left - 10);
-        if (partyUnlocked) {
-            int panelWidth = partyLabelWidth();
-            context.fill(textRight, buttonY, textRight + panelWidth, buttonY + actionsHeight,
-                    RenderUtils.blackWithOpacity(RenderUtils.LOCKED_ENTRY_BACKGROUND_OPACITY_PERCENT));
-            int x = textRight + panelWidth / 2;
-            int y = buttonY + (actionsHeight - PARTY_LABEL.length * client.textRenderer.fontHeight) / 2;
-            int color = 0xffffff;
-            for (String line : PARTY_LABEL) {
-                context.drawCenteredTextWithShadow(client.textRenderer, line, x, y, color);
-                y += client.textRenderer.fontHeight;
-            }
+        if (showCost) {
+            parentScreen.renderCostLine(context, costX + costWidth / 2,
+                    top + (height - client.textRenderer.fontHeight) / 2, "", cost, "");
         }
         String readableName = StructureUtils.getStructureName(structureID);
         int nameY = top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 2);
@@ -119,21 +115,6 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         return hovered ? 0xff424242 : 0xff242424;
     }
 
-    int partyLabelWidth() {
-        return client.textRenderer.getWidth(PARTY_LABEL[0]) + 8;
-    }
-
-    int partyLabelX(int controlsX) {
-        return controlsX - 5 - partyLabelWidth();
-    }
-
-    boolean isPartyLabelAt(double mouseX, double mouseY, int controlsX, int top, int height) {
-        int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
-        return parentScreen.isUnlockedThroughParty(structureID)
-                && ButtonPress.contains(mouseX, mouseY, partyLabelX(controlsX), top + (height - actionsHeight) / 2,
-                        partyLabelWidth(), actionsHeight);
-    }
-
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (button == 0 && isEnabled()) {
@@ -167,8 +148,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
 	@Override
 	public Text getNarration() {
 		return Text.literal(StructureUtils.getStructureName(structureID)).append(parentScreen.isStructureLocked(structureID)
-                ? Text.literal(". Locked") : parentScreen.isUnlockedThroughParty(structureID)
-                ? Text.literal(". Unlocked through party") : Text.empty());
+                ? Text.literal(". Locked") : Text.empty());
 	}
 
 }

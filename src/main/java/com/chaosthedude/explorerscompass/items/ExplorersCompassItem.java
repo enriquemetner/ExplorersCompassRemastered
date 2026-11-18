@@ -47,7 +47,12 @@ import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.math.BlockBox;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.MathHelper;
+import com.chaosthedude.explorerscompass.config.SearchCosts;
+import net.minecraft.client.item.TooltipContext;
+import net.minecraft.screen.slot.Slot;
+import net.minecraft.sound.SoundCategory;
+import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.Formatting;
 import net.minecraft.world.World;
 import net.minecraft.world.gen.structure.Structure;
 
@@ -108,6 +113,7 @@ public class ExplorersCompassItem extends Item {
     }
 
     @Override public void inventoryTick(ItemStack stack, World world, net.minecraft.entity.Entity entity, int slot, boolean selected) {
+        if (!world.isClient) SearchCosts.active().initialize(stack);
         if (!world.isClient && entity instanceof ServerPlayerEntity player
                 && com.chaosthedude.explorerscompass.unlocking.UnlockReloads.ready(player.getUuid())) validateTarget(player, stack);
     }
@@ -224,14 +230,49 @@ public class ExplorersCompassItem extends Item {
     }
 
 
-	private boolean rejectIfInsufficientXp(PlayerEntity player, int requestId) {
-		int cost = ExplorersCompassConfig.defaultXpCost;
-		if (!ExplorersCompassConfig.allowSearchWithoutEnoughXp && !player.getAbilities().creativeMode && cost > player.experienceLevel) {
-			SearchResultPacket.send((ServerPlayerEntity) player, requestId, SearchResultPacket.INSUFFICIENT_XP, cost);
-			return true;
-		}
-		return false;
-	}
+    private boolean rejectIfUnaffordable(ServerPlayerEntity player, ItemStack stack, int requestId, int cost, boolean multiple) {
+        SearchCosts costs = SearchCosts.active();
+        if (costs.canPay(player, stack, cost)) return false;
+        SearchResultPacket.sendCostFailure(player, requestId, cost, costs.available(player, stack), multiple);
+        return true;
+    }
+
+    @Override
+    public void appendTooltip(ItemStack stack, World world, List<Text> tooltip, TooltipContext context) {
+        SearchCosts costs = SearchCosts.remote();
+        if (costs.type() == SearchCosts.Type.ITEMS) {
+            tooltip.add(1, Text.literal("Energy: " + costs.energy(stack)).formatted(Formatting.GRAY));
+        }
+    }
+
+    public void consumeItems(ServerPlayerEntity player, Slot slot, boolean wholeStack) {
+        var handler = player.currentScreenHandler;
+        ItemStack cursor = handler.getCursorStack();
+        if (cursor.isEmpty() || !slot.canTakeItems(player) || !slot.canTakePartial(player)) return;
+        if (!consumeFuel(SearchCosts.active(), slot.getStack(), cursor, wholeStack)) return;
+        if (cursor.isEmpty()) handler.setCursorStack(ItemStack.EMPTY);
+        slot.markDirty();
+        handler.sendContentUpdates();
+        playChargeSound(player, null);
+    }
+
+    public static boolean consumeFuel(SearchCosts costs, ItemStack stack, ItemStack cursor, boolean wholeStack) {
+        if (cursor.isEmpty() || costs.type() != SearchCosts.Type.ITEMS) return false;
+        Integer value = costs.items().get(net.minecraft.registry.Registries.ITEM.getId(cursor.getItem()));
+        if (value == null) return false;
+        int count = wholeStack ? cursor.getCount() : 1;
+        int energy = SearchCosts.energyAfterConsumingItems(costs.energy(stack), count, value);
+        if (energy < 0) return false;
+        costs.setEnergy(stack, energy);
+        cursor.decrement(count);
+        return true;
+    }
+
+    public static void playChargeSound(PlayerEntity player, PlayerEntity excludedPlayer) {
+        World world = player.getWorld();
+        world.playSound(excludedPlayer, player.getBlockPos(), SoundEvents.ENTITY_ENDER_EYE_DEATH,
+                SoundCategory.PLAYERS, 1, 0.8f + world.random.nextFloat() * 0.4f);
+    }
 
 	public ExplorersCompassItem() {
 		super(new FabricItemSettings().maxCount(1));
@@ -249,9 +290,6 @@ public class ExplorersCompassItem extends Item {
 		if (player.isSneaking()) {
 			cancelSearch(player, -1);
 			clearSearchData(stack);
-			return TypedActionResult.pass(stack);
-		}
-		if (isBroken(stack)) {
 			return TypedActionResult.pass(stack);
 		}
 
@@ -289,7 +327,7 @@ public class ExplorersCompassItem extends Item {
             return true;
         });
 		ServerPlayNetworking.send(player, SyncPacket.ID, new SyncPacket(canTeleport, ExplorersCompassConfig.allowExcludeVisited,
-				hasInfiniteXp, ExplorersCompassConfig.defaultXpCost, ExplorersCompassConfig.allowSearchWithoutEnoughXp,
+				hasInfiniteXp,
 				allowedStructures, dimensionsForAllowedStructures, structureIDsToSetIDs,
 				locked, party,
                 com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRevision(player.getUuid()),
@@ -302,37 +340,9 @@ public class ExplorersCompassItem extends Item {
                 !ExplorersCompassConfig.structureWhitelist.isEmpty()));
 	}
 
-	@Override
-	public boolean isItemBarVisible(ItemStack stack) {
-		int max = ExplorersCompassConfig.compassDurability;
-		if (max > 0) {
-			int damage = getDamage(stack);
-			return damage > 0;
-		}
-		return false;
-	}
-
-	@Override
-	public int getItemBarStep(ItemStack stack) {
-		int max = ExplorersCompassConfig.compassDurability;
-		if (max > 0) {
-			int damage = getDamage(stack);
-			return Math.round(13.0f * (1.0f - (float) damage / max));
-		}
-		return 13;
-	}
-
-	@Override
-	public int getItemBarColor(ItemStack stack) {
-		int max = ExplorersCompassConfig.compassDurability;
-		int damage = getDamage(stack);
-		float f = max > 0 ? (float) damage / max : 0.0f;
-		return MathHelper.hsvToRgb(Math.max(0.0F, (1.0F - f) / 3.0F), 1.0F, 1.0F);
-	}
-
     public void searchForStructure(ServerWorld world, PlayerEntity player, BlockPos pos, Identifier structureOrSetId, boolean isSet, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
         ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-        if (isSet || isBroken(stack)) {
+        if (isSet) {
             SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
             return;
         }
@@ -350,7 +360,7 @@ public class ExplorersCompassItem extends Item {
 
     public void searchForListedStructures(ServerWorld world, PlayerEntity player, BlockPos pos, List<Identifier> requestedIds, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {
         ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
-        if (isBroken(stack) || requestedIds.isEmpty() || requestedIds.size() > 32767
+        if (requestedIds.isEmpty() || requestedIds.size() > 32767
                 || !StructureUtils.getAllowedStructureIDs(world).containsAll(requestedIds)) {
             SearchResultPacket.send(serverPlayer, requestId, SearchResultPacket.REJECTED, 0);
             return;
@@ -385,7 +395,11 @@ public class ExplorersCompassItem extends Item {
             SearchResultPacket.sendLocked(player, requestId, requirements);
             return;
         }
-        if (rejectIfInsufficientXp(player, requestId)) return;
+        SearchCosts costs = SearchCosts.active();
+        costs.initialize(stack);
+        List<Identifier> costTargets = searchable.isEmpty() ? ids : searchable;
+        int highestCost = costTargets.stream().mapToInt(costs::cost).max().orElse(0);
+        if (rejectIfUnaffordable(player, stack, requestId, highestCost, costTargets.size() > 1)) return;
         if (searchable.isEmpty()) {
             cancelSearch(player, -1);
             SearchResultPacket.send(player, requestId, SearchResultPacket.WRONG_DIMENSION, 0);
@@ -427,27 +441,13 @@ public class ExplorersCompassItem extends Item {
 			SearchResultPacket.send((ServerPlayerEntity) player, session.requestId, SearchResultPacket.REJECTED, 0);
 			return;
 		}
-		int xpLevels = ExplorersCompassConfig.defaultXpCost;
-		if (!ExplorersCompassConfig.allowSearchWithoutEnoughXp && !player.getAbilities().creativeMode && xpLevels > player.experienceLevel) {
-			cancelSearch(player, session.requestId);
-			SearchResultPacket.send((ServerPlayerEntity) player, session.requestId, SearchResultPacket.INSUFFICIENT_XP, xpLevels);
-			return;
-		}
-		if (!player.getAbilities().creativeMode && xpLevels > 0) player.addExperienceLevels(-xpLevels);
-		clearSearchData(stack);
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putString("StructureID", structureID.toString());
-			if (session.creativeBypass) stack.getNbt().putBoolean("CreativeBypass", true);
-			stack.getNbt().putInt("State", CompassState.FOUND.getID());
-			stack.getNbt().putInt("FoundX", x);
-			stack.getNbt().putInt("FoundZ", z);
-			stack.getNbt().putString("FoundDimension", player.getWorld().getRegistryKey().getValue().toString());
-            stack.getNbt().putLong(CompassSearchData.FOUND_START_CHUNK, startChunk.toLong());
-			stack.getNbt().putInt("Samples", samples);
-			stack.getNbt().putBoolean("DisplayCoordinates", displayCoordinates);
-			stack.getNbt().putBoolean("DisplayDistance", displayDistance);
-		}
-		damageCompass(stack);
+        ServerPlayerEntity serverPlayer = (ServerPlayerEntity) player;
+        SearchCosts costs = SearchCosts.active();
+        int cost = costs.cost(structureID);
+        if (rejectIfUnaffordable(serverPlayer, stack, session.requestId, cost, false)) {
+            cancelSearch(player, session.requestId);
+            return;
+        }
         List<Identifier> biomes = StructureDestination.sampleBiomes(session.world, bounds);
         var structure = StructureUtils.getStructureForID(session.world, structureID);
         int validBiomeMask = 0;
@@ -464,6 +464,23 @@ public class ExplorersCompassItem extends Item {
                 ? VisitedStructures.hasEffectiveVisit(session.world.getServer(), player.getUuid(),
                         session.world.getRegistryKey().getValue(), structureID, startChunk)
                 : null;
+        costs.pay(serverPlayer, stack, cost);
+		clearSearchData(stack);
+		if (ItemUtils.verifyNBT(stack)) {
+			stack.getNbt().putString("StructureID", structureID.toString());
+			if (session.creativeBypass) stack.getNbt().putBoolean("CreativeBypass", true);
+			stack.getNbt().putInt("State", CompassState.FOUND.getID());
+			stack.getNbt().putInt("FoundX", x);
+			stack.getNbt().putInt("FoundZ", z);
+			stack.getNbt().putString("FoundDimension", player.getWorld().getRegistryKey().getValue().toString());
+            stack.getNbt().putLong(CompassSearchData.FOUND_START_CHUNK, startChunk.toLong());
+			stack.getNbt().putInt("Samples", samples);
+			stack.getNbt().putBoolean("DisplayCoordinates", displayCoordinates);
+			stack.getNbt().putBoolean("DisplayDistance", displayDistance);
+		}
+        if (costs.type() == SearchCosts.Type.ITEMS) {
+            serverPlayer.currentScreenHandler.sendContentUpdates();
+        }
 		finishSearch(player, SearchResultPacket.FOUND, 0, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
 	}
 
@@ -679,29 +696,6 @@ public class ExplorersCompassItem extends Item {
 		}
 
 		return shouldDisplayCoordinates(stack);
-	}
-
-	public int getDamage(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack) && stack.getNbt().contains("CompassDamage")) {
-			return stack.getNbt().getInt("CompassDamage");
-		}
-		return 0;
-	}
-
-	public boolean isBroken(ItemStack stack) {
-		int max = ExplorersCompassConfig.compassDurability;
-		if (max > 0) {
-			return getDamage(stack) >= max;
-		}
-		return false;
-	}
-
-	private void damageCompass(ItemStack stack) {
-		int max = ExplorersCompassConfig.compassDurability;
-		if (max > 0 && ItemUtils.verifyNBT(stack)) {
-			int damage = getDamage(stack) + 1;
-			stack.getNbt().putInt("CompassDamage", damage);
-		}
 	}
 
 	private void clearSearchData(ItemStack stack) {

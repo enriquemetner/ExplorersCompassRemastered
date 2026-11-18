@@ -7,9 +7,22 @@ import com.chaosthedude.explorerscompass.network.ClientPacketHandlers;
 import com.chaosthedude.explorerscompass.network.SearchResultPacket;
 import com.chaosthedude.explorerscompass.network.SearchProgressPacket;
 import com.chaosthedude.explorerscompass.network.UnlockToastPacket;
-import com.chaosthedude.explorerscompass.network.RepairDurabilityPacket;
+import com.chaosthedude.explorerscompass.network.CompassSettingsPacket;
 import com.chaosthedude.explorerscompass.network.RulesChangedPacket;
-import com.chaosthedude.explorerscompass.recipe.CompassRepairRecipe;
+
+import com.chaosthedude.explorerscompass.config.SearchCosts;
+import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.item.ItemStack;
+import com.chaosthedude.explorerscompass.mixins.HandledScreenAccessor;
+import com.chaosthedude.explorerscompass.network.ConsumeCompassItemsPacket;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
+import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.registry.Registries;
+import org.lwjgl.glfw.GLFW;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -22,6 +35,13 @@ public class ExplorersCompassClient implements ClientModInitializer {
 	
 	@Override
 	public void onInitializeClient() {
+        ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+            if (!(screen instanceof HandledScreen<?> inventory)) return;
+            ScreenMouseEvents.allowMouseClick(screen).register((ignored, x, y, button) ->
+                    button != GLFW.GLFW_MOUSE_BUTTON_MIDDLE || !consumeCompassItems(inventory, x, y, true));
+            ScreenMouseEvents.allowMouseScroll(screen).register((ignored, x, y, horizontal, vertical) ->
+                    vertical == 0 || !consumeCompassItems(inventory, x, y, false));
+        });
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestClientIntegration.register();
 		ClientPlayNetworking.registerGlobalReceiver(CurrentStructurePacket.ID, ClientPacketHandlers::applyCurrentStructure);
@@ -30,13 +50,13 @@ public class ExplorersCompassClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(SearchProgressPacket.ID, ClientPacketHandlers::applySearchProgress);
         ClientPlayNetworking.registerGlobalReceiver(com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.ID, ClientPacketHandlers::applySearchAvailability);
 		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, ClientPacketHandlers::applyUnlockToast);
-		ClientPlayNetworking.registerGlobalReceiver(RepairDurabilityPacket.ID, ClientPacketHandlers::applyRepairDurability);
+		ClientPlayNetworking.registerGlobalReceiver(CompassSettingsPacket.ID, ClientPacketHandlers::applyCompassSettings);
 		ClientPlayNetworking.registerGlobalReceiver(RulesChangedPacket.ID, ClientPacketHandlers::applyRulesChanged);
         ClientPlayNetworking.registerGlobalReceiver(com.chaosthedude.explorerscompass.network.PartyRefreshPacket.ID, ClientPacketHandlers::applyPartyRefresh);
         // Minecraft can discard queued client work during disconnect.
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ExplorersCompassScreen.clearWorldSearchState());
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            CompassRepairRecipe.clearServerDurability();
+            com.chaosthedude.explorerscompass.config.SearchCosts.clearRemote();
             needle.clear();
             ClientPacketHandlers.shownNoticeRevision = 0;
             ClientPacketHandlers.pendingNoticeRevision = 0;
@@ -52,4 +72,42 @@ public class ExplorersCompassClient implements ClientModInitializer {
 		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM, new Identifier("angle"), needle);
 	}
 
+    private static boolean consumeCompassItems(HandledScreen<?> screen, double x, double y, boolean wholeStack) {
+        var handler = screen.getScreenHandler();
+        var cursor = handler.getCursorStack();
+        var costs = SearchCosts.remote();
+        if (cursor.isEmpty() || costs.type() != SearchCosts.Type.ITEMS
+                || !costs.items().containsKey(Registries.ITEM.getId(cursor.getItem()))) return false;
+
+        var slot = ((HandledScreenAccessor) screen).explorersCompass$getSlotAt(x, y);
+        if (slot == null || !slot.getStack().isOf(ExplorersCompass.EXPLORERS_COMPASS_ITEM)) return false;
+
+        if (screen instanceof CreativeInventoryScreen) {
+            // Creative's cursor is client-side. Sync the changed player slot through vanilla.
+            var client = MinecraftClient.getInstance();
+            var player = client.player;
+            var interaction = client.interactionManager;
+            if (player == null || interaction == null || !interaction.hasCreativeInventory()
+                    || slot.inventory != player.getInventory() || !slot.canTakePartial(player)) return false;
+            for (var playerSlot : player.playerScreenHandler.slots) {
+                if (playerSlot.getStack() != slot.getStack()) continue;
+                if (ExplorersCompassItem.consumeFuel(costs, slot.getStack(), cursor, wholeStack)) {
+                    if (cursor.isEmpty()) handler.setCursorStack(ItemStack.EMPTY);
+                    slot.markDirty();
+                    interaction.clickCreativeStack(slot.getStack(), playerSlot.id);
+                    ExplorersCompassItem.playChargeSound(player, player);
+                }
+                return true;
+            }
+            return false;
+        }
+        if (!ClientPlayNetworking.canSend(ConsumeCompassItemsPacket.ID)) return false;
+
+        var packet = PacketByteBufs.create();
+        packet.writeVarInt(handler.syncId);
+        packet.writeVarInt(slot.id);
+        packet.writeBoolean(wholeStack);
+        ClientPlayNetworking.send(ConsumeCompassItemsPacket.ID, packet);
+        return true;
+    }
 }

@@ -19,10 +19,10 @@ import com.chaosthedude.explorerscompass.network.ContinueSearchPacket;
 import com.chaosthedude.explorerscompass.network.ResetCompassPacket;
 import com.chaosthedude.explorerscompass.network.SyncPacket;
 import com.chaosthedude.explorerscompass.network.CurrentStructurePacket;
+import com.chaosthedude.explorerscompass.network.ConsumeCompassItemsPacket;
 import com.chaosthedude.explorerscompass.network.TeleportPacket;
-import com.chaosthedude.explorerscompass.network.RepairDurabilityPacket;
+import com.chaosthedude.explorerscompass.network.CompassSettingsPacket;
 import com.chaosthedude.explorerscompass.network.RefreshCompassPacket;
-import com.chaosthedude.explorerscompass.recipe.CompassRepairRecipe;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 
@@ -34,8 +34,6 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.item.ItemGroups;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
-import net.minecraft.recipe.RecipeSerializer;
-import net.minecraft.recipe.SpecialRecipeSerializer;
 import net.minecraft.util.Identifier;
 
 public class ExplorersCompass implements ModInitializer {
@@ -47,8 +45,6 @@ public class ExplorersCompass implements ModInitializer {
 	public static final Logger LOGGER = LogManager.getLogger(MODID);
 
 	public static final ExplorersCompassItem EXPLORERS_COMPASS_ITEM = new ExplorersCompassItem();
-	public static final RecipeSerializer<CompassRepairRecipe> COMPASS_REPAIR_SERIALIZER =
-			new SpecialRecipeSerializer<>(CompassRepairRecipe::new);
 
 	public static Map<Identifier, com.chaosthedude.explorerscompass.unlocking.RequirementNode> lockedRequirements = Map.of();
 	public static boolean synced;
@@ -56,8 +52,6 @@ public class ExplorersCompass implements ModInitializer {
 	public static boolean canExcludeVisited;
 	public static boolean infiniteXp;
 	public static List<Identifier> allowedStructureIDs;
-	public static int defaultXpCost;
-	public static boolean allowSearchWithoutEnoughXp;
 	public static ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs;
 	public static Map<Identifier, Identifier> structureIDsToSetIDs;
 
@@ -79,6 +73,7 @@ public class ExplorersCompass implements ModInitializer {
             }
         });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            com.chaosthedude.explorerscompass.config.SearchCosts.load(server);
             if (!ExplorersCompassConfig.structureWhitelist.isEmpty()
                     && server.getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).getIds().stream()
                             .allMatch(com.chaosthedude.explorerscompass.util.StructureUtils::structureIdIsExcluded)) {
@@ -101,10 +96,12 @@ public class ExplorersCompass implements ModInitializer {
                 com.chaosthedude.explorerscompass.unlocking.UnlockingCommands.register(dispatcher));
 
 		Registry.register(Registries.ITEM, new Identifier(MODID, "explorerscompass"), EXPLORERS_COMPASS_ITEM);
-		Registry.register(Registries.RECIPE_SERIALIZER, new Identifier(MODID, "compass_repair"), COMPASS_REPAIR_SERIALIZER);
 
 		ItemGroupEvents.modifyEntriesEvent(ItemGroups.TOOLS).register(entries -> entries.add(EXPLORERS_COMPASS_ITEM));
 
+        ServerPlayNetworking.registerGlobalReceiver(
+                ConsumeCompassItemsPacket.ID,
+                ConsumeCompassItemsPacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(CurrentStructurePacket.ID, CurrentStructurePacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(SearchPacket.ID, SearchPacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(SearchListedPacket.ID, SearchListedPacket::apply);
@@ -117,7 +114,7 @@ public class ExplorersCompass implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
 				com.chaosthedude.explorerscompass.unlocking.UnlockReloads.left(handler.player.getUuid()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-				RepairDurabilityPacket.send(handler.player, ExplorersCompassConfig.compassDurability,
+				CompassSettingsPacket.send(handler.player,
                         ExplorersCompassConfig.showNetherEquivalent));
         // Also validate idle sessions awaiting "Keep searching" during normal gameplay.
         // Active searches validate ownership in every queued slice, including while paused.

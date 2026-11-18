@@ -31,7 +31,7 @@ class CompassTransferTest {
         NbtCompound data = new NbtCompound();
         UUID previous = UUID.randomUUID(), next = UUID.randomUUID();
         data.putUuid(CompassTransfer.HOLDER, previous);
-        data.putInt("CompassDamage", 12);
+        data.putInt("SearchEnergy", 12);
         data.putString("CustomName", "Keep me");
         var result = CompassTransfer.acquire(data, next, false, true,
                 ignored -> { fail("Sharing disabled"); return Set.of(); }, ignored -> true);
@@ -39,7 +39,7 @@ class CompassTransferTest {
         assertNull(result.sharingSource());
         CompassSearchData.clear(data);
         assertEquals(next, data.getUuid(CompassTransfer.HOLDER));
-        assertEquals(12, data.getInt("CompassDamage"));
+        assertEquals(12, data.getInt("SearchEnergy"));
         assertEquals("Keep me", data.getString("CustomName"));
         assertTrue(result.unlocks().isEmpty());
     }
@@ -80,11 +80,11 @@ class CompassTransferTest {
         NbtCompound copy = data.copy();
         UUID newHolder = UUID.randomUUID();
         copy.putUuid(CompassTransfer.HOLDER, newHolder);
-        copy.putInt("CompassDamage", 9);
+        copy.putInt("SearchEnergy", 9);
         assertEquals(100, CompassSearchData.pointingData(copy).getInt("FoundX"));
         assertTrue(CompassSearchData.restore(copy, token));
         assertEquals(newHolder, copy.getUuid(CompassTransfer.HOLDER));
-        assertEquals(9, copy.getInt("CompassDamage"));
+        assertEquals(9, copy.getInt("SearchEnergy"));
         assertEquals(CompassState.FOUND.getID(), copy.getInt("State"));
         assertEquals(42L, copy.getLong(CompassSearchData.FOUND_START_CHUNK));
         assertTrue(copy.getBoolean(CompassTransfer.INHERITED));
@@ -96,6 +96,6 @@ class CompassTransferTest {
         assertFalse(copy.contains(CompassSearchData.FOUND_START_CHUNK));
         assertFalse(copy.contains(CompassTransfer.INHERITED));
         assertFalse(copy.contains(CompassSearchData.BACKUP));
-        assertEquals(9, copy.getInt("CompassDamage"));
+        assertEquals(9, copy.getInt("SearchEnergy"));
     }
 }

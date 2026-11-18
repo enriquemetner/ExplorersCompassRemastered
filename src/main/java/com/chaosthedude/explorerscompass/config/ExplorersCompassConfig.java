@@ -25,6 +25,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.api.EnvType;
 
 public class ExplorersCompassConfig {
+	public static final String SEARCH_COSTS = "server/search_costs.json";
 	public static final String UNLOCKING_RULES = "server/unlocking_rules.json";
 	public static final String DEFAULT_UNLOCKING_RULES = "{\n  \"default\": \"unlocked\",\n  \"requirements\": {}\n}\n";
 	private static final String SERVER_SETTINGS = "server/settings.toml";
@@ -49,9 +50,6 @@ public class ExplorersCompassConfig {
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
 	public static boolean showNetherEquivalent = false;
-	public static int compassDurability = 0;
-	public static int defaultXpCost = 0;
-	public static boolean allowSearchWithoutEnoughXp = false;
 	public static List<String> structureWhitelist = List.of();
 	public static List<String> structureBlacklist = new ArrayList<>();
 	public static List<String> hiddenStructures = new ArrayList<>();
@@ -67,6 +65,7 @@ public class ExplorersCompassConfig {
 	public static boolean adjustRowsToFitView;
 	public static boolean allowIdSearches;
 	public static boolean showOnlyMatchingFilterOptions;
+	public static boolean hideSearchCost;
 	public static boolean matchSearchWordsInAnyOrder;
 	public static int overlayLineOffset;
 	public static OverlaySide overlaySide;
@@ -83,6 +82,7 @@ public class ExplorersCompassConfig {
 		CLEAR_SEARCH_BAR_ON_CLOSE(() -> clearSearchBarOnClose = true),
 		ALLOW_ID_SEARCHES(() -> allowIdSearches = false),
 		SHOW_ONLY_MATCHING_FILTER_OPTIONS(() -> showOnlyMatchingFilterOptions = false),
+		HIDE_SEARCH_COST(() -> hideSearchCost = false),
 		MATCH_SEARCH_WORDS_IN_ANY_ORDER(() -> matchSearchWordsInAnyOrder = false),
 		PAUSE_GAME_WHEN_OPEN(() -> pauseGameWhenOpen = false),
 		CREATIVE_UNLOCKS_ALL(() -> creativeUnlocksAll = false),
@@ -132,6 +132,7 @@ public class ExplorersCompassConfig {
 						|| clientConfig.get("view.showTechnicalNames") != null
 						|| clientConfig.get("behavior.allowIdSearches") == null
 						|| clientConfig.get("behavior.showOnlyMatchingFilterOptions") == null
+						|| clientConfig.get("behavior.hideSearchCost") == null
 						|| clientConfig.get("behavior.matchSearchWordsInAnyOrder") == null
 						|| !new ArrayList<>(clientConfig.valueMap().keySet()).get(clientConfig.valueMap().size() - 1).equals("sorting")
 						|| clientConfig.get("behavior.pauseGameWhenOpen") != null
@@ -168,6 +169,8 @@ public class ExplorersCompassConfig {
 		}
 		Path rules = defaults.resolve(UNLOCKING_RULES);
 		if (Files.notExists(rules)) Files.writeString(rules, DEFAULT_UNLOCKING_RULES);
+		Path costs = defaults.resolve(SEARCH_COSTS);
+		if (Files.notExists(costs)) Files.writeString(costs, SearchCosts.DEFAULT_JSON);
 	}
 
 	public static Path serverConfigFile(net.minecraft.server.MinecraftServer server, String name) {
@@ -189,13 +192,17 @@ public class ExplorersCompassConfig {
 	private static void loadServerFiles(Path commonFile, Path blacklistFile, Path whitelistFile) throws IOException {
 		CommentedConfig common = parse(commonFile);
 		loadCommon(common);
-		if (common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
+		if (common.contains("compass.compassDurability") || common.contains("search.defaultXpCost")
+                || common.contains("search.allowSearchWithoutEnoughXp") || common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
 				|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
 				|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
 				|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
                     || common.get(SEARCH_SAVED_STRUCTURES) == null || common.get("compass.showNetherEquivalent") == null
                     || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 			common.remove("permissions.allowTeleport");
+			common.remove("compass.compassDurability");
+			common.remove("search.defaultXpCost");
+			common.remove("search.allowSearchWithoutEnoughXp");
 			writeCommon(common);
 			write(commonFile, common);
 		}
@@ -292,9 +299,6 @@ public class ExplorersCompassConfig {
 		displayCoordinates = bool(config, "compass.displayCoordinates", true);
 		displayDistance = bool(config, "compass.displayDistance", true);
 		showNetherEquivalent = bool(config, "compass.showNetherEquivalent", false);
-		compassDurability = number(config, "compass.compassDurability", 0, 0);
-		defaultXpCost = number(config, "search.defaultXpCost", 0, 0);
-		allowSearchWithoutEnoughXp = bool(config, "search.allowSearchWithoutEnoughXp", false);
 	}
 
 	static boolean loadClient(CommentedConfig config) {
@@ -312,6 +316,7 @@ public class ExplorersCompassConfig {
 		allowIdSearches = config.get("behavior.allowIdSearches") != null
 				? bool(config, "behavior.allowIdSearches", allowIdSearches)
 				: bool(config, "behavior.searchTechnicalNames", allowIdSearches);
+		hideSearchCost = bool(config, "behavior.hideSearchCost", hideSearchCost);
 		showOnlyMatchingFilterOptions = bool(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions);
 		matchSearchWordsInAnyOrder = bool(config, "behavior.matchSearchWordsInAnyOrder", false);
 		overlayLineOffset = number(config, "overlay.overlayLineOffset", overlayLineOffset, Integer.MIN_VALUE);
@@ -364,9 +369,6 @@ public class ExplorersCompassConfig {
 		put(config, "compass.displayDistance", displayDistance, "Show distance to located structures.");
 		put(config, "compass.showNetherEquivalent", showNetherEquivalent, "Point to equivalent coordinates when tracking a structure across the Overworld and Nether.");
         config.remove("search.maxSamples"); // Retired: searches are bounded by radius.
-		put(config, "compass.compassDurability", compassDurability, "Successful searches before the compass breaks; 0 disables durability.");
-		put(config, "search.defaultXpCost", defaultXpCost, "XP levels consumed after a successful search.");
-		put(config, "search.allowSearchWithoutEnoughXp", allowSearchWithoutEnoughXp, "Permit searching with insufficient XP; a successful search drains remaining XP.");
 		// Keep the established order of all other sections and settings.
 		moveToPosition(config, "compass", 0);
 		moveToPosition(config, "unlocking", 2);
@@ -389,6 +391,7 @@ public class ExplorersCompassConfig {
 		put(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions,
 				"Show only unchecked filter options with matching structures under the filters in the other columns.");
 		put(config, "behavior.matchSearchWordsInAnyOrder", matchSearchWordsInAnyOrder, "Match every part of the main structure search in any order.");
+		put(config, "behavior.hideSearchCost", hideSearchCost, "Hide the search cost on structure entries.\nReasonable when all structures have the same search cost.");
 		put(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen, "Pause singleplayer while the compass screen is open, except while locating a structure.");
 		put(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll, "Temporarily unlock all structures while in Creative mode without changing saved unlocks.");
 		put(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative, "Show the Teleport button only in Creative mode. Teleport permission is still required.");

@@ -16,7 +16,7 @@ import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-final class UnlockingRuleDocument {
+public final class UnlockingRuleDocument {
     private static final Pattern LINE = Pattern.compile("line (\\d+)");
     // Gson's strict reader still accepts raw controls in strings and case-insensitive literals.
     private static final Pattern LEXEME = Pattern.compile(
@@ -24,9 +24,9 @@ final class UnlockingRuleDocument {
             + "|\"(?:[^\"\\\\\\x00-\\x1f]|\\\\(?:[\"\\\\/bfnrt]|u[0-9a-fA-F]{4}))*+\"");
     private final Map<JsonElement, Integer> lines = new IdentityHashMap<>();
     private final Map<JsonObject, Map<String, Integer>> fieldLines = new IdentityHashMap<>();
-    final JsonElement root;
+    public final JsonElement root;
 
-    UnlockingRuleDocument(String source) {
+    public UnlockingRuleDocument(String source) {
         validateLexemes(source);
         try (JsonReader reader = new JsonReader(new StringReader(source))) {
             root = read(reader, 0);
@@ -54,11 +54,11 @@ final class UnlockingRuleDocument {
         }
     }
 
-    int fieldLine(JsonObject object, String key) {
+    public int fieldLine(JsonObject object, String key) {
         return fieldLines.get(object).get(key);
     }
 
-    int line(JsonElement value) {
+    public int line(JsonElement value) {
         return lines.getOrDefault(value, 1);
     }
 

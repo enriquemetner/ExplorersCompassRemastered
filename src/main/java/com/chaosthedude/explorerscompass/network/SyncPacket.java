@@ -18,13 +18,11 @@ public class SyncPacket extends PacketByteBuf {
 
 	public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "sync");
 
- public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, int defaultXpCost, boolean allowSearchWithoutEnoughXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, Map<Identifier, RequirementNode> partyRequirements, long noticeRevision, boolean noticeRelocked, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter, List<Identifier> excludedIds, boolean whitelistActive) {
+ public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, Map<Identifier, RequirementNode> partyRequirements, long noticeRevision, boolean noticeRelocked, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter, List<Identifier> excludedIds, boolean whitelistActive) {
 		super(Unpooled.buffer());
 		writeBoolean(canTeleport);
 		writeBoolean(canExcludeVisited);
 		writeBoolean(infiniteXp);
-		writeInt(defaultXpCost);
-		writeBoolean(allowSearchWithoutEnoughXp);
 		writeInt(allowedStructureIDs.size());
 		for (Identifier structureID : allowedStructureIDs) {
 			writeIdentifier(structureID);

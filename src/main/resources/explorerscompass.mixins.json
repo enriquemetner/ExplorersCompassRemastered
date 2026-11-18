@@ -17,6 +17,8 @@
   ],
   "client": [
     "ChatInputSuggestorMixin",
+    "HandledScreenAccessor",
+    "DrawContextAccessor",
     "HeldItemRendererMixin",
     "InGameHudMixin",
     "JesCompassRegistrationMixin",

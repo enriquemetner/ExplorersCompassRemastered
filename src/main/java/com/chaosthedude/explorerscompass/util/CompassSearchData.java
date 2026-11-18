@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.UUID;
 import net.minecraft.nbt.NbtCompound;
 
-/** Search snapshots contain target fields only, never ownership, durability, or custom item data. */
+/** Search snapshots contain target fields only, never ownership, energy, or custom item data. */
 public final class CompassSearchData {
     public static final String BACKUP = "CompassSearchBackup";
     public static final String TOKEN = "CompassSearchToken";

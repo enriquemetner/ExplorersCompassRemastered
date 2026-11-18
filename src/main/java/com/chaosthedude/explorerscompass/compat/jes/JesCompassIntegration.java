@@ -44,8 +44,7 @@ public final class JesCompassIntegration {
     private static ItemStack usableCompass(PlayerEntity player) {
         if (player == null || player.isSneaking()) return ItemStack.EMPTY;
         var compass = ExplorersCompass.EXPLORERS_COMPASS_ITEM;
-        ItemStack stack = ItemUtils.getHeldItem(player, compass);
-        return compass.isBroken(stack) ? ItemStack.EMPTY : stack;
+        return ItemUtils.getHeldItem(player, compass);
     }
 
     private static boolean open(PlayerEntity player, Identifier structure) {

@@ -185,20 +185,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
                 int rowLeft = getRowLeft();
                 int rowTop = getRowTop(i);
                 int rowBottom = displayedRowBottom(i);
-                if (parentScreen.isUnlockedThroughParty(entry.getStructureID())) {
-                    int labelX = entry.partyLabelX(rowControlsX());
-                    int labelLeft = MathHelper.clamp(labelX, rowLeft, right);
-                    int labelRight = MathHelper.clamp(labelX + entry.partyLabelWidth(), rowLeft, right);
-                    int labelTop = rowTop + (rowBottom - rowTop - ACTION_BUTTONS_HEIGHT) / 2;
-                    int labelBottom = labelTop + ACTION_BUTTONS_HEIGHT;
-                    // Leave the panel area clear so its fill has the same opacity as a locked row.
-                    context.fill(rowLeft, rowTop, right, labelTop, fillColor);
-                    context.fill(rowLeft, labelBottom, right, rowBottom, fillColor);
-                    context.fill(rowLeft, labelTop, labelLeft, labelBottom, fillColor);
-                    context.fill(labelRight, labelTop, right, labelBottom, fillColor);
-                } else {
-                    context.fill(rowLeft, rowTop, right, rowBottom, fillColor);
-                }
+                context.fill(rowLeft, rowTop, right, rowBottom, fillColor);
             }
         }
         // Render entries
@@ -318,17 +305,6 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
         return getEntryAtPosition(mouseX, rowY);
     }
 
-    boolean isPartyLabelHovered(double mouseX, double mouseY) {
-        return isPartyLabelAt(actionRowAt(mouseX, mouseY), mouseX, mouseY);
-    }
-
-    private boolean isPartyLabelAt(StructureSearchEntry row, double mouseX, double mouseY) {
-        if (row == null) return false;
-        int index = children().indexOf(row);
-        int top = getRowTop(index);
-        return row.isPartyLabelAt(mouseX, mouseY, rowControlsX(), top, displayedRowBottom(index) - top);
-    }
-
     ButtonPress buttonAt(double mouseX, double mouseY) {
         StructureSearchEntry row = actionRowAt(mouseX, mouseY);
         if (row == null || !row.isEnabled()) return null;
@@ -339,9 +315,6 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
                     && ButtonPress.contains(mouseX, mouseY, previewX(), y, JesThumbnails.SIZE, JesThumbnails.SIZE)) {
                 return new ButtonPress(row, "jesPreview", () -> parentScreen.openJesPreview(row.getStructureID()));
             }
-        }
-        if (isPartyLabelAt(row, mouseX, mouseY)) {
-            return new ButtonPress(row, "partyRequirements", () -> parentScreen.showPartyRequirements(row.getStructureID()));
         }
         if (isFilterButtonClick(row, mouseX, mouseY)) {
             return new ButtonPress(row, "filters", () -> parentScreen.openEntryFilters(row.getStructureID()));

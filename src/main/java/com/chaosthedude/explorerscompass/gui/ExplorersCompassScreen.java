@@ -1,5 +1,6 @@
 package com.chaosthedude.explorerscompass.gui;
 
+import com.chaosthedude.explorerscompass.config.SearchCosts;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -41,11 +42,16 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.tooltip.Tooltip;
+import net.minecraft.client.gui.tooltip.TooltipComponent;
+import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;
+import net.minecraft.client.font.TextRenderer;
+import com.chaosthedude.explorerscompass.mixins.DrawContextAccessor;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
@@ -90,11 +96,12 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SETTINGS_OFFSET_ROW = 2;
 	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 12;
 	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 13;
-	private static final int SETTINGS_HIDDEN_ROW = 19;
+	private static final int SETTINGS_HIDE_SEARCH_COST_ROW = 14;
+	private static final int SETTINGS_HIDDEN_ROW = 20;
 	private static final String HIDDEN_STRUCTURES_TITLE = "Hidden Structures";
-	private static final int SETTINGS_PAUSE_ROW = 15;
-	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 16;
-	private static final int SETTINGS_TELEPORT_ROW = 17;
+	private static final int SETTINGS_PAUSE_ROW = 16;
+	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 17;
+	private static final int SETTINGS_TELEPORT_ROW = 18;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
 	private String lastSearchFieldText;
@@ -119,6 +126,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Allow ID Searches",
 		"Show Only Matching Filter Options",
 		"Match Search Words in Any Order",
+		"Hide Search Cost",
 		"Singleplayer & Creative",
 		"Pause Game When Open",
 		"Unlock All Structures in Creative",
@@ -141,6 +149,7 @@ public class ExplorersCompassScreen extends Screen {
 		"Enables searching for structure IDs such as minecraft:ancient_city as well.\nWorks for filter searches too.",
 		"Show unchecked sources, dimensions, and structure sets only when they match at least one structure with the filters in the other columns. Checked options stay available so you can uncheck them.",
 		"Match every part of your search in any order, like in Settings.\nExample: 'Plains Village' or 'vil pl' match 'Village Plains'.",
+		"Hide the search cost on structure entries.\nReasonable when all structures have the same search cost.",
 		null,
 		"Pauses singleplayer while the compass screen is open, except while locating a structure. Searches need the game to keep ticking to make progress.",
 		"Temporarily unlock all structures while in Creative mode. Changing the mode back relocks previously locked structures.",
@@ -170,6 +179,7 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget allowIdSearchesButton;
 	private ButtonWidget showOnlyMatchingFilterOptionsButton;
 	private ButtonWidget matchSearchWordsButton;
+	private ButtonWidget hideSearchCostButton;
 	private ButtonWidget overlaySideButton;
 	private ButtonWidget clearOnCloseButton;
 	private ButtonWidget clearSearchBarOnCloseButton;
@@ -235,14 +245,15 @@ public class ExplorersCompassScreen extends Screen {
     private Identifier selectionAfterSync;
     private Identifier excludedStructure;
     private boolean excludedByWhitelist;
-    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_XP, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, EXCLUDED, REJECTED }
+    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_COST, MULTI_COST, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, EXCLUDED, REJECTED }
     private Dialog dialog = Dialog.NONE;
     private LockedRequirementsView lockedRequirementsView;
     private Identifier lockedRequirementsId;
     private boolean refreshAfterQuestBook;
     private boolean restoreQuestListAfterSync;
     private double questReturnScroll;
-    private int insufficientXpCost;
+    private int insufficientCost;
+    private int availableEnergy;
     private long dialogStarted;
     private long notFoundCompassUpdated;
     private double notFoundCompassAngle;
@@ -277,7 +288,7 @@ public class ExplorersCompassScreen extends Screen {
     private boolean showFoundDistance;
 	private double filterScroll;
 	private int settingsFirstRow;
-	private List<Integer> settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, "");
+	private List<Integer> settingsRows = List.of();
 	private boolean lastCreativeBypass;
 	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN, FOUND, SEARCH_FAILURE }
 	private ScrollPanel draggedScrollbar;
@@ -446,7 +457,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void tick() {
-        if ((dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_XP) && System.currentTimeMillis() - dialogStarted >= 3000) {
+        if ((dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_COST) && System.currentTimeMillis() - dialogStarted >= 3000) {
 			dialog = Dialog.NONE;
 			focusActiveSearchField();
 		}
@@ -557,7 +568,28 @@ public class ExplorersCompassScreen extends Screen {
 		} else if (settingsOpen) {
 			renderSettingsPanel(context);
 		}
+        SearchCosts costs = SearchCosts.remote();
+        boolean showBalance = isStructureView() && costs.showsSearchCosts();
+        String headerLabel = switch (costs.type()) {
+            case ITEMS -> "Energy: ";
+            case XP -> "Experience: ";
+            case XP_LEVELS -> "XP Levels: ";
+        };
+        int balance = showBalance ? mainViewBalance(costs) : 0;
+        int balanceWidth = showBalance ? costLineWidth(headerLabel, balance, "") : 0;
+        int balanceX = cancelButton.getX() - HEADER_GAP - balanceWidth;
+        if (isStructureView()) {
+            searchTextField.setWidth(Math.max(1, balanceX - searchTextField.getX() - (showBalance ? HEADER_GAP : 0)));
+        }
 		super.render(context, mouseX, mouseY, partialTicks);
+        if (showBalance) {
+            int balanceY = cancelButton.getY() + (cancelButton.getHeight() - textRenderer.fontHeight) / 2;
+            renderCostLine(context, balanceX + balanceWidth / 2, balanceY, headerLabel, balance, "");
+            if (costs.type() == SearchCosts.Type.ITEMS && mouseX >= balanceX && mouseX < balanceX + balanceWidth
+                    && mouseY >= balanceY && mouseY < balanceY + textRenderer.fontHeight) {
+                renderEnergyTooltip(context, mouseX, mouseY);
+            }
+        }
 		renderExcludeButton(context, excludeVisitedButton, "Exclude Visited", FilterSelections.excludeVisited(), mouseX, mouseY);
 		renderExcludeButton(context, excludeLockedButton, "Exclude Locked", FilterSelections.excludeLocked(), mouseX, mouseY);
         renderExcludeButton(context, newlyUnlockedButton, "Newly Unlocked", FilterSelections.newlyUnlocked(), mouseX, mouseY);
@@ -586,14 +618,68 @@ public class ExplorersCompassScreen extends Screen {
 		if (settingsOpen) {
 			renderSettingsTooltip(context, mouseX, mouseY);
 		}
-		if (isStructureView() && selectionList.isPartyLabelHovered(mouseX, mouseY)) {
-			drawQuestionTooltip(context, "This structure is unlocked only while you’re in this party.\n"
-					+ "You haven’t met its personal unlock requirements.\nClick to show requirements", mouseX, mouseY);
-		}
 		if (selectionToggleButton.visible && selectionToggleButton.isMouseOver(mouseX, mouseY)) {
 			drawQuestionTooltip(context, SELECTION_TOGGLE_TOOLTIP, mouseX, mouseY);
 		}
 	}
+
+    private void renderEnergyTooltip(DrawContext context, int mouseX, int mouseY) {
+        Text instructions = Text.literal(
+                "In your inventory, pick up a valid energy item and hold it over the compass.\n"
+                + "Middle-click to consume the whole stack, or scroll to consume one item at a time.");
+        List<TooltipComponent> rows = new ArrayList<>();
+        textRenderer.wrapLines(instructions, Math.max(1, Math.min(220, width - 30)))
+                .forEach(line -> rows.add(TooltipComponent.of(line)));
+        rows.add(TooltipComponent.of(Text.empty().asOrderedText()));
+        rows.add(TooltipComponent.of(Text.literal("Compass Charging Rates:")
+                .formatted(net.minecraft.util.Formatting.AQUA).asOrderedText()));
+        SearchCosts.remote().items().entrySet().stream()
+                .sorted(Map.Entry.<Identifier, Integer>comparingByValue().thenComparing(Map.Entry.comparingByKey()))
+                .forEach(entry -> {
+                    Identifier id = entry.getKey();
+                    ItemStack item = Registries.ITEM.get(id).getDefaultStack();
+                    String name = item.isEmpty() ? id.toString() : item.getName().getString();
+                    rows.add(new ChargingRateRow(item, name + ": ", entry.getValue().toString(), textRenderer.fontHeight));
+                });
+        ((DrawContextAccessor) context).explorersCompass$drawTooltip(
+                textRenderer, rows, mouseX, mouseY, HoveredTooltipPositioner.INSTANCE);
+    }
+
+    private record ChargingRateRow(ItemStack item, String label, String rate, int iconSize) implements TooltipComponent {
+        @Override
+        public int getHeight() {
+            return iconSize + 1;
+        }
+
+        @Override
+        public int getWidth(TextRenderer font) {
+            return font.getWidth("• ") + iconSize + 2 + font.getWidth(label) + font.getWidth(rate) + 8;
+        }
+
+        @Override
+        public void drawItems(TextRenderer font, int x, int y, DrawContext context) {
+            int textY = y + (getHeight() - font.fontHeight) / 2;
+            context.drawTextWithShadow(font, "• ", x, textY, 0xffffff);
+            int iconX = x + font.getWidth("• ");
+            float scale = iconSize / 16.0f;
+            var matrices = context.getMatrices();
+            matrices.push();
+            matrices.translate(iconX, textY, 0);
+            matrices.scale(scale, scale, 1);
+            context.drawItem(item, 0, 0);
+            matrices.pop();
+            int labelX = iconX + iconSize + 2;
+            context.drawTextWithShadow(font, label, labelX, textY, 0xffffff);
+            int rateX = labelX + font.getWidth(label);
+            drawExperienceNumber(context, font, rate, rateX, textY);
+            drawEnergyOrb(context, font, rateX + font.getWidth(rate) + 3, textY);
+        }
+    }
+
+    private int mainViewBalance(SearchCosts costs) {
+        ItemStack held = ItemUtils.getHeldItem(player, explorersCompass);
+        return costs.available(player, held.isEmpty() ? stack : held);
+    }
 
 	private void updateSearchButtons() {
 		int count = structureSelection.size();
@@ -1251,6 +1337,7 @@ public class ExplorersCompassScreen extends Screen {
 	private void updateSettingsButtonLabels() {
 		chatOverlayButton.setMessage(onOff(ExplorersCompassConfig.displayWithChatOpen));
 		allowIdSearchesButton.setMessage(onOff(ExplorersCompassConfig.allowIdSearches));
+		hideSearchCostButton.setMessage(onOff(ExplorersCompassConfig.hideSearchCost));
 		matchSearchWordsButton.setMessage(onOff(ExplorersCompassConfig.matchSearchWordsInAnyOrder));
 		showOnlyMatchingFilterOptionsButton.setMessage(onOff(ExplorersCompassConfig.showOnlyMatchingFilterOptions));
 		clearOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearFiltersOnClose));
@@ -1465,6 +1552,7 @@ public class ExplorersCompassScreen extends Screen {
 			case INFO -> y + dialogHeight() - 30;
 			case SEARCHING -> searchConfirmed ? searchActionsY() : Integer.MIN_VALUE;
 			case REJECTED -> y + 57;
+			case MULTI_COST -> y + dialogHeight() - 26;
 			default -> Integer.MIN_VALUE;
 		};
 		return backY == Integer.MIN_VALUE ? null : ButtonPress.at(mouseX, mouseY, backX, backY, 70, 20, dialog, "back", this::dismissDialog);
@@ -1540,7 +1628,7 @@ public class ExplorersCompassScreen extends Screen {
                 dismissDialog();
                 return true;
             }
-            if (dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_XP) { dismissDialog(); return true; }
+            if (dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_COST) { dismissDialog(); return true; }
             return true;
         }
 		if (button == 1) {
@@ -1975,7 +2063,7 @@ public class ExplorersCompassScreen extends Screen {
         searchRadius = Math.max(searchRadius, radius);
     }
 
-    public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, Set<Identifier> validBiomes, Boolean visited, RequirementNode requirements) {
+    public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, Set<Identifier> validBiomes, Boolean visited, RequirementNode requirements, int balance) {
         if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
         if (result == SearchResultPacket.FOUND) {
             if (ExplorersCompassConfig.closeOnFound) {
@@ -2009,16 +2097,17 @@ public class ExplorersCompassScreen extends Screen {
             showLockedRequirements(searchedId, requirements);
         } else if (result == SearchResultPacket.WRONG_DIMENSION) {
             showWrongDimension();
-        } else if (result == SearchResultPacket.INSUFFICIENT_XP) {
-            showInsufficientXp(radius);
+        } else if (result == SearchResultPacket.INSUFFICIENT_COST || result == SearchResultPacket.MULTI_COST) {
+            showInsufficientCost(radius, balance, result == SearchResultPacket.MULTI_COST);
         } else {
             dialog = Dialog.REJECTED;
         }
     }
 
-    private void showInsufficientXp(int cost) {
-        insufficientXpCost = cost;
-        dialog = Dialog.INSUFFICIENT_XP;
+    private void showInsufficientCost(int cost, int balance, boolean multiple) {
+        insufficientCost = cost;
+        availableEnergy = balance;
+        dialog = multiple ? Dialog.MULTI_COST : Dialog.INSUFFICIENT_COST;
         dialogStarted = System.currentTimeMillis();
     }
 
@@ -2045,10 +2134,13 @@ public class ExplorersCompassScreen extends Screen {
 
     private int dialogWidth() {
         if (dialog == Dialog.WRONG_DIMENSION) {
-            return Math.min(width - 20, textRenderer.getWidth(Text.literal("You're in the wrong dimension")) + 12);
+            return Math.min(width - 20, textRenderer.getWidth(Text.literal("You're In The Wrong Dimension")) + 12);
         }
-        if (dialog == Dialog.INSUFFICIENT_XP) {
-            return Math.min(width - 20, Math.max(textRenderer.getWidth(Text.literal("Not enough experience")), xpCostLineWidth()) + 12);
+        if (dialog == Dialog.INSUFFICIENT_COST || dialog == Dialog.MULTI_COST) {
+            int contentWidth = Math.max(textRenderer.getWidth(costTitle()), costLineWidth(costLabel(), insufficientCost, costSuffix(insufficientCost)));
+            contentWidth = Math.max(contentWidth, costLineWidth(balanceLabel(), availableEnergy, costSuffix(availableEnergy)));
+            if (dialog == Dialog.MULTI_COST) contentWidth = Math.max(contentWidth, 205);
+            return Math.min(width - 20, contentWidth + 16);
         }
         if (isSearchFailureDialog()) return Math.min(width - 20, 340);
         if (dialog == Dialog.FOUND || dialog == Dialog.SEARCHING) {
@@ -2220,7 +2312,8 @@ public class ExplorersCompassScreen extends Screen {
             case NOT_FOUND, INVALID_SEARCH, EXCLUDED -> Math.min(height - 10, searchFailureTextOffset() + searchFailureContentHeight() + 30);
             case INFO -> textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68;
             case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
-            case INSUFFICIENT_XP -> textRenderer.fontHeight * 2 + 16;
+            case INSUFFICIENT_COST -> 3 * textRenderer.fontHeight + 16;
+            case MULTI_COST -> (costExplanation().size() + 4) * textRenderer.fontHeight + 46;
             case SEARCHING -> searchDialogHeight(foundRowsHeight(4));
             case FOUND -> searchDialogHeight(foundContentHeight());
             default -> 80;
@@ -2229,9 +2322,69 @@ public class ExplorersCompassScreen extends Screen {
     private int dialogX() { return (width - dialogWidth()) / 2; }
     private int dialogY() { return (height - dialogHeight()) / 2; }
 
-    private int xpCostLineWidth() {
-        return textRenderer.getWidth(Text.literal("Level cost:")) + 3
-                + 5 + 3 + textRenderer.getWidth(Integer.toString(insufficientXpCost));
+    private boolean usesEnergy() {
+        return SearchCosts.remote().type() == SearchCosts.Type.ITEMS;
+    }
+
+    private String costTitle() {
+        return usesEnergy() ? "Not Enough Energy" : "Not Enough Experience";
+    }
+
+    private String costLabel() {
+        String label = switch (SearchCosts.remote().type()) {
+            case ITEMS -> "Energy cost: ";
+            case XP -> "XP cost: ";
+            case XP_LEVELS -> "Level cost: ";
+        };
+        return dialog == Dialog.MULTI_COST ? "Highest " + (SearchCosts.remote().type() == SearchCosts.Type.XP
+                ? "XP cost: " : label.toLowerCase(Locale.ROOT)) : label;
+    }
+
+    private String balanceLabel() {
+        return switch (SearchCosts.remote().type()) {
+            case ITEMS -> "Current energy: ";
+            case XP -> "Current XP: ";
+            case XP_LEVELS -> "Current XP Levels: ";
+        };
+    }
+
+    private String costSuffix(int amount) {
+        return SearchCosts.remote().type() == SearchCosts.Type.XP
+                ? SearchCosts.equivalentLevels(amount) + " Levels" : "";
+    }
+
+    private List<net.minecraft.text.OrderedText> costExplanation() {
+        return textRenderer.wrapLines(Text.literal("Your selection includes structures for which you don't have enough " + (usesEnergy() ? "energy." : "experience.")),
+                Math.max(1, dialogWidth() - 16));
+    }
+
+    int costLineWidth(String label, int amount, String suffix) {
+        return textRenderer.getWidth(label) + textRenderer.getWidth(Integer.toString(amount))
+                + 8 + textRenderer.getWidth(suffix);
+    }
+
+    void renderCostLine(DrawContext context, int centerX, int y, String label, int amount, String suffix) {
+        int x = centerX - costLineWidth(label, amount, suffix) / 2;
+        context.drawTextWithShadow(textRenderer, label, x, y, 0xffffff);
+        x += textRenderer.getWidth(label);
+        String number = Integer.toString(amount);
+        drawExperienceNumber(context, textRenderer, number, x, y);
+        x += textRenderer.getWidth(number) + 3;
+        drawEnergyOrb(context, textRenderer, x, y);
+        if (!suffix.isEmpty()) context.drawTextWithShadow(textRenderer, suffix, x + 5, y, 0xffffff);
+    }
+
+    private static void drawExperienceNumber(DrawContext context, TextRenderer font, String number, int x, int y) {
+        context.drawText(font, number, x - 1, y, 0x000000, false);
+        context.drawText(font, number, x + 1, y, 0x000000, false);
+        context.drawText(font, number, x, y - 1, 0x000000, false);
+        context.drawText(font, number, x, y + 1, 0x000000, false);
+        context.drawText(font, number, x, y, 0x80ff20, false);
+    }
+
+    private static void drawEnergyOrb(DrawContext context, TextRenderer font, int x, int y) {
+        Identifier texture = new Identifier(ExplorersCompass.MODID, "textures/gui/experience_orb_00.png");
+        context.drawTexture(texture, x, y + (font.fontHeight - 6) / 2, 5, 5, 0, 0, 16, 16, 16, 16);
     }
 
     private record FoundLine(String label, Text value) {}
@@ -2347,11 +2500,6 @@ public class ExplorersCompassScreen extends Screen {
 
     boolean isUnlockedThroughParty(Identifier id) {
         return id != null && ClientPacketHandlers.partyRequirements.containsKey(id);
-    }
-
-    void showPartyRequirements(Identifier id) {
-        RequirementNode requirements = ClientPacketHandlers.partyRequirements.get(id);
-        if (requirements != null) showLockedRequirements(id, requirements);
     }
 
     public boolean isStructureLocked(Identifier id) {
@@ -2547,23 +2695,25 @@ public class ExplorersCompassScreen extends Screen {
 				drawDialogButton(context, Text.literal("Teleport").getString(), foundTeleportX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
 			}
             drawDialogButton(context, Text.literal("Close").getString(), foundCloseX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
-        } else if (dialog == Dialog.INSUFFICIENT_XP) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Not enough experience"), x + w / 2, y + 6, 0xffff4444);
-            int lineX = x + (w - xpCostLineWidth()) / 2;
+        } else if (dialog == Dialog.INSUFFICIENT_COST || dialog == Dialog.MULTI_COST) {
+            int center = x + w / 2;
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal(costTitle()), center, y + 6, 0xffff4444);
             int lineY = y + 10 + textRenderer.fontHeight;
-            Text costLabel = Text.literal("Level cost:");
-            context.drawTextWithShadow(textRenderer, costLabel, lineX, lineY, 0xffffff);
-            int orbX = lineX + textRenderer.getWidth(costLabel) + 3;
-            int orbSize = 5;
-            int orbFrame = (int)((System.currentTimeMillis() / 40L) % 20L);
-            Identifier orbTexture = new Identifier(ExplorersCompass.MODID, String.format(Locale.ROOT, "textures/gui/experience_orb_%02d.png", orbFrame));
-            context.drawTexture(orbTexture, orbX, lineY + (textRenderer.fontHeight - orbSize) / 2, orbSize, orbSize, 0, 0, 16, 16, 16, 16);
-            context.drawTextWithShadow(textRenderer, Integer.toString(insufficientXpCost), orbX + orbSize + 3, lineY, 0x80ff20);
+            if (dialog == Dialog.MULTI_COST) {
+                for (var line : costExplanation()) {
+                    context.drawCenteredTextWithShadow(textRenderer, line, center, lineY, 0xffffff);
+                    lineY += textRenderer.fontHeight;
+                }
+                lineY += textRenderer.fontHeight;
+                drawDialogButton(context, "Back", center - 35, y + h - 26, 70, mouseX, mouseY);
+            }
+            renderCostLine(context, center, lineY, costLabel(), insufficientCost, costSuffix(insufficientCost));
+            renderCostLine(context, center, lineY + textRenderer.fontHeight, balanceLabel(), availableEnergy, costSuffix(availableEnergy));
         } else if (isSearchFailureDialog()) {
             renderSearchFailureDialog(context, x, y, w, mouseX, mouseY);
         } else {
             boolean wrongDimension = dialog == Dialog.WRONG_DIMENSION;
-            String message = wrongDimension ? "You're in the wrong dimension" : "Search could not start";
+            String message = wrongDimension ? "You're In The Wrong Dimension" : "Search could not start";
             context.drawCenteredTextWithShadow(textRenderer, textRenderer.trimToWidth(message, w - 12), x + w / 2,
                     wrongDimension ? y + (h - textRenderer.fontHeight) / 2 : y + 14, wrongDimension ? 0xffff4444 : 0xffffff);
             if (dialog == Dialog.REJECTED) {
@@ -2575,7 +2725,7 @@ public class ExplorersCompassScreen extends Screen {
 
     private void renderSearchFailureDialog(DrawContext context, int x, int y, int w, int mouseX, int mouseY) {
         if (dialog == Dialog.EXCLUDED) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal(excludedByWhitelist ? "Not on Whitelist" : "Blacklisted"), x + w / 2, y + 6, 0xffff5555);
+            context.drawCenteredTextWithShadow(textRenderer, Text.literal(excludedByWhitelist ? "Not On Whitelist" : "Blacklisted"), x + w / 2, y + 6, 0xffff5555);
         } else if (dialog == Dialog.INVALID_SEARCH) {
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Invalid Search"), x + w / 2, y + 6, 0xffffff);
         } else if (height >= 90) {
@@ -2873,6 +3023,12 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 		}));
+        hideSearchCostButton = addDrawableChild(new TransparentButton(controlX,
+                settingsRowY(SETTINGS_HIDE_SEARCH_COST_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+            ExplorersCompassConfig.hideSearchCost = !ExplorersCompassConfig.hideSearchCost;
+            ExplorersCompassConfig.saveClient();
+            updateSettingsButtonLabels();
+        }));
 		matchSearchWordsButton = addDrawableChild(new TransparentButton(controlX,
 				settingsRowY(SETTINGS_MATCH_SEARCH_WORDS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
 			ExplorersCompassConfig.matchSearchWordsInAnyOrder = !ExplorersCompassConfig.matchSearchWordsInAnyOrder;
@@ -2922,6 +3078,7 @@ public class ExplorersCompassScreen extends Screen {
 		addSettingResetButton(9, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
 		addSettingResetButton(10, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
 		addSettingResetButton(11, ClientSetting.ALLOW_ID_SEARCHES);
+		addSettingResetButton(SETTINGS_HIDE_SEARCH_COST_ROW, ClientSetting.HIDE_SEARCH_COST);
 		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
 		addSettingResetButton(SETTINGS_MATCH_SEARCH_WORDS_ROW, ClientSetting.MATCH_SEARCH_WORDS_IN_ANY_ORDER);
 		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
@@ -3023,7 +3180,6 @@ public class ExplorersCompassScreen extends Screen {
 		settingsSearchTextField.setMaxLength(256);
 		settingsSearchTextField.setText(settingsQuery);
 		settingsSearchTextField.setChangedListener(value -> {
-			settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, value);
 			settingsFirstRow = 0;
 			if (draggedScrollbar == ScrollPanel.SETTINGS) draggedScrollbar = null;
 			updateViewButtons();
@@ -3151,6 +3307,11 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void updateViewButtons() {
+        String query = settingsSearchTextField == null ? "" : settingsSearchTextField.getText();
+        boolean showCosts = SearchCosts.remote().showsSearchCosts();
+        settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, query,
+                row -> row != SETTINGS_HIDE_SEARCH_COST_ROW || showCosts);
+        settingsFirstRow = Math.min(settingsFirstRow, settingsMaxFirstRow());
 		settingsFirstRow = MathHelper.clamp(settingsFirstRow, 0, settingsMaxFirstRow());
 		searchButton.visible = isStructureView();
 		updateSearchButtons();
@@ -3190,6 +3351,7 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(checkedFiltersFirstButton, 5);
 		placeSetting(adjustRowsToFitViewButton, 6);
 		placeSetting(allowIdSearchesButton, 11);
+		placeSetting(hideSearchCostButton, SETTINGS_HIDE_SEARCH_COST_ROW);
 		placeSetting(matchSearchWordsButton, SETTINGS_MATCH_SEARCH_WORDS_ROW);
 		placeSetting(showOnlyMatchingFilterOptionsButton, SETTINGS_MATCHING_FILTER_OPTIONS_ROW);
 		placeSetting(closeOnFoundButton, 8);

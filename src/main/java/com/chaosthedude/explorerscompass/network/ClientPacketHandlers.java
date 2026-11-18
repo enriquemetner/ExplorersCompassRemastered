@@ -4,7 +4,7 @@ import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.gui.ExplorersCompassScreen;
 import com.chaosthedude.explorerscompass.gui.FilterSelections;
 import com.chaosthedude.explorerscompass.gui.UnlockToast;
-import com.chaosthedude.explorerscompass.recipe.CompassRepairRecipe;
+import com.chaosthedude.explorerscompass.config.SearchCosts;
 import com.chaosthedude.explorerscompass.unlocking.RequirementNode;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
@@ -116,21 +116,27 @@ public final class ClientPacketHandlers {
         Boolean visited = result == SearchResultPacket.FOUND && buf.isReadable() ? buf.readBoolean() : null;
         RequirementNode requirements = result == SearchResultPacket.LOCKED ? RequirementNode.read(buf) : null;
         final Identifier resultId = (result == SearchResultPacket.BLACKLISTED || result == SearchResultPacket.NOT_WHITELISTED) ? buf.readIdentifier() : foundId;
+        int balance = (result == SearchResultPacket.INSUFFICIENT_COST || result == SearchResultPacket.MULTI_COST)
+                ? buf.readVarInt() : 0;
         final int resultX = foundX, resultZ = foundZ;
         final boolean showCoordinates = displayCoordinates;
         final boolean showDistance = displayDistance;
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, List.copyOf(biomes), java.util.Set.copyOf(validBiomes), visited, requirements);
+                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, List.copyOf(biomes), java.util.Set.copyOf(validBiomes), visited, requirements, balance);
             }
         });
     }
 
-    public static void applyRepairDurability(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
-        int durability = buf.readVarInt();
-        boolean equivalent = buf.isReadable() && buf.readBoolean();
+    public static void applyCompassSettings(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
+        var type = buf.readEnumConstant(SearchCosts.Type.class);
+        int energy = buf.readVarInt();
+        var items = buf.readMap(PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);
+        boolean equivalent = buf.readBoolean();
+        int defaultCost = buf.readVarInt();
+        var overrides = buf.readMap(PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);
         client.execute(() -> {
-            CompassRepairRecipe.setServerDurability(durability);
+            SearchCosts.setRemote(type, defaultCost, overrides, energy, items);
             showNetherEquivalent = equivalent;
         });
     }
@@ -139,8 +145,6 @@ public final class ClientPacketHandlers {
         final boolean canTeleport = buf.readBoolean();
         final boolean canExcludeVisited = buf.readBoolean();
         final boolean infiniteXp = buf.readBoolean();
-        final int defaultXpCost = buf.readInt();
-        final boolean allowSearchWithoutEnoughXp = buf.readBoolean();
         final List<Identifier> allowedStructureIDs = new ArrayList<Identifier>();
         final ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs = ArrayListMultimap.create();
         final Map<Identifier, Identifier> structureIDsToSetIDs = new HashMap<Identifier, Identifier>();
@@ -203,8 +207,6 @@ public final class ClientPacketHandlers {
             ExplorersCompass.canExcludeVisited = canExcludeVisited;
             ExplorersCompass.infiniteXp = infiniteXp;
             ExplorersCompass.allowedStructureIDs = allowedStructureIDs;
-            ExplorersCompass.defaultXpCost = defaultXpCost;
-            ExplorersCompass.allowSearchWithoutEnoughXp = allowSearchWithoutEnoughXp;
             ExplorersCompass.allowedStructureIDsToDimensionIDs = allowedStructureIDsToDimensionIDs;
             ExplorersCompass.structureIDsToSetIDs = structureIDsToSetIDs;
         });
