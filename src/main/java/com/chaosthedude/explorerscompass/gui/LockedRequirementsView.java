@@ -5,21 +5,25 @@ import java.util.List;
 import java.util.function.Predicate;
 import com.chaosthedude.explorerscompass.compat.ftb.FtbQuestNavigation;
 import com.chaosthedude.explorerscompass.unlocking.RequirementNode;
+import com.chaosthedude.explorerscompass.util.StructureUtils;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
 
 /** Modal requirements panel using the same frame and dim backdrop as the search dialog. */
 final class LockedRequirementsView {
     static final int WINDOW_WIDTH = 260;
+    private static final int FRAME_HEIGHT = 67; // Title, footer, and border outside the scrollable body.
     private static final int BUTTON_BACKGROUND = 0xff242424;
     private static final int BUTTON_BORDER = 0xff909090;
     private final TextRenderer renderer;
     private final RequirementNode requirements;
+    private final Identifier structureId;
     private final Runnable onQuestBookOpened;
     private final java.util.function.Consumer<RequirementNode> onLink;
     private final Predicate<RequirementNode> canOpenLink;
@@ -44,7 +48,7 @@ final class LockedRequirementsView {
     void offerOpenTab(Runnable action) { openTab = action; }
     private final boolean partyUnlocked;
 
-    LockedRequirementsView(TextRenderer renderer, RequirementNode requirements, Runnable onQuestBookOpened, boolean partyUnlocked, boolean nested, String title,
+    LockedRequirementsView(TextRenderer renderer, Identifier structureId, RequirementNode requirements, Runnable onQuestBookOpened, boolean partyUnlocked, boolean nested, String title,
                            java.util.function.Consumer<RequirementNode> onLink, Predicate<RequirementNode> canOpenLink) {
         this.renderer = renderer;
         this.nested = nested;
@@ -52,6 +56,7 @@ final class LockedRequirementsView {
         this.onLink = onLink;
         this.canOpenLink = canOpenLink;
         this.requirements = requirements;
+        this.structureId = structureId;
         this.partyUnlocked = partyUnlocked;
         this.onQuestBookOpened = onQuestBookOpened;
         this.lineHeight = renderer.fontHeight + 3;
@@ -64,13 +69,27 @@ final class LockedRequirementsView {
         width = Math.max(40, Math.min(WINDOW_WIDTH, screenWidth - 24));
         lineHeight = renderer.fontHeight + 3;
         lines = new ArrayList<>();
+        if (structureId != null) {
+            addDetail(Text.literal(StructureUtils.getStructureName(structureId)));
+            lines.add(detailRow(Text.empty().asOrderedText()));
+        }
         addNode(requirements, 0, false, false);
-        // Include the title, Back button, spacing, and border in the half-screen limit.
-        int maxBodyHeight = Math.max(1, screenHeight / 2 - 67);
+        int heightLimit = structureId != null ? screenHeight * 3 / 4 : screenHeight / 2;
+        int maxBodyHeight = Math.max(1, heightLimit - FRAME_HEIGHT);
         bodyHeight = Math.max(1, Math.min(maxBodyHeight, lines.size() * lineHeight));
         x = (screenWidth - width) / 2;
-        y = (screenHeight - bodyHeight - 65) / 2;
+        y = (screenHeight - bodyHeight - FRAME_HEIGHT) / 2 + 1;
         scroll = MathHelper.clamp(scroll, 0, maxScroll());
+    }
+
+    private void addDetail(Text detail) {
+        for (OrderedText line : renderer.wrapLines(detail, Math.max(1, width - 36))) {
+            lines.add(detailRow(line));
+        }
+    }
+
+    private static Row detailRow(OrderedText text) {
+        return new Row(text, 0, null, true, false, null, null, null, null);
     }
 
     private void addNode(RequirementNode node, int depth, boolean inLogicalGroup, boolean bullet) {
@@ -128,8 +147,9 @@ final class LockedRequirementsView {
             if (row.ticked != null) context.drawText(renderer, row.ticked ? "✔" : "•",
                     x + 12 + row.indent, rowY, row.ticked ? 0xff55ff55 : 0xffc0c0c0, true);
             else if (row.bullet) context.drawText(renderer, "•", x + 12 + row.indent, rowY, 0xffc0c0c0, true);
-            int textX = x + (row.heading ? 12 : 23) + row.indent;
-            OrderedText text = row.node == hoveredLink
+            int textX = row.node == null ? x + (width - renderer.getWidth(row.text)) / 2
+                    : x + (row.heading ? 12 : 23) + row.indent;
+            OrderedText text = hoveredLink != null && row.node == hoveredLink
                     ? visitor -> row.text.accept((index, style, codePoint) -> visitor.accept(index, style.withBold(true), codePoint))
                     : row.text;
             context.drawText(renderer, text, textX, rowY, 0xffffff, true);
@@ -213,7 +233,7 @@ final class LockedRequirementsView {
             return false;
         }
         Row questRow = rowAt(mouseX, mouseY);
-        if (questRow != null && questRow.questId == null && canOpenLink.test(questRow.node)) {
+        if (questRow != null && questRow.questId == null && isClickable(questRow.node)) {
             onLink.accept(questRow.node);
         }
         if (questRow != null && questRow.questId != null) {
@@ -243,7 +263,7 @@ final class LockedRequirementsView {
     }
 
     private boolean isClickable(RequirementNode node) {
-        return node.questId() != null || canOpenLink.test(node);
+        return node != null && (node.questId() != null || canOpenLink.test(node));
     }
 
     private Row rowAt(double mouseX, double mouseY) {
@@ -251,6 +271,7 @@ final class LockedRequirementsView {
         int index = (int) ((mouseY - bodyTop() + (int) scroll) / lineHeight);
         if (index < 0 || index >= lines.size()) return null;
         Row row = lines.get(index);
+        if (row.node == null) return null;
         int rowY = bodyTop() + index * lineHeight - (int) scroll;
         int textX = x + (row.heading ? 12 : 23) + row.indent;
         return mouseX >= textX && mouseX < textX + renderer.getWidth(row.text)

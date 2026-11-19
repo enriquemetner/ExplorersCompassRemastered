@@ -2516,7 +2516,7 @@ public class ExplorersCompassScreen extends Screen {
 
     private void setLockedPopup(Identifier id, RequirementNode requirements, String title) {
         lockedRequirementsId = id;
-        lockedRequirementsView = new LockedRequirementsView(textRenderer, requirements, this::rememberQuestBookReturn,
+        lockedRequirementsView = new LockedRequirementsView(textRenderer, id, requirements, this::rememberQuestBookReturn,
                 id != null && isUnlockedThroughParty(id), !lockedHistory.isEmpty(), title, this::openRequirementLink, this::canOpenRequirementLink);
         dialog = Dialog.LOCKED;
     }
@@ -2532,7 +2532,9 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private boolean canOpenRequirementLink(RequirementNode node) {
-        return node.advancementId() != null || node.structureId() != null && isStructureLocked(node.structureId());
+        Identifier structure = node.structureId();
+        return node.advancementId() != null || structure != null
+                && !structure.equals(lockedRequirementsId) && isStructureLocked(structure);
     }
 
     private void openRequirementLink(RequirementNode node) {
