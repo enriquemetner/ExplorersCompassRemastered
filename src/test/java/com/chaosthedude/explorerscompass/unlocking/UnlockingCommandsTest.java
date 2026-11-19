@@ -52,6 +52,18 @@ class UnlockingCommandsTest {
         assertEquals(List.of("unlocking_rules.json", "typo", "6", "ancient_citys"), yellowParts(rule));
     }
 
+    @Test void reportHighlightsTomlFilesSettingsAndSelectors() {
+        for (String filename : List.of("blacklist.toml", "whitelist.toml")) {
+            var selector = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.ERROR,
+                    filename + ": No structures match selector \"village_z\" at line 4"));
+            assertEquals(List.of(filename, "village_z", "4"), yellowParts(selector));
+        }
+
+        var setting = UnlockingCommands.formatDiagnostic(new UnlockingRules.Diagnostic(UnlockingRules.Severity.ERROR,
+                "settings.toml: Invalid setting \"compass.useClassicCompass\" at line 2. Expected a boolean, found \"yes\""));
+        assertEquals(List.of("settings.toml", "compass.useClassicCompass", "2", "yes"), yellowParts(setting));
+    }
+
     private static List<String> yellowParts(net.minecraft.text.Text text) {
         return text.getSiblings().stream()
                 .filter(part -> TextColor.fromFormatting(Formatting.YELLOW).equals(part.getStyle().getColor()))

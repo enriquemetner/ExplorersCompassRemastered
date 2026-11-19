@@ -89,14 +89,19 @@ public class StructureUtils {
 	}
 
 	public static List<Identifier> getAllowedStructureIDs(ServerWorld world) {
-		final List<Identifier> structureIDs = new ArrayList<Identifier>();
-		for (Structure structure : getStructureRegistry(world)) {
-			if (structure != null && getIDForStructure(world, structure) != null && !getIDForStructure(world, structure).getNamespace().isEmpty() && !getIDForStructure(world, structure).getPath().isEmpty() && !structureIsExcluded(world, structure) && !structureIsHidden(world, structure)) {
-				structureIDs.add(getIDForStructure(world, structure));
-			}
-		}
+		return getEligibleStructureIDs(world).stream().filter(id -> !structureIdIsExcluded(id))
+				.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+	}
 
-		return structureIDs;
+	public static java.util.Set<Identifier> getEligibleStructureIDs(ServerWorld world) {
+		var registry = getStructureRegistry(world);
+		var eligible = new java.util.LinkedHashSet<Identifier>();
+		for (Structure structure : registry) {
+			Identifier id = registry.getId(structure);
+			if (id != null && !id.getNamespace().isEmpty() && !id.getPath().isEmpty()
+					&& !structureIsHidden(world, structure)) eligible.add(id);
+		}
+		return eligible;
 	}
 
 	public static boolean structureIsExcluded(ServerWorld world, Structure structure) {

@@ -43,7 +43,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 public final class UnlockingCommands {
     private static final java.util.regex.Pattern REPORT_DETAILS = java.util.regex.Pattern.compile(
             "(?i)(?<=\\bline )\\d+|(?<=\\blines )\\d+(?:, \\d+)*|(?<=integer >= )\\d+|(?<=\\bcolumn )\\d+"
-            + "|(?<=\\bpath )\\$[^\\r\\n]*|\\b(?:unlocking_rules|search_costs)\\.json\\b"
+            + "|(?<=\\bpath )\\$[^\\r\\n]*|\\b(?:(?:unlocking_rules|search_costs)\\.json|(?:blacklist|whitelist|settings)\\.toml)\\b"
             + "|\"(?:\\\\.|[^\"\\\\])*\""
             + "|(?<=Unknown \"default\": )[^\\r\\n]+|(?<=condition type )[^\\r\\n]+"
             + "|(?<=match selector )[^\\r\\n]+|(?<=ID or pattern )[^\\r\\n]+"
@@ -81,8 +81,7 @@ public final class UnlockingCommands {
     }
 
     static java.util.List<UnlockingRules.Diagnostic> combinedReport(UnlockingRules.Severity severity) {
-        return java.util.stream.Stream.concat(UnlockingRules.report(severity).stream(),
-                com.chaosthedude.explorerscompass.config.SearchCosts.report(severity).stream()).toList();
+        return com.chaosthedude.explorerscompass.config.StartupConfigReport.report(severity);
     }
 
     private static int report(ServerCommandSource source, UnlockingRules.Severity severity) {
@@ -90,7 +89,7 @@ public final class UnlockingCommands {
         if (diagnostics.isEmpty()) {
             String kind = severity == null ? "errors or warnings"
                     : severity == UnlockingRules.Severity.ERROR ? "errors" : "warnings";
-            source.sendFeedback(() -> Text.literal("No " + kind + " in unlocking rules or search costs."), false);
+            source.sendFeedback(() -> Text.literal("No " + kind + " in the server configuration."), false);
         }
         for (var diagnostic : diagnostics) {
             source.sendFeedback(() -> formatDiagnostic(diagnostic), false);

@@ -33,7 +33,6 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
     public static final String DEFAULT_JSON = "{\n  \"type\": \"xpLevels\",\n  \"defaultCost\": 0,\n  \"overrides\": {}\n}\n";
     private static final String ENERGY = "SearchEnergy";
     private static final SearchCosts FREE = new SearchCosts(Type.XP_LEVELS, 0, Map.of(), 0, Map.of(), false);
-    private static List<Diagnostic> diagnostics = List.of();
     private static SearchCosts active = FREE;
     private static SearchCosts remote = FREE;
 
@@ -49,28 +48,23 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
     }
     public static void clearRemote() { remote = FREE; }
 
-    public static List<Diagnostic> report(Severity severity) {
-        return diagnostics.stream().filter(entry -> severity == null || entry.severity() == severity).toList();
-    }
-
-    public static void load(MinecraftServer server) {
+    public static StartupConfigReport.Section load(MinecraftServer server) {
         var file = ExplorersCompassConfig.serverConfigFile(server, ExplorersCompassConfig.SEARCH_COSTS);
         List<Diagnostic> attempt = new ArrayList<>();
+        boolean failed = false;
         try {
             active = parse(Files.readString(file), selector -> UnlockingRules.resolveCostTargets(server, selector),
                     id -> Registries.ITEM.containsId(id) && !id.equals(new Identifier("minecraft", "air")),
                     message -> attempt.add(new Diagnostic(Severity.WARNING, file.getFileName() + ": " + message)));
         } catch (IOException | IllegalArgumentException error) {
             active = FREE;
-            String reason = error instanceof java.nio.file.FileSystemException fs
-                    ? java.util.Objects.requireNonNullElse(fs.getReason(), fs.getClass().getSimpleName()) : error.getMessage();
-            attempt.add(new Diagnostic(Severity.ERROR, "Could not load " + file.getFileName() + ": " + reason));
+            var failure = new Diagnostic(Severity.ERROR, "Could not load " + file.getFileName() + ": " + StartupConfigReport.cause(error));
+            attempt.add(failure);
+            failed = true;
         }
-        diagnostics = List.copyOf(attempt);
-        for (Diagnostic diagnostic : diagnostics) {
-            if (diagnostic.severity() == Severity.ERROR) ExplorersCompass.LOGGER.error(diagnostic.message());
-            else ExplorersCompass.LOGGER.warn(diagnostic.message());
-        }
+        String summary = !failed ? "Successfully loaded search_costs.json successfully"
+                : "Could not load search_costs.json. All structures fell back to costing nothing";
+        return new StartupConfigReport.Section(summary, failed ? Severity.ERROR : null, attempt);
     }
 
     static SearchCosts parse(String source, Function<String, Set<Identifier>> resolve, Predicate<Identifier> knownItem) {

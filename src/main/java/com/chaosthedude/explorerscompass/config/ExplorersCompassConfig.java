@@ -15,6 +15,9 @@ import java.util.List;
 import java.util.Set;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.config.StartupConfigReport.Section;
+import com.chaosthedude.explorerscompass.unlocking.UnlockingRules.Diagnostic;
+import com.chaosthedude.explorerscompass.unlocking.UnlockingRules.Severity;
 import com.chaosthedude.explorerscompass.util.OverlaySide;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.electronwill.nightconfig.core.CommentedConfig;
@@ -199,29 +202,50 @@ public class ExplorersCompassConfig {
 		return Files.exists(override) ? override : directory().resolve(name);
 	}
 
+	private static Section startupSettings;
+	private static StructureListLoad startupLists;
+
 	public static void loadServer(net.minecraft.server.MinecraftServer server) {
+		StartupConfigReport.clear();
 		try {
 			ensureServerDefaults();
-			loadServerSettings(directory().resolve(SERVER_SETTINGS), serverConfigFile(server, SERVER_SETTINGS));
-			loadStructureLists(serverConfigFile(server, WHITELIST), serverConfigFile(server, BLACKLIST),
+			startupSettings = loadServerSettings(directory().resolve(SERVER_SETTINGS), serverConfigFile(server, SERVER_SETTINGS));
+			startupLists = loadStructureLists(serverConfigFile(server, WHITELIST), serverConfigFile(server, BLACKLIST),
 					server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds());
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass server configuration", e);
 		}
 	}
 
-	static void loadServerSettings(Path instanceFile, Path worldFile) {
+	public static void logStartup(Set<Identifier> available, Section rules, Section costs) {
+		int loaded = (int) available.stream().filter(id -> !StructureUtils.structureIdIsExcluded(id)).count();
+		StartupConfigReport.publish(available.size(), startupLists.override(), startupLists.summary(available.size(), loaded),
+				rules, costs, startupSettings);
+	}
+
+	static Section loadServerSettings(Path instanceFile, Path worldFile) {
+		List<Diagnostic> failures = new ArrayList<>();
 		Path selectedFile = worldFile == null ? instanceFile : worldFile;
-		CommentedConfig common = tryReadServerSettings(selectedFile);
-		if (common == null && !selectedFile.equals(instanceFile)) {
+		ServerToml document = tryReadServerSettings(selectedFile, !selectedFile.equals(instanceFile), failures);
+		if (document == null && !selectedFile.equals(instanceFile)) {
 			selectedFile = instanceFile;
-			common = tryReadServerSettings(selectedFile);
+			document = tryReadServerSettings(selectedFile, false, failures);
 		}
-		if (common == null) {
-			loadCommon(TomlFormat.newConfig(LinkedHashMap::new));
-			return;
+		if (document == null) {
+			loadCommon(new ServerToml(TomlFormat.newConfig(LinkedHashMap::new), List.of()), "settings.toml");
+			return new Section("Could not load settings.toml. All settings fell back to built-in defaults",
+					Severity.WARNING, failures);
 		}
-		if (!loadCommon(common)) return;
+		CommentedConfig common = document.config();
+		var settings = loadCommon(document, selectedFile.getFileName().toString());
+		List<Diagnostic> diagnostics = new ArrayList<>(failures);
+		diagnostics.addAll(settings.diagnostics);
+		String count = settings.loaded + "/" + settings.total;
+		String summary = settings.valid ? "Successfully loaded " + count + " settings"
+				: count + " settings loaded successfully";
+		if (!failures.isEmpty()) summary = "Could not load world settings.toml. Using instance settings. " + summary;
+		var result = new Section(summary, diagnostics.isEmpty() ? null : Severity.WARNING, diagnostics);
+		if (!settings.valid) return result;
 
 		if (common.contains("compass.compassDurability") || common.contains("search.defaultXpCost")
                 || common.contains("search.allowSearchWithoutEnoughXp") || common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
@@ -243,39 +267,113 @@ public class ExplorersCompassConfig {
 				// Settings are already loaded even if the file cannot be updated.
 			}
 		}
+		return result;
 	}
 
-	private static CommentedConfig tryReadServerSettings(Path path) {
+	private static ServerToml tryReadServerSettings(Path path, boolean world, List<Diagnostic> failures) {
 		try {
-			return Files.isRegularFile(path) ? parse(path) : null;
-		} catch (IOException | IllegalArgumentException ignored) {
+			return ServerToml.read(path);
+		} catch (IOException | IllegalArgumentException error) {
+			String scope = world ? "world" : "instance";
+			failures.add(new Diagnostic(Severity.ERROR,
+					"Could not load " + scope + " " + path.getFileName() + ": " + StartupConfigReport.cause(error)));
 			return null;
 		}
 	}
 
-	static void loadStructureLists(Path whitelistFile, Path blacklistFile, Set<Identifier> registeredIds) {
+	private static Diagnostic fileFailure(Path file, Exception error) {
+		return new Diagnostic(Severity.ERROR, "Could not load " + file.getFileName() + ": " + StartupConfigReport.cause(error));
+	}
+
+	record StructureListLoad(String filename, boolean valid, Diagnostic override,
+							 List<Diagnostic> diagnostics) {
+		Section summary(int available, int loaded) {
+			String message;
+			if (!valid) message = "Could not load " + filename + ". Loaded all " + available + " structures";
+			else if (filename.equals("whitelist.toml")) message = "Whitelisted and loaded " + loaded + " structures";
+			else message = "Blacklisted " + (available - loaded) + " structures and loaded " + loaded + " structures";
+			return new Section(message, valid ? null : Severity.ERROR, diagnostics);
+		}
+	}
+
+	static StructureListLoad loadStructureLists(Path whitelistFile, Path blacklistFile, Set<Identifier> registeredIds) {
 		var whitelist = readStructureList(whitelistFile, WHITELIST_KEY, registeredIds);
-		structureWhitelist = whitelist == null ? List.of() : whitelist;
+		structureWhitelist = List.of();
 		structureBlacklist = List.of();
-		if (whitelist == null || !whitelist.isEmpty()) return;
+		if (whitelist.selectors() == null || !whitelist.selectors().isEmpty()) {
+			var result = whitelist.result();
+			if (result.valid()) structureWhitelist = whitelist.selectors();
+			if (!hasBlacklistEntries(blacklistFile)) return result;
 
+			var warning = new Diagnostic(Severity.WARNING, "whitelist.toml overrides the nonempty blacklist.toml");
+			var diagnostics = new ArrayList<>(result.diagnostics());
+			diagnostics.add(0, warning);
+			return new StructureListLoad(result.filename(), result.valid(), warning, List.copyOf(diagnostics));
+		}
 		var blacklist = readStructureList(blacklistFile, BLACKLIST_KEY, registeredIds);
-		if (blacklist != null) structureBlacklist = blacklist;
+		if (blacklist.selectors() != null) structureBlacklist = blacklist.selectors();
+		return blacklist.result();
 	}
 
-	/** Returns null when the file or any of its selectors is invalid. */
-	private static List<String> readStructureList(Path file, String key, Set<Identifier> registeredIds) {
+	private static boolean hasBlacklistEntries(Path file) {
 		try {
-			var config = parse(file);
-			List<String> selectors = strings(config, key, List.of());
-			for (String selector : selectors) {
-				var pattern = StructureUtils.structureIdPattern(selector);
-				if (registeredIds.stream().noneMatch(id -> pattern.matcher(id.toString()).matches())) return null;
-			}
-			return List.copyOf(selectors);
+			return ServerToml.read(file).config().get(BLACKLIST_KEY) instanceof List<?> entries && !entries.isEmpty();
 		} catch (IOException | IllegalArgumentException ignored) {
-			return null;
+			return false;
 		}
+	}
+
+	private record StructureList(List<String> selectors, StructureListLoad result) {}
+
+	private static StructureList readStructureList(Path file, String key, Set<Identifier> registeredIds) {
+		String filename = file.getFileName().toString();
+		ServerToml document;
+		try {
+			document = ServerToml.read(file);
+		} catch (IOException | IllegalArgumentException error) {
+			var failure = List.of(fileFailure(file, error));
+			return new StructureList(null, new StructureListLoad(filename, false, null, failure));
+		}
+		List<Diagnostic> diagnostics = new ArrayList<>();
+		Object value = document.config().get(key);
+		List<String> selectors = new ArrayList<>();
+		var matchesById = new LinkedHashMap<Identifier, List<String>>();
+		if (value instanceof List<?> entries) {
+			for (Object entry : entries) {
+				if (!(entry instanceof String selector)) {
+					diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Expected a string selector in " + quotedDiagnosticValue(key)
+							+ document.assignmentLocation(key) + ", found " + quotedDiagnosticValue(entry)));
+					continue;
+				}
+				selectors.add(selector);
+				String detail = quotedDiagnosticValue(selector) + document.selectorLocation(selector);
+				String normalized = selector.contains(":") ? selector : "minecraft:" + selector;
+				Identifier id = Identifier.tryParse(normalized.replace('*', 'a'));
+				if (id == null || id.getNamespace().isEmpty() || id.getPath().isEmpty()
+						|| normalized.startsWith(":") || normalized.indexOf(':') != normalized.lastIndexOf(':')) {
+					diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Invalid structure selector " + detail));
+					continue;
+				}
+				var pattern = StructureUtils.structureIdPattern(selector);
+				var matches = registeredIds.stream().filter(candidate -> pattern.matcher(candidate.toString()).matches()).sorted().toList();
+				if (matches.isEmpty()) diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": No structures match selector " + detail));
+				for (Identifier match : matches) matchesById.computeIfAbsent(match, ignored -> new ArrayList<>()).add(detail);
+			}
+		} else if (value != null) {
+			diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Expected a string array for " + quotedDiagnosticValue(key)
+					+ document.assignmentLocation(key)));
+		}
+		boolean valid = diagnostics.isEmpty();
+		matchesById.forEach((id, entries) -> {
+			if (entries.size() > 1) diagnostics.add(new Diagnostic(Severity.WARNING,
+					filename + ": " + id + " is listed more than once by " + String.join(", ", entries)));
+		});
+		return new StructureList(valid ? List.copyOf(selectors) : null,
+				new StructureListLoad(filename, valid, null, diagnostics));
+	}
+
+	private static String quotedDiagnosticValue(Object value) {
+		return new com.google.gson.JsonPrimitive(String.valueOf(value)).toString();
 	}
 
 	private static Path directory() {
@@ -288,7 +386,7 @@ public class ExplorersCompassConfig {
 		CommentedConfig config = TomlFormat.newConfig(LinkedHashMap::new);
 		switch (name) {
 			case SERVER_SETTINGS -> {
-				loadCommon(config);
+				loadCommon(new ServerToml(config, List.of()), "settings.toml");
 				writeCommon(config);
 			}
 			case CLIENT_SETTINGS -> writeClient(config);
@@ -350,8 +448,8 @@ public class ExplorersCompassConfig {
 		return new IllegalArgumentException("Invalid Explorer's Compass setting '" + key + "'; expected " + expected);
 	}
 
-	private static boolean loadCommon(CommentedConfig config) {
-		var settings = new ServerSettingsReader(config);
+	private static ServerSettingsReader loadCommon(ServerToml document, String filename) {
+		var settings = new ServerSettingsReader(document, filename);
 		maxSearchRadius = settings.searchRadius();
 		findOldStructures = settings.bool(SEARCH_SAVED_STRUCTURES, false);
 		compassSharing = settings.bool("unlocking.compassSharing", false);
@@ -363,38 +461,78 @@ public class ExplorersCompassConfig {
 		displayDistance = settings.bool("compass.displayDistance", true);
 		showNetherEquivalent = settings.bool("compass.showNetherEquivalent", false);
 		useClassicCompass = settings.bool("compass.useClassicCompass", false);
-		return settings.valid;
+		return settings;
 	}
 
 	private static final class ServerSettingsReader {
-		private final CommentedConfig config;
+		private final ServerToml document;
+		private final String filename;
+		private final List<Diagnostic> diagnostics = new ArrayList<>();
 		private boolean valid = true;
+		private int loaded, total;
 
-		private ServerSettingsReader(CommentedConfig config) {
-			this.config = config;
-			for (String section : List.of("compass", "search", "unlocking", "permissions")) {
-				Object value = config.get(section);
-				if (value != null && !(value instanceof CommentedConfig)) valid = false;
+		private ServerSettingsReader(ServerToml document, String filename) {
+			this.document = document;
+			this.filename = filename;
+			Object permissions = document.config().get("permissions");
+			if (permissions != null && !(permissions instanceof CommentedConfig)) {
+				invalid("permissions", "a table");
 			}
+		}
+
+		private Object value(String key) {
+			String section = key.substring(0, key.indexOf('.'));
+			Object parent = document.config().get(section);
+			if (parent != null && !(parent instanceof CommentedConfig)) {
+				throw bad(section, "a table");
+			}
+			return document.config().get(key);
+		}
+
+		private void invalid(String key, String expected) {
+			valid = false;
+			String location = document.assignmentLocation(key);
+			Object received;
+			try {
+				received = document.config().get(key);
+			} catch (ClassCastException ignored) {
+				received = null;
+			}
+			if (location.isEmpty() && key.contains(".")) {
+				location = document.assignmentLocation(key.substring(0, key.indexOf('.')));
+			}
+			diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Invalid setting " + quotedDiagnosticValue(key) + location
+					+ ". Expected " + expected + (received == null ? "" : ", found " + quotedDiagnosticValue(received))));
 		}
 
 		private boolean bool(String key, boolean fallback) {
+			total++;
 			try {
-				return ExplorersCompassConfig.bool(config, key, fallback);
-			} catch (IllegalArgumentException | ClassCastException ignored) {
-				valid = false;
-				return fallback;
+				Object value = value(key);
+				if (value == null || value instanceof Boolean) {
+					loaded++;
+					return value instanceof Boolean result ? result : fallback;
+				}
+			} catch (IllegalArgumentException ignored) {
+				// The setting's containing table is invalid.
 			}
+			invalid(key, "a boolean in its settings table");
+			return fallback;
 		}
 
 		private int searchRadius() {
+			total++;
 			try {
-				int radius = number(config, SEARCH_RADIUS, DEFAULT_SEARCH_RADIUS, 1);
-				if (radius <= MAX_SEARCH_RADIUS) return radius;
-			} catch (IllegalArgumentException | ClassCastException ignored) {
-				// Keep other settings when the radius has an invalid value.
+				value(SEARCH_RADIUS);
+				int radius = number(document.config(), SEARCH_RADIUS, DEFAULT_SEARCH_RADIUS, 1);
+				if (radius <= MAX_SEARCH_RADIUS) {
+					loaded++;
+					return radius;
+				}
+			} catch (IllegalArgumentException ignored) {
+				// The setting or its containing table is invalid.
 			}
-			valid = false;
+			invalid(SEARCH_RADIUS, "an integer between 1 and " + MAX_SEARCH_RADIUS);
 			return DEFAULT_SEARCH_RADIUS;
 		}
 	}

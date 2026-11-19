@@ -76,8 +76,10 @@ public class ExplorersCompass implements ModInitializer {
             }
         });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-            com.chaosthedude.explorerscompass.config.SearchCosts.load(server);
-            com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server);
+            var rules = com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server);
+            var costs = com.chaosthedude.explorerscompass.config.SearchCosts.load(server);
+            var available = com.chaosthedude.explorerscompass.util.StructureUtils.getEligibleStructureIDs(server.getOverworld());
+            ExplorersCompassConfig.logStartup(available, rules, costs);
             com.chaosthedude.explorerscompass.unlocking.UnlockReloads.tick(server);
         });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
@@ -88,6 +90,7 @@ public class ExplorersCompass implements ModInitializer {
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             EXPLORERS_COMPASS_ITEM.stopAllSearches();
             com.chaosthedude.explorerscompass.unlocking.UnlockingRules.clear();
+            com.chaosthedude.explorerscompass.config.StartupConfigReport.clear();
             com.chaosthedude.explorerscompass.unlocking.UnlockReloads.clear();
             com.chaosthedude.explorerscompass.unlocking.PartySharing.clear();
         });

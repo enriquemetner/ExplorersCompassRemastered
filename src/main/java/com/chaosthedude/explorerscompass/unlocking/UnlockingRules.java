@@ -52,6 +52,7 @@ public final class UnlockingRules {
     public record Diagnostic(Severity severity, String message) {}
 
     private final List<Diagnostic> diagnostics = new ArrayList<>();
+    private int prerequisiteCount;
 
     static List<Diagnostic> report(Severity severity) {
         return active.diagnostics(severity);
@@ -67,8 +68,6 @@ public final class UnlockingRules {
 
     private void diagnose(Severity severity, String text) {
         diagnostics.add(new Diagnostic(severity, text));
-        if (severity == Severity.ERROR) LOGGER.error(text);
-        else LOGGER.warn(text);
     }
 
     private DefaultMode defaultMode = DefaultMode.UNLOCKED;
@@ -144,9 +143,14 @@ public final class UnlockingRules {
 
     public static String definition() { return activeDefinition; }
 
-    public static int reload(MinecraftServer server) {
+    public static com.chaosthedude.explorerscompass.config.StartupConfigReport.Section reload(MinecraftServer server) {
         Path file = ExplorersCompassConfig.serverConfigFile(server, ExplorersCompassConfig.UNLOCKING_RULES);
-        return reload(file, catalog(server));
+        int count = reload(file, catalog(server));
+        var details = active.diagnostics(null);
+        String summary = count < 0 ? "Could not load unlocking_rules.json"
+                : "Successfully loaded " + count + " unlocking requirements and " + active.prerequisiteCount + " prerequisites";
+        return new com.chaosthedude.explorerscompass.config.StartupConfigReport.Section(
+                summary, count < 0 ? Severity.ERROR : null, details);
     }
 
     static int reload(Path file, Catalog catalog) {
@@ -154,7 +158,6 @@ public final class UnlockingRules {
         active = loaded.rules();
         activeDefinition = loaded.definition();
         PartySharing.changed();
-        LOGGER.info("Loaded {} structure unlocking requirements", active.rules.size());
         return loaded.fallback() ? -1 : active.rules.size();
     }
 
@@ -282,6 +285,7 @@ public final class UnlockingRules {
                         (id, line) -> required.computeIfAbsent(id, ignored -> new ArrayList<>()).add(line), warning);
                 boolean all = matchAll(document, value);
                 targets.forEach((id, lines) -> prerequisites.put(id, new UnlockPrerequisites.Gate(all, required, lines)));
+                prerequisiteCount++;
             } catch (IllegalArgumentException e) {
                 String message = e instanceof LocatedError ? e.getMessage()
                         : "line " + document.fieldLine(entries, entry.getKey()) + ": " + e.getMessage();
@@ -290,6 +294,7 @@ public final class UnlockingRules {
         }
         if (UnlockPrerequisites.reportCycles(prerequisites, message -> diagnose(Severity.ERROR, file, message))) {
             prerequisites.clear();
+            prerequisiteCount = 0;
         }
     }
 
