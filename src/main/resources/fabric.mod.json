@@ -19,10 +19,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.chaosthedude.explorerscompass.ExplorersCompass"
+      "io.github.enriquemetner.explorerscompass.ExplorersCompass"
     ],
     "client": [
-      "com.chaosthedude.explorerscompass.ExplorersCompassClient"
+      "io.github.enriquemetner.explorerscompass.ExplorersCompassClient"
     ]
   },
   "mixins": [
