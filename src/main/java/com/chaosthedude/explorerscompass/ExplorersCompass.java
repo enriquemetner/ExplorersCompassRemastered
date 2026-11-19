@@ -61,7 +61,6 @@ public class ExplorersCompass implements ModInitializer {
 		ExplorersCompassConfig.load();
         if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("openpartiesandclaims"))
             com.chaosthedude.explorerscompass.compat.opac.OpacIntegration.register();
-        com.chaosthedude.explorerscompass.network.AcknowledgeNoticePacket.register();
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTING.register(server -> {
@@ -84,6 +83,7 @@ public class ExplorersCompass implements ModInitializer {
                 LOGGER.warn("The structure whitelist matches no registered structures. The compass list will be empty.");
             }
             com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server);
+            com.chaosthedude.explorerscompass.unlocking.UnlockReloads.tick(server);
         });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             // Invalidate queued continuations before shutdown can drain the server task queue.

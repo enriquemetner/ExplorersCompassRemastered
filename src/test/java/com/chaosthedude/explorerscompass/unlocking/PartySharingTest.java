@@ -105,7 +105,7 @@ class PartySharingTest {
         assertEquals(Set.of(village), state.getStructures(bob));
         assertEquals(Set.of(fortress, village), PartySharing.build(state, parties, id -> !id.equals(stronghold)).forPlayer(bob));
 
-        state.queueReload(Set.of(alice), true, false);
+        state.queueRelock(Set.of(alice));
         assertEquals(Set.of(village), PartySharing.build(state, parties, id -> true).forPlayer(bob));
         assertTrue(state.takePendingRelock(alice));
         state.clearStructures(alice);

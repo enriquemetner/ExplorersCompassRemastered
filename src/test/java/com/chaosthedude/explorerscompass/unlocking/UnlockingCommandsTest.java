@@ -19,6 +19,8 @@ class UnlockingCommandsTest {
         UnlockingCommands.register(dispatcher);
         var root = dispatcher.getRoot().getChild("explorerscompass");
         assertSame(root, dispatcher.getRoot().getChild("ecomp").getRedirect());
+        assertNull(root.getChild("reload"));
+        assertNotNull(root.getChild("report").getCommand());
         for (String action : List.of("lock", "unlock")) {
             var player = root.getChild(action).getChild("player");
             assertNotNull(player.getChild("requirement").getChild("requirement").getCommand());

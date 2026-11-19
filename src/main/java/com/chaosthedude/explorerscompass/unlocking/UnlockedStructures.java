@@ -19,7 +19,6 @@ public final class UnlockedStructures extends PersistentState {
     private final Map<UUID, Set<Identifier>> unlockedStructures = new HashMap<>();
     private final Set<UUID> notificationsEnabled = new HashSet<>();
     private final Map<UUID, Set<Identifier>> pendingNotifications = new HashMap<>();
-    private final Set<UUID> pendingReloadNotice = new HashSet<>();
     private final Set<UUID> pendingRelock = new HashSet<>();
     private String definitionHistory;
     private final Map<UUID, Set<Identifier>> latestUnlockedStructures = new HashMap<>();
@@ -32,15 +31,6 @@ public final class UnlockedStructures extends PersistentState {
     }
     public void beginUnlockEvent(UUID player, Set<Identifier> before) { unlockEventBaselines.put(player, before); }
     public void finishUnlockEvent(UUID player) { unlockEventBaselines.remove(player); }
-
-    private long noticeSequence;
-    private final Map<UUID, Long> noticeRevisions = new HashMap<>();
-    private final Set<UUID> noticeRelocked = new HashSet<>();
-    public long noticeRevision(UUID player) { return pendingReloadNotice.contains(player) ? noticeRevisions.getOrDefault(player, 1L) : 0; }
-    public boolean noticeRelocked(UUID player) { return noticeRelocked.contains(player); }
-    public void acknowledgeNotice(UUID player, long revision) {
-        if (noticeRevision(player) == revision) takePendingReloadNotice(player);
-    }
 
     public static UnlockedStructures get(MinecraftServer server) {
         return server.getOverworld().getPersistentStateManager().getOrCreate(
@@ -58,7 +48,6 @@ public final class UnlockedStructures extends PersistentState {
     public Set<UUID> knownPlayers() {
         Set<UUID> players = new HashSet<>(unlockedStructures.keySet());
         players.addAll(notificationsEnabled);
-        players.addAll(pendingReloadNotice);
         players.addAll(pendingRelock);
         return players;
     }
@@ -73,18 +62,11 @@ public final class UnlockedStructures extends PersistentState {
         return changed;
     }
 
-    public void queueReload(Set<UUID> players, boolean relock, boolean notice) {
-        if (relock) {
-            pendingRelock.addAll(players);
+    public void queueRelock(Set<UUID> players) {
+        if (pendingRelock.addAll(players)) {
             PartySharing.changed();
+            markDirty();
         }
-        if (notice) {
-            pendingReloadNotice.addAll(players);
-            long revision = ++noticeSequence;
-            players.forEach(player -> noticeRevisions.put(player, revision));
-            if (relock) noticeRelocked.addAll(players);
-        }
-        if (relock || notice) markDirty();
     }
 
     boolean hasPendingRelock(UUID player) {
@@ -98,13 +80,6 @@ public final class UnlockedStructures extends PersistentState {
         return true;
     }
 
-    public boolean takePendingReloadNotice(UUID player) {
-        if (!pendingReloadNotice.remove(player)) return false;
-        noticeRevisions.remove(player);
-        noticeRelocked.remove(player);
-        markDirty();
-        return true;
-    }
 
     public void clearStructures(UUID player) {
         if (unlockedStructures.remove(player) != null) {
@@ -177,7 +152,6 @@ public final class UnlockedStructures extends PersistentState {
 
     public static UnlockedStructures fromNbt(NbtCompound nbt) {
         UnlockedStructures state = new UnlockedStructures();
-        state.noticeSequence = nbt.getLong("NoticeSequence");
         if (nbt.contains("DefinitionHistory", NbtElement.STRING_TYPE))
             state.definitionHistory = nbt.getString("DefinitionHistory");
         NbtList players = nbt.getList("Players", NbtElement.COMPOUND_TYPE);
@@ -200,10 +174,6 @@ public final class UnlockedStructures extends PersistentState {
             state.unlockedStructures.put(player.getUuid("UUID"), structures);
             UUID uuid = player.getUuid("UUID");
             if (player.getBoolean("NotificationsEnabled")) state.notificationsEnabled.add(uuid);
-            if (player.getBoolean("PendingReloadNotice")) state.pendingReloadNotice.add(uuid);
-            state.noticeRevisions.put(uuid, Math.max(1, player.getLong("NoticeRevision")));
-            state.noticeSequence = Math.max(state.noticeSequence, state.noticeRevisions.get(uuid));
-            if (player.getBoolean("NoticeRelocked")) state.noticeRelocked.add(uuid);
             if (player.getBoolean("PendingRelock")) state.pendingRelock.add(uuid);
             Set<Identifier> pending = new HashSet<>();
             NbtList queued = player.getList("PendingNotifications", NbtElement.STRING_TYPE);
@@ -222,7 +192,6 @@ public final class UnlockedStructures extends PersistentState {
         Set<UUID> uuids = new HashSet<>(unlockedStructures.keySet());
         uuids.addAll(notificationsEnabled);
         uuids.addAll(pendingNotifications.keySet());
-        uuids.addAll(pendingReloadNotice);
         uuids.addAll(pendingRelock);
         uuids.addAll(latestUnlockedStructures.keySet());
         uuids.forEach(uuid -> {
@@ -235,9 +204,6 @@ public final class UnlockedStructures extends PersistentState {
             latestUnlockedStructures.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> latest.add(NbtString.of(id.toString())));
             player.put("LatestUnlockedStructures", latest);
             player.putBoolean("NotificationsEnabled", notificationsEnabled.contains(uuid));
-            player.putBoolean("PendingReloadNotice", pendingReloadNotice.contains(uuid));
-            player.putLong("NoticeRevision", noticeRevisions.getOrDefault(uuid, 0L));
-            player.putBoolean("NoticeRelocked", noticeRelocked.contains(uuid));
             player.putBoolean("PendingRelock", pendingRelock.contains(uuid));
             NbtList queued = new NbtList();
             pendingNotifications.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> queued.add(NbtString.of(id.toString())));
@@ -245,7 +211,6 @@ public final class UnlockedStructures extends PersistentState {
             players.add(player);
         });
         nbt.put("Players", players);
-        nbt.putLong("NoticeSequence", noticeSequence);
         if (definitionHistory != null) nbt.putString("DefinitionHistory", definitionHistory);
         return nbt;
     }

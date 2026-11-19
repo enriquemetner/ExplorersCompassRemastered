@@ -33,10 +33,9 @@ Use the server terminal for administrative commands (without a leading slash):
 
 ```text
 op Player1
-explorerscompass reload
 ```
 
-Player1 can then edit FTB quests; Player2 can test ordinary player behavior.
+Player1 can then edit FTB quests and Player2 can test ordinary player behavior. Use `stop` and restart the server to apply edits to the compass’s unlocking requirements.
 Use separate FTB teams when testing independent quest progress. Disconnect one
 client to test offline updates. Type `stop` in the server terminal to save and quit.
 

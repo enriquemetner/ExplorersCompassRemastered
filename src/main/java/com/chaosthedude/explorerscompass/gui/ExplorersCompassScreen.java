@@ -215,27 +215,9 @@ public class ExplorersCompassScreen extends Screen {
     private boolean hiddenStructuresOpen;
     private int hiddenScroll;
     private ButtonWidget hiddenStructuresButton;
-    private long infoRevision;
-    private boolean infoRelocked;
     public void preparePartyRefresh() {
         questReturnScroll = selectionList.getScrollAmount();
         restoreQuestListAfterSync = true;
-    }
-    public void prepareRuleRefresh() {
-        questReturnScroll = selectionList.getScrollAmount();
-        restoreQuestListAfterSync = true;
-        activeRequestId = -1;
-        if (draggedScrollbar == ScrollPanel.SEARCH_FAILURE || draggedScrollbar == ScrollPanel.FOUND) draggedScrollbar = null;
-        dialog = Dialog.NONE;
-        entryFiltersId = null;
-        sortMenuOpen = false;
-        lockedRequirementsView = null;
-        lockedRequirementsId = null;
-    }
-    private Text infoMessage() {
-        return Text.literal(infoRelocked
-            ? "The unlocking requirements of Explorer's Compass have been changed.\n\nSome previously unlocked structures may be locked again."
-            : "The unlocking requirements of Explorer's Compass have been changed.\n\nAll your unlocked structures remain unlocked.");
     }
     private DisabledStructureView disabledView;
     private int listedDisabledCount;
@@ -243,7 +225,7 @@ public class ExplorersCompassScreen extends Screen {
     private Identifier selectionAfterSync;
     private Identifier excludedStructure;
     private boolean excludedByWhitelist;
-    private enum Dialog { INFO, NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_COST, MULTI_COST, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, EXCLUDED, REJECTED }
+    private enum Dialog { NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_COST, MULTI_COST, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, EXCLUDED, REJECTED }
     private Dialog dialog = Dialog.NONE;
     private LockedRequirementsView lockedRequirementsView;
     private Identifier lockedRequirementsId;
@@ -523,18 +505,6 @@ public class ExplorersCompassScreen extends Screen {
 			restoreQuestListAfterSync = false;
 			focusActiveSearchField();
 
-            long revision = com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRevision;
-            if (dialog != Dialog.EXCLUDED && revision > com.chaosthedude.explorerscompass.network.ClientPacketHandlers.shownNoticeRevision) {
-                infoRevision = revision;
-                infoRelocked = com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRelocked;
-                dialog = Dialog.INFO;
-                entryFiltersId = null;
-                sortMenuOpen = false;
-                lockedHistory.clear();
-                lockedRequirementsView = null;
-                lockedRequirementsId = null;
-                com.chaosthedude.explorerscompass.network.ClientPacketHandlers.pendingNoticeRevision = 0;
-            }
 			ExplorersCompass.synced = false;
 		}
 	}
@@ -1542,7 +1512,6 @@ public class ExplorersCompassScreen extends Screen {
 			return ButtonPress.at(mouseX, mouseY, searchFailureBackX(), actionY, buttonWidth, 20, dialog, "back", this::dismissDialog);
 		}
 		int backY = switch (dialog) {
-			case INFO -> y + dialogHeight() - 30;
 			case SEARCHING -> searchConfirmed ? searchActionsY() : Integer.MIN_VALUE;
 			case REJECTED -> y + 57;
 			case MULTI_COST -> y + dialogHeight() - 26;
@@ -2303,7 +2272,6 @@ public class ExplorersCompassScreen extends Screen {
     private int dialogHeight() {
         return switch (dialog) {
             case NOT_FOUND, INVALID_SEARCH, EXCLUDED -> Math.min(height - 10, searchFailureTextOffset() + searchFailureContentHeight() + 30);
-            case INFO -> textRenderer.wrapLines(infoMessage(), dialogWidth() - 24).size() * textRenderer.fontHeight + 68;
             case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
             case INSUFFICIENT_COST -> 3 * textRenderer.fontHeight + 16;
             case MULTI_COST -> (costExplanation().size() + 4) * textRenderer.fontHeight + 46;
@@ -2636,21 +2604,7 @@ public class ExplorersCompassScreen extends Screen {
         context.fill(0, 0, width, height, 0x88000000);
         context.fill(x - 1, y - 1, x + w + 1, y + h + 1, 0xff909090);
         context.fill(x, y, x + w, y + h, 0xff000000);
-        if (dialog == Dialog.INFO) {
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Info"), x + w / 2, y + 10, 0xFFAA00);
-            int lineY = y + 30;
-            for (var line : textRenderer.wrapLines(infoMessage(), w - 24)) {
-                context.drawTextWithShadow(textRenderer, line, x + 12, lineY, 0xFFFFFF);
-                lineY += textRenderer.fontHeight;
-            }
-            drawDialogButton(context, "Okay", x + (w - 70) / 2, y + h - 30, 70, mouseX, mouseY);
-            if (infoRevision > 0 && client.getNetworkHandler() != null) {
-                ClientPlayNetworking.send(com.chaosthedude.explorerscompass.network.AcknowledgeNoticePacket.ID,
-                    new com.chaosthedude.explorerscompass.network.AcknowledgeNoticePacket(infoRevision));
-                com.chaosthedude.explorerscompass.network.ClientPacketHandlers.shownNoticeRevision = infoRevision;
-                infoRevision = 0;
-            }
-        } else if (dialog == Dialog.SEARCHING) {
+        if (dialog == Dialog.SEARCHING) {
             int frame = (int)((System.currentTimeMillis() - dialogStarted) / 31L % 32L);
             Identifier texture = CompassTextures.frame(frame);
             context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);

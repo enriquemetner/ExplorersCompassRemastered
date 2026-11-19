@@ -18,12 +18,10 @@ class StartupRulesTest {
         state = UnlockedStructures.fromNbt(state.writeNbt(new NbtCompound()));
         UnlockReloads.prepareStartup(state, "rules-and-ftb", true);
         assertFalse(state.takePendingRelock(player));
-        assertFalse(state.takePendingReloadNotice(player));
         assertEquals(Set.of(structure), state.getStructures(player));
         UnlockReloads.prepareStartup(state, "changed-rules-or-ftb", true);
         state = UnlockedStructures.fromNbt(state.writeNbt(new NbtCompound()));
         assertTrue(state.takePendingRelock(player));
-        assertTrue(state.takePendingReloadNotice(player));
     }
 
     @Test void changedDefinitionsRespectDisabledRelocking() {
@@ -33,6 +31,5 @@ class StartupRulesTest {
         UnlockReloads.prepareStartup(state, "original", false);
         UnlockReloads.prepareStartup(state, "changed", false);
         assertFalse(state.takePendingRelock(player));
-        assertTrue(state.takePendingReloadNotice(player));
     }
 }

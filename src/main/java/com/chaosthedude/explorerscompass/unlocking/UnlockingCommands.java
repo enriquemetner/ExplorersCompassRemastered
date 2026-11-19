@@ -53,15 +53,6 @@ public final class UnlockingCommands {
 
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         var command = dispatcher.register(literal("explorerscompass").requires(source -> source.hasPermissionLevel(2))
-                .then(literal("reload").executes(context -> {
-                    int count = UnlockingRules.reload(context.getSource().getServer());
-                    UnlockReloads.commandReload(context.getSource().getServer());
-                    context.getSource().sendFeedback(() -> Text.literal(com.chaosthedude.explorerscompass.config.ExplorersCompassConfig.relockOnReload
-                            ? "Reloaded Explorer's Compass unlocking rules from file and relocked all structures."
-                            : "Reloaded Explorer's Compass unlocking rules from file."), false);
-                    context.getSource().sendFeedback(() -> Text.literal("Note: reloading Explorer's Compass data is a developer convenience tool and not recommended for use on live servers.").formatted(Formatting.GOLD), false);
-                    return Math.max(0, count);
-                }))
                 .then(literal("report").executes(c -> report(c.getSource(), null))
                         .then(literal("error").executes(c -> report(c.getSource(), UnlockingRules.Severity.ERROR)))
                         .then(literal("warning").executes(c -> report(c.getSource(), UnlockingRules.Severity.WARNING))))

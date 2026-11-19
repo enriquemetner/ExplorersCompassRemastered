@@ -27,7 +27,7 @@ final class LockedRequirementsView {
     private final String title;
     private record Row(OrderedText text, int indent, Boolean ticked, boolean heading, boolean bullet,
                        Text tooltipTitle, Text tooltipDescription, Long questId, RequirementNode node) {}
-    private record QuestPopup(long questId, boolean invisibleUntilCompleted) {}
+    private record QuestPopup(long questId, boolean invisibleUntilCompleted, boolean missing) {}
     private record PopupLayout(int x, int y, int width, int height, int buttonY, int openX, int buttonWidth,
                                List<OrderedText> title, List<OrderedText> message) {
         int backX() { return openX + buttonWidth + 8; }
@@ -182,11 +182,12 @@ final class LockedRequirementsView {
             return ButtonPress.at(mouseX, mouseY, backX(), backTop(), buttonWidth(), 20, this, "back", back);
         }
         PopupLayout p = popupLayout(screenWidth, screenHeight);
-        if (ButtonPress.contains(mouseX, mouseY, p.openX, p.buttonY, p.buttonWidth, 20)) {
+        if (!questPopup.missing && ButtonPress.contains(mouseX, mouseY, p.openX, p.buttonY, p.buttonWidth, 20)) {
             return new ButtonPress(questPopup, "open", () -> {
                 long questId = questPopup.questId;
                 closeQuestPopup();
                 if (FtbQuestNavigation.openChapter(questId)) onQuestBookOpened.run();
+                else questPopup = new QuestPopup(questId, false, true);
             });
         }
         if (ButtonPress.contains(mouseX, mouseY, p.closeX(), p.buttonY, p.buttonWidth, 20))
@@ -217,11 +218,13 @@ final class LockedRequirementsView {
         }
         if (questRow != null && questRow.questId != null) {
             FtbQuestNavigation.QuestInfo info = FtbQuestNavigation.info(questRow.questId);
-            if (info != null) {
-                if (info.openable()) {
-                    if (FtbQuestNavigation.openQuest(questRow.questId)) onQuestBookOpened.run();
-                }
-                else questPopup = new QuestPopup(questRow.questId, info.invisibleUntilCompleted());
+            if (info == null) {
+                questPopup = new QuestPopup(questRow.questId, false, true);
+            } else if (info.openable()) {
+                if (FtbQuestNavigation.openQuest(questRow.questId)) onQuestBookOpened.run();
+                else questPopup = new QuestPopup(questRow.questId, false, true);
+            } else {
+                questPopup = new QuestPopup(questRow.questId, info.invisibleUntilCompleted(), false);
             }
             return false;
         }
@@ -240,7 +243,7 @@ final class LockedRequirementsView {
     }
 
     private boolean isClickable(RequirementNode node) {
-        return node.questId() != null ? FtbQuestNavigation.info(node.questId()) != null : canOpenLink.test(node);
+        return node.questId() != null || canOpenLink.test(node);
     }
 
     private Row rowAt(double mouseX, double mouseY) {
@@ -258,17 +261,22 @@ final class LockedRequirementsView {
         int popupWidth = Math.max(40, Math.min(WINDOW_WIDTH, screenWidth - 24));
         int textWidth = Math.max(1, popupWidth - 24);
         List<OrderedText> title = renderer.wrapLines(Text.literal("Quest Unavailable"), textWidth);
-        Text first = Text.translatable(questPopup.invisibleUntilCompleted
+        Text first = Text.translatable(questPopup.missing
+                ? "gui.explorerscompass.quest_missing" : questPopup.invisibleUntilCompleted
                 ? "gui.explorerscompass.quest_hidden_until_complete"
                 : "gui.explorerscompass.quest_hidden_progress");
         List<OrderedText> message = new ArrayList<>(renderer.wrapLines(first, textWidth));
-        message.addAll(renderer.wrapLines(Text.translatable("gui.explorerscompass.open_quest_chapter"), textWidth));
+        if (!questPopup.missing) {
+            message.addAll(renderer.wrapLines(Text.translatable("gui.explorerscompass.open_quest_chapter"), textWidth));
+        }
         int buttonY = 18 + title.size() * lineHeight + 8 + message.size() * lineHeight + 12;
         int popupHeight = buttonY + 30;
         int popupX = (screenWidth - popupWidth) / 2;
         int popupY = (screenHeight - popupHeight) / 2;
         int buttonWidth = Math.min(70, (popupWidth - 24) / 3);
-        int openX = popupX + (popupWidth - 3 * buttonWidth - 16) / 2;
+        int openX = questPopup.missing
+                ? popupX + (popupWidth - 2 * buttonWidth - 8) / 2 - buttonWidth - 8
+                : popupX + (popupWidth - 3 * buttonWidth - 16) / 2;
         return new PopupLayout(popupX, popupY, popupWidth, popupHeight, popupY + buttonY,
                 openX, buttonWidth, title, message);
     }
@@ -290,7 +298,9 @@ final class LockedRequirementsView {
             context.drawText(renderer, line, p.x + 12, rowY, 0xffffff, true);
             rowY += lineHeight;
         }
-        renderPopupButton(context, p.openX, p.buttonY, p.buttonWidth, Text.translatable("gui.explorerscompass.open"), mouseX, mouseY);
+        if (!questPopup.missing) {
+            renderPopupButton(context, p.openX, p.buttonY, p.buttonWidth, Text.translatable("gui.explorerscompass.open"), mouseX, mouseY);
+        }
         renderPopupButton(context, p.backX(), p.buttonY, p.buttonWidth, Text.literal("Back"), mouseX, mouseY);
         renderPopupButton(context, p.closeX(), p.buttonY, p.buttonWidth, Text.literal("Close"), mouseX, mouseY);
         context.getMatrices().pop();

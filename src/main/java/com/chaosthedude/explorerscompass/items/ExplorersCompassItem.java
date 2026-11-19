@@ -106,10 +106,7 @@ public class ExplorersCompassItem extends Item {
             added = copiedVisits ? rules.evaluateSilently(player, transfer.unlocks())
                     : state.add(player.getUuid(), rules.applyPrerequisites(transfer.unlocks(), state.getStructures(player.getUuid())));
         }
-        if (added > 0) {
-            UnlockNotifications.newlyAdded(player, added);
-            com.chaosthedude.explorerscompass.network.RulesChangedPacket.send(player);
-        }
+        if (added > 0) UnlockNotifications.newlyAdded(player, added);
     }
 
     @Override public void inventoryTick(ItemStack stack, World world, net.minecraft.entity.Entity entity, int slot, boolean selected) {
@@ -331,8 +328,6 @@ public class ExplorersCompassItem extends Item {
 				hasInfiniteXp,
 				allowedStructures, dimensionsForAllowedStructures, structureIDsToSetIDs,
 				locked, party,
-                com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRevision(player.getUuid()),
-                com.chaosthedude.explorerscompass.unlocking.UnlockedStructures.get(player.getServer()).noticeRelocked(player.getUuid()),
                 getTrackedStructure(player),
                 UnlockedStructures.get(player.getServer()).latestUnlocked(player.getUuid()),
                 UnlockingRules.get().hasUnlockingRequirements(player),

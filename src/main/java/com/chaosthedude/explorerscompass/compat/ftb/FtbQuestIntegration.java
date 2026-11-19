@@ -46,13 +46,10 @@ public final class FtbQuestIntegration {
                 UnlockStructuresReward::new, () -> Icon.getIcon(CompassTextures.stillIcon()));
         type.setDisplayName(Text.translatable("ftb_reward.explorerscompass.unlock_structures"));
         FtbVisitStructuresTask.register();
-        FtbStructureRewards.register(FtbQuestIntegration::snapshot);
-        FtbStructureRewards.registerDefinitions(FtbQuestIntegration::definition);
+        FtbStructureRewards.register(FtbQuestIntegration::capture);
     }
 
-    private static String definition() {
-        ServerQuestFile file = ServerQuestFile.INSTANCE;
-        if (file == null || file.isLoading()) return null;
+    private static String definition(ServerQuestFile file) {
         java.util.SortedMap<Long, String> relevant = new java.util.TreeMap<>();
         file.forAllQuests(quest -> {
             boolean used = quest.getTasks().stream().anyMatch(task -> task instanceof FtbVisitStructuresTask)
@@ -76,26 +73,34 @@ public final class FtbQuestIntegration {
         return relevant.toString();
     }
 
-    private static FtbStructureRewards.Snapshot snapshot(ServerPlayerEntity player) {
+    private static FtbStructureRewards.Session capture(net.minecraft.server.MinecraftServer server) {
         ServerQuestFile file = ServerQuestFile.INSTANCE;
-        if (file == null || file.isLoading()) return FtbStructureRewards.Snapshot.EMPTY;
+        if (file == null || file.isLoading() || file.server != server) return null;
         Map<Identifier, LinkedHashMap<Long, FtbStructureRewards.Quest>> quests = new LinkedHashMap<>();
         Map<Long, Set<Identifier>> targets = new LinkedHashMap<>();
-        Set<Long> claimedRewardIds = new LinkedHashSet<>();
-        TeamData team = TeamData.get(player);
+        List<UnlockStructuresReward> rewards = new ArrayList<>();
         file.forAllQuests(quest -> {
             for (Reward reward : quest.getRewards()) {
                 if (!(reward instanceof UnlockStructuresReward unlock)) continue;
-                Set<Identifier> resolved = unlock.resolve(player);
+                Set<Identifier> resolved = Set.copyOf(unlock.resolve(server));
                 targets.put(unlock.getId(), resolved);
-                if (team.isRewardClaimed(player.getUuid(), unlock)) claimedRewardIds.add(unlock.getId());
+                rewards.add(unlock);
                 for (Identifier id : resolved) quests.computeIfAbsent(id, ignored -> new LinkedHashMap<>())
                         .putIfAbsent(quest.getId(), new FtbStructureRewards.Quest(quest.getId(), serverQuestTitle(quest)));
             }
         });
         Map<Identifier, List<FtbStructureRewards.Quest>> entries = new LinkedHashMap<>();
         quests.forEach((id, named) -> entries.put(id, List.copyOf(named.values())));
-        return new FtbStructureRewards.Snapshot(entries, targets, claimedRewardIds);
+        var frozenQuests = Map.copyOf(entries);
+        var frozenTargets = Map.copyOf(targets);
+        return new FtbStructureRewards.Session(definition(file), player -> {
+            TeamData team = TeamData.get(player);
+            Set<Long> claimedRewardIds = new LinkedHashSet<>();
+            for (UnlockStructuresReward reward : rewards) {
+                if (team.isRewardClaimed(player.getUuid(), reward)) claimedRewardIds.add(reward.getId());
+            }
+            return new FtbStructureRewards.Snapshot(frozenQuests, frozenTargets, Set.copyOf(claimedRewardIds));
+        });
     }
 
     // FTB's getTitle/getMutableTitle are stripped from dedicated servers.
@@ -119,12 +124,8 @@ public final class FtbQuestIntegration {
         public UnlockStructuresReward(long id, Quest quest) { super(id, quest); }
         @Override public RewardType getType() { return type; }
 
-        private Set<Identifier> resolve(ServerPlayerEntity player) {
-            return resolve(player.getServer());
-        }
-
         @Override public void claim(ServerPlayerEntity player, boolean notify) {
-            FtbStructureRewards.claimed(player, resolve(player));
+            FtbStructureRewards.claimed(player, getId());
         }
 
         @Override public void writeData(NbtCompound nbt) {

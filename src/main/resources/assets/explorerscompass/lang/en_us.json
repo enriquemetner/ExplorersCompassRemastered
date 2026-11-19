@@ -24,6 +24,7 @@
   "ftb_task.explorerscompass.visit_all": "Visit %s of:",
   "gui.explorerscompass.hidden_quest_title": "[Hidden Quest Title]",
   "gui.explorerscompass.open_quest_tooltip": "Click to open in Quest Book",
+  "gui.explorerscompass.quest_missing": "This quest is no longer available. Compass requirements update when the world restarts.",
   "gui.explorerscompass.quest_hidden_progress": "This quest can't be opened until you progress further.",
   "gui.explorerscompass.quest_hidden_until_complete": "This quest is hidden until complete.",
   "gui.explorerscompass.open_quest_chapter": "Open Quest Chapter instead?",

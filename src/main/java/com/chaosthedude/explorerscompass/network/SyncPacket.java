@@ -18,7 +18,7 @@ public class SyncPacket extends PacketByteBuf {
 
 	public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "sync");
 
- public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, Map<Identifier, RequirementNode> partyRequirements, long noticeRevision, boolean noticeRelocked, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter, List<Identifier> excludedIds, boolean whitelistActive) {
+ public SyncPacket(boolean canTeleport, boolean canExcludeVisited, boolean infiniteXp, List<Identifier> allowedStructureIDs, ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs, Map<Identifier, Identifier> structureIDsToSetIDs, Map<Identifier, RequirementNode> lockedRequirements, Map<Identifier, RequirementNode> partyRequirements, Identifier trackedStructureId, java.util.Set<Identifier> latestUnlocked, boolean showNewlyUnlockedFilter, List<Identifier> excludedIds, boolean whitelistActive) {
 		super(Unpooled.buffer());
 		writeBoolean(canTeleport);
 		writeBoolean(canExcludeVisited);
@@ -39,8 +39,6 @@ public class SyncPacket extends PacketByteBuf {
         latestUnlocked.stream().sorted().forEach(this::writeIdentifier);
         writeBoolean(trackedStructureId != null);
         if (trackedStructureId != null) writeIdentifier(trackedStructureId);
-        writeLong(noticeRevision);
-        writeBoolean(noticeRelocked);
         // Source/set rules often share a tree across many structures; send each tree once.
         var uniqueDescriptions = new LinkedHashSet<>(lockedRequirements.values());
         uniqueDescriptions.addAll(partyRequirements.values());

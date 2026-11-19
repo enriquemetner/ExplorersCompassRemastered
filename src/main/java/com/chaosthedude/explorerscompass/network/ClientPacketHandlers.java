@@ -24,8 +24,6 @@ import net.minecraft.util.Identifier;
 @Environment(EnvType.CLIENT)
 public final class ClientPacketHandlers {
     private ClientPacketHandlers() {}
-    public static long pendingNoticeRevision;
-    public static long shownNoticeRevision;
     public static Identifier trackedStructureId;
     public static boolean showNewlyUnlockedFilter;
     public static boolean whitelistActive;
@@ -34,7 +32,6 @@ public final class ClientPacketHandlers {
     public static java.util.Set<Identifier> excludedStructures = java.util.Set.of();
     public static Map<Identifier, RequirementNode> partyRequirements = Map.of();
     public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
-    public static boolean pendingNoticeRelocked;
 
     public static void applyCurrentStructure(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         var request = buf.readUuid();
@@ -66,15 +63,6 @@ public final class ClientPacketHandlers {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
                 screen.preparePartyRefresh();
                 net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(RefreshCompassPacket.ID, new RefreshCompassPacket(false));
-            }
-        });
-    }
-
-    public static void applyRulesChanged(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
-        client.execute(() -> {
-            if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.prepareRuleRefresh();
-                net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking.send(RefreshCompassPacket.ID, new RefreshCompassPacket());
             }
         });
     }
@@ -175,8 +163,6 @@ public final class ClientPacketHandlers {
         java.util.Set<Identifier> latest = new java.util.HashSet<>();
         for (int i = 0; i < latestCount; i++) latest.add(buf.readIdentifier());
         Identifier tracked = buf.readBoolean() ? buf.readIdentifier() : null;
-        long noticeRevision = buf.readLong();
-        boolean noticeRelocked = buf.readBoolean();
         List<RequirementNode> descriptions = new ArrayList<>();
         int descriptionCount = buf.readInt();
         for (int i = 0; i < descriptionCount; i++) descriptions.add(RequirementNode.read(buf));
@@ -204,8 +190,6 @@ public final class ClientPacketHandlers {
                 FilterSelections.clearNewlyUnlocked();
                 if (client.currentScreen instanceof ExplorersCompassScreen screen) screen.showNormalResults();
             }
-            pendingNoticeRevision = noticeRevision;
-            pendingNoticeRelocked = noticeRelocked;
             ExplorersCompass.canTeleport = canTeleport;
             ExplorersCompass.canExcludeVisited = canExcludeVisited;
             ExplorersCompass.infiniteXp = infiniteXp;

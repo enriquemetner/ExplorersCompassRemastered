@@ -89,24 +89,6 @@ class UnlockingRulesTest {
                 java.util.Map.of(), java.util.Map.of(1L, Set.of()), Set.of())));
     }
 
-    @Test void updateNoticesCollapsePersistAndIgnoreStaleAcknowledgments() {
-        UUID player = UUID.randomUUID();
-        UnlockedStructures state = new UnlockedStructures();
-        state.queueReload(Set.of(player), true, true);
-        long oldRevision = state.noticeRevision(player);
-        state.takePendingRelock(player);
-        state.queueReload(Set.of(player), false, true);
-        long newest = state.noticeRevision(player);
-        assertTrue(newest > oldRevision);
-        state = UnlockedStructures.fromNbt(state.writeNbt(new NbtCompound()));
-        assertTrue(state.noticeRelocked(player));
-        state.acknowledgeNotice(player, oldRevision);
-        assertEquals(newest, state.noticeRevision(player));
-        state.acknowledgeNotice(player, newest);
-        assertEquals(0, state.noticeRevision(player));
-        assertFalse(state.noticeRelocked(player));
-    }
-
     @Test void reloadHistoryAndOfflineWorkSurviveRestart() {
         UUID player = UUID.randomUUID();
         UnlockedStructures saved = new UnlockedStructures();
@@ -115,13 +97,11 @@ class UnlockingRulesTest {
         assertFalse(saved.updateDefinitionHistory("first"));
         assertFalse(saved.updateDefinitionHistory("first"));
         assertTrue(saved.updateDefinitionHistory("second"));
-        saved.queueReload(saved.knownPlayers(), true, true);
+        saved.queueRelock(saved.knownPlayers());
         saved = UnlockedStructures.fromNbt(saved.writeNbt(new NbtCompound()));
         assertEquals("second", saved.definitionHistory());
         assertTrue(saved.takePendingRelock(player));
         assertFalse(saved.takePendingRelock(player));
-        assertTrue(saved.takePendingReloadNotice(player));
-        assertFalse(saved.takePendingReloadNotice(player));
         saved.clearStructures(player);
         assertTrue(saved.getStructures(player).isEmpty());
         assertTrue(saved.notificationsEnabled(player));

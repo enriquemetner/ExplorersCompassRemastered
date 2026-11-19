@@ -66,7 +66,6 @@ Permission level 2 is required. `<player>` accepts an online name, a name in `us
 
 /explorerscompass clearVisited <player> structure <id>
 /explorerscompass clearVisited <player> all
-/explorerscompass reload
 /explorerscompass report [error|warning]
 ```
 
@@ -74,7 +73,7 @@ Permission level 2 is required. `<player>` accepts an online name, a name in `us
 
 `clearVisited` removes every visited instance of the chosen type, or the player's entire history. It does not relock anything. A player standing inside a structure can have that visit recorded again at the next normal check. Use Minecraft's `/advancement revoke` to reset advancements separately.
 
-The reload command rereads the file. If the whole file is rejected, the server applies the generated default of `unlocked` with no explicit rules and leaves the file intact. FTB Quest rewards still take precedence.
+Explorer’s Compass reads server settings and unlocking definitions when the world starts. After changing server files or FTB quest definitions, close and reopen a singleplayer world or restart a dedicated server. The `unlocking.relockOnReload` setting only applies when definitions change between world sessions. If the whole file is rejected, the server applies the generated default of `unlocked` with no explicit rules and leaves the file intact. FTB Quest rewards still take precedence.
 
 The file must be strict JSON with an object at the root. An invalid `default`, a non-object `requirements` value, the legacy `rules` field, malformed JSON, or an unreadable file rejects the whole file. An invalid individual requirement is skipped. Its targets use another valid requirement or the configured default. Errors include the relevant source line when available. When valid rules overlap, a warning lists the contributing selector lines and the last matching rule wins.
 

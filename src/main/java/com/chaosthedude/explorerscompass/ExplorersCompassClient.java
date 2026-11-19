@@ -8,7 +8,6 @@ import com.chaosthedude.explorerscompass.network.SearchResultPacket;
 import com.chaosthedude.explorerscompass.network.SearchProgressPacket;
 import com.chaosthedude.explorerscompass.network.UnlockToastPacket;
 import com.chaosthedude.explorerscompass.network.CompassSettingsPacket;
-import com.chaosthedude.explorerscompass.network.RulesChangedPacket;
 
 import com.chaosthedude.explorerscompass.config.SearchCosts;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
@@ -51,15 +50,12 @@ public class ExplorersCompassClient implements ClientModInitializer {
         ClientPlayNetworking.registerGlobalReceiver(com.chaosthedude.explorerscompass.network.SearchAvailabilityPacket.ID, ClientPacketHandlers::applySearchAvailability);
 		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, ClientPacketHandlers::applyUnlockToast);
 		ClientPlayNetworking.registerGlobalReceiver(CompassSettingsPacket.ID, ClientPacketHandlers::applyCompassSettings);
-		ClientPlayNetworking.registerGlobalReceiver(RulesChangedPacket.ID, ClientPacketHandlers::applyRulesChanged);
         ClientPlayNetworking.registerGlobalReceiver(com.chaosthedude.explorerscompass.network.PartyRefreshPacket.ID, ClientPacketHandlers::applyPartyRefresh);
         // Minecraft can discard queued client work during disconnect.
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ExplorersCompassScreen.clearWorldSearchState());
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             com.chaosthedude.explorerscompass.config.SearchCosts.clearRemote();
             needle.clear();
-            ClientPacketHandlers.shownNoticeRevision = 0;
-            ClientPacketHandlers.pendingNoticeRevision = 0;
             ClientPacketHandlers.whitelistActive = false;
             ClientPacketHandlers.showNetherEquivalent = false;
             ClientPacketHandlers.useClassicCompass = false;

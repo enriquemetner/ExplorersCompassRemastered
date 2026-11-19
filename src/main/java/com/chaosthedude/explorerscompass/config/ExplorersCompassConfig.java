@@ -28,6 +28,8 @@ public class ExplorersCompassConfig {
 	public static final String SEARCH_COSTS = "server/search_costs.json";
 	public static final String UNLOCKING_RULES = "server/unlocking_rules.json";
 	public static final String DEFAULT_UNLOCKING_RULES = "{\n  \"default\": \"unlocked\",\n  \"requirements\": {}\n}\n";
+	private static final String RELOCK_COMMENT =
+			"Relock player structures at world startup when unlocking definitions changed, then restore satisfied requirements.";
 	private static final String SERVER_SETTINGS = "server/settings.toml";
 	private static final String CLIENT_SETTINGS = "client/settings.toml";
 	private static final String WHITELIST = "server/whitelist.toml";
@@ -198,6 +200,7 @@ public class ExplorersCompassConfig {
 				|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
                     || common.get(SEARCH_SAVED_STRUCTURES) == null || common.get("compass.showNetherEquivalent") == null
                     || common.get("compass.useClassicCompass") == null
+                    || !RELOCK_COMMENT.equals(String.valueOf(common.getComment("unlocking.relockOnReload")).strip())
                     || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 			common.remove("permissions.allowTeleport");
 			common.remove("compass.compassDurability");
@@ -362,7 +365,7 @@ public class ExplorersCompassConfig {
 		put(config, SEARCH_SAVED_STRUCTURES, findOldStructures,
                 "Find existing structures saved under older world generation rules. Searches can be much slower in explored areas. Usually only needed if world or structure generation changed significantly through mods or datapacks after those chunks were generated.");
 		put(config, SEARCH_RADIUS, maxSearchRadius, "Maximum horizontal search radius in blocks (1 to 50000). Requires a restart to change.");
-		put(config, "unlocking.relockOnReload", relockOnReload, "Relock all player structures when unlocking definitions reload, then restore satisfied requirements. Requires a restart to change.");
+		put(config, "unlocking.relockOnReload", relockOnReload, RELOCK_COMMENT);
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
 		put(config, "compass.displayDistance", displayDistance, "Show distance to located structures.");
 		put(config, "compass.showNetherEquivalent", showNetherEquivalent, "Point to equivalent coordinates when tracking a structure across the Overworld and Nether.");
