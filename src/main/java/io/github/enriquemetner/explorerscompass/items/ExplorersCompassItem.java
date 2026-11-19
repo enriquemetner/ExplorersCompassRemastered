@@ -413,6 +413,8 @@ public class ExplorersCompassItem extends Item {
         session.workers.createWorkers(world, player, stack, generation, structures, firstId, excludeVisited, creativeBypass, pos);
         session.workers.setRadiusLimit(session.radiusLimit);
         if (session.workers.start()) {
+            Hand hand = player.getMainHandStack() == stack ? Hand.MAIN_HAND : Hand.OFF_HAND;
+            player.swingHand(hand, true);
             SearchProgressPacket.send(player, requestId, 0);
         } else {
             fail(player, stack, firstId, 0, 0);

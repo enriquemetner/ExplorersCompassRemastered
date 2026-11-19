@@ -42,7 +42,7 @@ public class HeldItemRendererMixin {
 	}
 
 	@Inject(method = "updateHeldItems()V", at = @At("HEAD"))
-	private void keepCompassRaisedOnSearchEnd(CallbackInfo ci) {
+	private void keepCompassRaisedOnStateSync(CallbackInfo ci) {
 		ItemStack newMainStack = client.player.getMainHandStack();
 		if (skipEquipMotion(mainHand, newMainStack)) mainHand = newMainStack;
 
@@ -53,6 +53,7 @@ public class HeldItemRendererMixin {
 	private static boolean skipEquipMotion(ItemStack previous, ItemStack current) {
 		if (!(previous.getItem() instanceof ExplorersCompassItem compass) || !current.isOf(compass)) return false;
 		CompassState previousState = compass.getState(previous);
-		return previousState == CompassState.SEARCHING || previousState == compass.getState(current);
+		// Search start uses a server-side hand swing. Only clearing a target needs equip motion here.
+		return previousState != CompassState.FOUND || compass.getState(current) != CompassState.INACTIVE;
 	}
 }
