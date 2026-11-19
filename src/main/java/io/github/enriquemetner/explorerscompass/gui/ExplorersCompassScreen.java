@@ -629,13 +629,17 @@ public class ExplorersCompassScreen extends Screen {
             int textY = y + (getHeight() - font.fontHeight) / 2;
             context.drawTextWithShadow(font, "• ", x, textY, 0xffffff);
             int iconX = x + font.getWidth("• ");
-            float scale = iconSize / 16.0f;
-            var matrices = context.getMatrices();
-            matrices.push();
-            matrices.translate(iconX, textY, 0);
-            matrices.scale(scale, scale, 1);
-            context.drawItem(item, 0, 0);
-            matrices.pop();
+            if (item.isOf(ExplorersCompass.EXPLORERS_COMPASS_ITEM)) {
+                CompassTextures.drawStillIcon(context, iconX, textY, iconSize);
+            } else {
+                float scale = iconSize / 16.0f;
+                var matrices = context.getMatrices();
+                matrices.push();
+                matrices.translate(iconX, textY, 0);
+                matrices.scale(scale, scale, 1);
+                context.drawItem(item, 0, 0);
+                matrices.pop();
+            }
             int labelX = iconX + iconSize + 2;
             context.drawTextWithShadow(font, label, labelX, textY, 0xffffff);
             int rateX = labelX + font.getWidth(label);
@@ -3235,9 +3239,7 @@ public class ExplorersCompassScreen extends Screen {
 		clearFiltersTopButton.setY(40);
 		excludeVisitedButton.setX(filterLeft());
 		excludeVisitedButton.setY(40);
-		excludeLockedButton.setX(filterLeft() + (ExplorersCompass.canExcludeVisited ? excludeVisitedButton.getWidth() + 5 : 0));
 		excludeLockedButton.setY(40);
-        newlyUnlockedButton.setX(excludeLockedButton.getX() + excludeLockedButton.getWidth() + 5);
         newlyUnlockedButton.setY(40);
 		if (searchTextField != null) {
 
@@ -3276,7 +3278,10 @@ public class ExplorersCompassScreen extends Screen {
 		teleportButton.visible = isStructureView() && showTeleportButton();
 		clearFiltersTopButton.visible = filtersOpen;
 		excludeVisitedButton.visible = filtersOpen && ExplorersCompass.canExcludeVisited;
-		excludeLockedButton.visible = filtersOpen;
+		excludeLockedButton.visible = filtersOpen && !ExplorersCompass.lockedRequirements.isEmpty();
+		int excludeLockedX = filterLeft() + (excludeVisitedButton.visible ? excludeVisitedButton.getWidth() + 5 : 0);
+		excludeLockedButton.setX(excludeLockedX);
+		newlyUnlockedButton.setX(excludeLockedX + (excludeLockedButton.visible ? excludeLockedButton.getWidth() + 5 : 0));
         newlyUnlockedButton.visible = filtersOpen && io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers.showNewlyUnlockedFilter;
 		backButton.visible = filtersOpen || settingsOpen || hiddenStructuresOpen;
 		restoreDefaultsButton.visible = settingsOpen;

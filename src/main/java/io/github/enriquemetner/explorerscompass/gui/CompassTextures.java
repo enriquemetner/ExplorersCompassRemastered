@@ -2,17 +2,23 @@ package io.github.enriquemetner.explorerscompass.gui;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.Identifier;
 
 import java.util.Locale;
 
 public final class CompassTextures {
+    private static final Identifier MOD_ICON = new Identifier(ExplorersCompass.MODID, "icon.png");
     private static final Identifier CLASSIC_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/classic_ftb_reward_compass.png");
 
     private CompassTextures() {}
 
     public static Identifier stillIcon() {
-        return ClientPacketHandlers.useClassicCompass ? CLASSIC_ICON : ExplorersCompass.STILL_COMPASS_ICON;
+        return ClientPacketHandlers.useClassicCompass ? CLASSIC_ICON : MOD_ICON;
+    }
+
+    public static void drawStillIcon(DrawContext context, int x, int y, int size) {
+        context.drawTexture(stillIcon(), x, y, size, size, 0, 0, 16, 16, 16, 16);
     }
 
     public static Identifier frame(int index) {

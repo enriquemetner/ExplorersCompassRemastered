@@ -180,6 +180,7 @@ public final class ClientPacketHandlers {
         client.execute(() -> {
             whitelistActive = whitelist;
             ExplorersCompass.lockedRequirements = lockedRequirements;
+            if (lockedRequirements.isEmpty()) FilterSelections.clearExcludeLocked();
             partyRequirements = shared;
             excludedStructures = java.util.Set.copyOf(excluded);
             ExplorersCompass.synced = true;

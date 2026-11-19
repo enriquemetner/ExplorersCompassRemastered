@@ -35,7 +35,7 @@ public final class FilterSelections {
 		sets.clear();
 		currentSelected = false;
 		excludeVisited = false;
-		excludeLocked = false;
+		clearExcludeLocked();
         newlyUnlocked = false;
 	}
 
@@ -53,6 +53,10 @@ public final class FilterSelections {
 
 	public static boolean excludeLocked() {
 		return excludeLocked;
+	}
+
+	public static void clearExcludeLocked() {
+		excludeLocked = false;
 	}
 
 	public static void toggleExcludeLocked() {
