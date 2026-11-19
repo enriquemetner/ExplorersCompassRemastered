@@ -41,15 +41,15 @@ record StructureSearchQuery(String source, String dimension, String set, String 
                         if (source != null) return null;
                         source = value;
                     }
-                    case '$' -> {
+                    case '%' -> {
                         if (dimension != null) return null;
                         dimension = value;
                     }
-                    case '%' -> {
+                    case '&' -> {
                         if (set != null) return null;
                         set = value;
                     }
-                    case '&' -> {
+                    case '$' -> {
                         if (structure != null) return null;
                         structure = value;
                     }
@@ -68,7 +68,7 @@ record StructureSearchQuery(String source, String dimension, String set, String 
 
     static boolean matchesFilter(String query, String name, String id) {
         query = query.strip().toLowerCase(Locale.ROOT);
-        if (query.startsWith("&")) {
+        if (query.startsWith("$")) {
             return id != null && id.toLowerCase(Locale.ROOT).contains(query.substring(1));
         }
         return name.toLowerCase(Locale.ROOT).contains(query);
