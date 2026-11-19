@@ -2032,6 +2032,7 @@ public class ExplorersCompassScreen extends Screen {
     public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, Set<Identifier> validBiomes, Boolean visited, RequirementNode requirements, int balance) {
         if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
         if (result == SearchResultPacket.FOUND) {
+            client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.ITEM_LODESTONE_COMPASS_LOCK, 1.0F));
             if (ExplorersCompassConfig.closeOnFound) {
                 successfulClose = true;
                 client.setScreen(null);
