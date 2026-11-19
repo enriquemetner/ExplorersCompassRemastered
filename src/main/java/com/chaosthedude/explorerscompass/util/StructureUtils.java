@@ -108,8 +108,7 @@ public class StructureUtils {
 		boolean whitelist = !ExplorersCompassConfig.structureWhitelist.isEmpty();
 		List<String> patterns = whitelist ? ExplorersCompassConfig.structureWhitelist : ExplorersCompassConfig.structureBlacklist;
 		for (String structureKey : patterns) {
-			String pattern = structureKey.contains(":") ? structureKey : "minecraft:" + structureKey;
-			if (id.toString().matches(convertToRegex(pattern))) {
+			if (structureIdPattern(structureKey).matcher(id.toString()).matches()) {
 				return !whitelist;
 			}
 		}
@@ -212,13 +211,14 @@ public class StructureUtils {
 		return world.getRegistryManager().get(RegistryKeys.STRUCTURE_SET);
 	}
 
-	private static String convertToRegex(String glob) {
+	public static Pattern structureIdPattern(String selector) {
+		String glob = selector.contains(":") ? selector : "minecraft:" + selector;
 		StringBuilder regex = new StringBuilder("^");
 		for (int i = 0; i < glob.length(); i++) {
 			char c = glob.charAt(i);
 			if (c == '*') regex.append(".*");
 			else regex.append(Pattern.quote(String.valueOf(c)));
 		}
-		return regex.append('$').toString();
+		return Pattern.compile(regex.append('$').toString());
 	}
 }

@@ -77,11 +77,6 @@ public class ExplorersCompass implements ModInitializer {
         });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             com.chaosthedude.explorerscompass.config.SearchCosts.load(server);
-            if (!ExplorersCompassConfig.structureWhitelist.isEmpty()
-                    && server.getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).getIds().stream()
-                            .allMatch(com.chaosthedude.explorerscompass.util.StructureUtils::structureIdIsExcluded)) {
-                LOGGER.warn("The structure whitelist matches no registered structures. The compass list will be empty.");
-            }
             com.chaosthedude.explorerscompass.unlocking.UnlockingRules.reload(server);
             com.chaosthedude.explorerscompass.unlocking.UnlockReloads.tick(server);
         });

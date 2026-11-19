@@ -12,9 +12,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.util.OverlaySide;
+import com.chaosthedude.explorerscompass.util.StructureUtils;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.core.io.ParsingMode;
 import com.electronwill.nightconfig.toml.TomlFormat;
@@ -23,6 +25,8 @@ import com.electronwill.nightconfig.toml.TomlWriter;
 
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.api.EnvType;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.util.Identifier;
 
 public class ExplorersCompassConfig {
 	public static final String SEARCH_COSTS = "server/search_costs.json";
@@ -32,6 +36,8 @@ public class ExplorersCompassConfig {
 			"Relock player structures at world startup when unlocking definitions changed, then restore satisfied requirements.";
 	private static final String SERVER_SETTINGS = "server/settings.toml";
 	private static final String CLIENT_SETTINGS = "client/settings.toml";
+	private static final String WHITELIST_KEY = "structureWhitelist";
+	private static final String BLACKLIST_KEY = "structureBlacklist";
 	private static final String WHITELIST = "server/whitelist.toml";
 	private static final String WHITELIST_PRECEDENCE = "When the structure whitelist contains any entries, the blacklist is ignored.";
 	private static final String BLACKLIST = "server/blacklist.toml";
@@ -124,7 +130,7 @@ public class ExplorersCompassConfig {
 		try {
 			archiveLegacyConfig();
 			ensureServerDefaults();
-			loadServerFiles(directory().resolve(SERVER_SETTINGS), directory().resolve(BLACKLIST), directory().resolve(WHITELIST));
+			loadServerSettings(directory().resolve(SERVER_SETTINGS));
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
 				Files.createDirectories(directory().resolve("client"));
@@ -165,8 +171,15 @@ public class ExplorersCompassConfig {
 	private static void ensureServerDefaults() throws IOException {
 		Path defaults = directory();
 		Files.createDirectories(defaults.resolve("server"));
-		for (String name : List.of(SERVER_SETTINGS, BLACKLIST, WHITELIST)) {
-			if (Files.notExists(defaults.resolve(name))) readOrCreate(name);
+		if (Files.notExists(defaults.resolve(SERVER_SETTINGS))) readOrCreate(SERVER_SETTINGS);
+		for (String name : List.of(BLACKLIST, WHITELIST)) {
+			if (Files.notExists(defaults.resolve(name))) {
+				try {
+					readOrCreate(name);
+				} catch (IOException ignored) {
+					// The structure list loader handles unavailable files independently.
+				}
+			}
 		}
 		Path rules = defaults.resolve(UNLOCKING_RULES);
 		if (Files.notExists(rules)) Files.writeString(rules, DEFAULT_UNLOCKING_RULES);
@@ -183,14 +196,15 @@ public class ExplorersCompassConfig {
 	public static void loadServer(net.minecraft.server.MinecraftServer server) {
 		try {
 			ensureServerDefaults();
-			loadServerFiles(serverConfigFile(server, SERVER_SETTINGS), serverConfigFile(server, BLACKLIST),
-					serverConfigFile(server, WHITELIST));
+			loadServerSettings(serverConfigFile(server, SERVER_SETTINGS));
+			loadStructureLists(serverConfigFile(server, WHITELIST), serverConfigFile(server, BLACKLIST),
+					server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds());
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass server configuration", e);
 		}
 	}
 
-	private static void loadServerFiles(Path commonFile, Path blacklistFile, Path whitelistFile) throws IOException {
+	private static void loadServerSettings(Path commonFile) throws IOException {
 		CommentedConfig common = parse(commonFile);
 		loadCommon(common);
 		if (common.contains("compass.compassDurability") || common.contains("search.defaultXpCost")
@@ -209,14 +223,30 @@ public class ExplorersCompassConfig {
 			writeCommon(common);
 			write(commonFile, common);
 		}
-		structureWhitelist = strings(parse(whitelistFile), "structureWhitelist", List.of());
-		CommentedConfig blacklist = parse(blacklistFile);
-		structureBlacklist = strings(blacklist, "structureBlacklist", List.of());
-		String comment = blacklist.getComment("structureBlacklist");
-		if (comment == null || !comment.contains(WHITELIST_PRECEDENCE)) {
-			if (comment == null) writeCommonBlacklist(blacklist);
-			else blacklist.setComment("structureBlacklist", comment + "\n" + WHITELIST_PRECEDENCE);
-			write(blacklistFile, blacklist);
+	}
+
+	static void loadStructureLists(Path whitelistFile, Path blacklistFile, Set<Identifier> registeredIds) {
+		var whitelist = readStructureList(whitelistFile, WHITELIST_KEY, registeredIds);
+		structureWhitelist = whitelist == null ? List.of() : whitelist;
+		structureBlacklist = List.of();
+		if (whitelist == null || !whitelist.isEmpty()) return;
+
+		var blacklist = readStructureList(blacklistFile, BLACKLIST_KEY, registeredIds);
+		if (blacklist != null) structureBlacklist = blacklist;
+	}
+
+	/** Returns null when the file or any of its selectors is invalid. */
+	private static List<String> readStructureList(Path file, String key, Set<Identifier> registeredIds) {
+		try {
+			var config = parse(file);
+			List<String> selectors = strings(config, key, List.of());
+			for (String selector : selectors) {
+				var pattern = StructureUtils.structureIdPattern(selector);
+				if (registeredIds.stream().noneMatch(id -> pattern.matcher(id.toString()).matches())) return null;
+			}
+			return List.copyOf(selectors);
+		} catch (IOException | IllegalArgumentException ignored) {
+			return null;
 		}
 	}
 
@@ -404,11 +434,11 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeCommonWhitelist(CommentedConfig config) {
-		put(config, "structureWhitelist", List.of(), "Structures allowed by the server. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
+		put(config, WHITELIST_KEY, List.of(), "Structures allowed by the server. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
 	}
 
 	private static void writeCommonBlacklist(CommentedConfig config) {
-		put(config, "structureBlacklist", structureBlacklist, "Structures excluded from the compass. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
+		put(config, BLACKLIST_KEY, List.of(), "Structures excluded from the compass. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
 	}
 
 	private static void writeHiddenStructures(CommentedConfig config) {
