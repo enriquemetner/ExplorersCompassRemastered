@@ -130,7 +130,7 @@ public class ExplorersCompassConfig {
 		try {
 			archiveLegacyConfig();
 			ensureServerDefaults();
-			loadServerSettings(directory().resolve(SERVER_SETTINGS));
+			loadServerSettings(directory().resolve(SERVER_SETTINGS), null);
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
 				Files.createDirectories(directory().resolve("client"));
@@ -171,7 +171,13 @@ public class ExplorersCompassConfig {
 	private static void ensureServerDefaults() throws IOException {
 		Path defaults = directory();
 		Files.createDirectories(defaults.resolve("server"));
-		if (Files.notExists(defaults.resolve(SERVER_SETTINGS))) readOrCreate(SERVER_SETTINGS);
+		if (Files.notExists(defaults.resolve(SERVER_SETTINGS))) {
+			try {
+				readOrCreate(SERVER_SETTINGS);
+			} catch (IOException ignored) {
+				// The settings loader handles unavailable files independently.
+			}
+		}
 		for (String name : List.of(BLACKLIST, WHITELIST)) {
 			if (Files.notExists(defaults.resolve(name))) {
 				try {
@@ -196,7 +202,7 @@ public class ExplorersCompassConfig {
 	public static void loadServer(net.minecraft.server.MinecraftServer server) {
 		try {
 			ensureServerDefaults();
-			loadServerSettings(serverConfigFile(server, SERVER_SETTINGS));
+			loadServerSettings(directory().resolve(SERVER_SETTINGS), serverConfigFile(server, SERVER_SETTINGS));
 			loadStructureLists(serverConfigFile(server, WHITELIST), serverConfigFile(server, BLACKLIST),
 					server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds());
 		} catch (IOException e) {
@@ -204,9 +210,19 @@ public class ExplorersCompassConfig {
 		}
 	}
 
-	private static void loadServerSettings(Path commonFile) throws IOException {
-		CommentedConfig common = parse(commonFile);
-		loadCommon(common);
+	static void loadServerSettings(Path instanceFile, Path worldFile) {
+		Path selectedFile = worldFile == null ? instanceFile : worldFile;
+		CommentedConfig common = tryReadServerSettings(selectedFile);
+		if (common == null && !selectedFile.equals(instanceFile)) {
+			selectedFile = instanceFile;
+			common = tryReadServerSettings(selectedFile);
+		}
+		if (common == null) {
+			loadCommon(TomlFormat.newConfig(LinkedHashMap::new));
+			return;
+		}
+		if (!loadCommon(common)) return;
+
 		if (common.contains("compass.compassDurability") || common.contains("search.defaultXpCost")
                 || common.contains("search.allowSearchWithoutEnoughXp") || common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
 				|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
@@ -221,7 +237,19 @@ public class ExplorersCompassConfig {
 			common.remove("search.defaultXpCost");
 			common.remove("search.allowSearchWithoutEnoughXp");
 			writeCommon(common);
-			write(commonFile, common);
+			try {
+				write(selectedFile, common);
+			} catch (IOException ignored) {
+				// Settings are already loaded even if the file cannot be updated.
+			}
+		}
+	}
+
+	private static CommentedConfig tryReadServerSettings(Path path) {
+		try {
+			return Files.isRegularFile(path) ? parse(path) : null;
+		} catch (IOException | IllegalArgumentException ignored) {
+			return null;
 		}
 	}
 
@@ -259,7 +287,10 @@ public class ExplorersCompassConfig {
 		if (Files.exists(path)) return parse(path);
 		CommentedConfig config = TomlFormat.newConfig(LinkedHashMap::new);
 		switch (name) {
-			case SERVER_SETTINGS -> writeCommon(config);
+			case SERVER_SETTINGS -> {
+				loadCommon(config);
+				writeCommon(config);
+			}
 			case CLIENT_SETTINGS -> writeClient(config);
 			case WHITELIST -> writeCommonWhitelist(config);
 			case BLACKLIST -> writeCommonBlacklist(config);
@@ -319,20 +350,53 @@ public class ExplorersCompassConfig {
 		return new IllegalArgumentException("Invalid Explorer's Compass setting '" + key + "'; expected " + expected);
 	}
 
-	private static void loadCommon(CommentedConfig config) {
-		int radius = number(config, SEARCH_RADIUS, DEFAULT_SEARCH_RADIUS, 1);
-		if (radius > MAX_SEARCH_RADIUS) throw bad(SEARCH_RADIUS, "integer between 1 and " + MAX_SEARCH_RADIUS);
-		maxSearchRadius = radius;
-		findOldStructures = bool(config, SEARCH_SAVED_STRUCTURES, false);
-		compassSharing = bool(config, "unlocking.compassSharing", false);
-		visitsSharing = bool(config, "unlocking.visitsSharing", false);
-        opacPartySharing = bool(config, "unlocking.opacPartySharing", true);
-		allowExcludeVisited = bool(config, "search.allowExcludeVisited", true);
-		relockOnReload = bool(config, "unlocking.relockOnReload", false);
-		displayCoordinates = bool(config, "compass.displayCoordinates", true);
-		displayDistance = bool(config, "compass.displayDistance", true);
-		showNetherEquivalent = bool(config, "compass.showNetherEquivalent", false);
-		useClassicCompass = bool(config, "compass.useClassicCompass", false);
+	private static boolean loadCommon(CommentedConfig config) {
+		var settings = new ServerSettingsReader(config);
+		maxSearchRadius = settings.searchRadius();
+		findOldStructures = settings.bool(SEARCH_SAVED_STRUCTURES, false);
+		compassSharing = settings.bool("unlocking.compassSharing", false);
+		visitsSharing = settings.bool("unlocking.visitsSharing", false);
+		opacPartySharing = settings.bool("unlocking.opacPartySharing", true);
+		allowExcludeVisited = settings.bool("search.allowExcludeVisited", true);
+		relockOnReload = settings.bool("unlocking.relockOnReload", false);
+		displayCoordinates = settings.bool("compass.displayCoordinates", true);
+		displayDistance = settings.bool("compass.displayDistance", true);
+		showNetherEquivalent = settings.bool("compass.showNetherEquivalent", false);
+		useClassicCompass = settings.bool("compass.useClassicCompass", false);
+		return settings.valid;
+	}
+
+	private static final class ServerSettingsReader {
+		private final CommentedConfig config;
+		private boolean valid = true;
+
+		private ServerSettingsReader(CommentedConfig config) {
+			this.config = config;
+			for (String section : List.of("compass", "search", "unlocking", "permissions")) {
+				Object value = config.get(section);
+				if (value != null && !(value instanceof CommentedConfig)) valid = false;
+			}
+		}
+
+		private boolean bool(String key, boolean fallback) {
+			try {
+				return ExplorersCompassConfig.bool(config, key, fallback);
+			} catch (IllegalArgumentException | ClassCastException ignored) {
+				valid = false;
+				return fallback;
+			}
+		}
+
+		private int searchRadius() {
+			try {
+				int radius = number(config, SEARCH_RADIUS, DEFAULT_SEARCH_RADIUS, 1);
+				if (radius <= MAX_SEARCH_RADIUS) return radius;
+			} catch (IllegalArgumentException | ClassCastException ignored) {
+				// Keep other settings when the radius has an invalid value.
+			}
+			valid = false;
+			return DEFAULT_SEARCH_RADIUS;
+		}
 	}
 
 	static boolean loadClient(CommentedConfig config) {
