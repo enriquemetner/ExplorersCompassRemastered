@@ -50,6 +50,7 @@ public class ExplorersCompassConfig {
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
 	public static boolean showNetherEquivalent = false;
+	public static boolean useClassicCompass = false;
 	public static List<String> structureWhitelist = List.of();
 	public static List<String> structureBlacklist = new ArrayList<>();
 	public static List<String> hiddenStructures = new ArrayList<>();
@@ -196,6 +197,7 @@ public class ExplorersCompassConfig {
 				|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
 				|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
                     || common.get(SEARCH_SAVED_STRUCTURES) == null || common.get("compass.showNetherEquivalent") == null
+                    || common.get("compass.useClassicCompass") == null
                     || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
 			common.remove("permissions.allowTeleport");
 			common.remove("compass.compassDurability");
@@ -297,6 +299,7 @@ public class ExplorersCompassConfig {
 		displayCoordinates = bool(config, "compass.displayCoordinates", true);
 		displayDistance = bool(config, "compass.displayDistance", true);
 		showNetherEquivalent = bool(config, "compass.showNetherEquivalent", false);
+		useClassicCompass = bool(config, "compass.useClassicCompass", false);
 	}
 
 	static boolean loadClient(CommentedConfig config) {
@@ -363,6 +366,7 @@ public class ExplorersCompassConfig {
 		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
 		put(config, "compass.displayDistance", displayDistance, "Show distance to located structures.");
 		put(config, "compass.showNetherEquivalent", showNetherEquivalent, "Point to equivalent coordinates when tracking a structure across the Overworld and Nether.");
+		put(config, "compass.useClassicCompass", useClassicCompass, "Use the original Explorer’s Compass textures and crafting recipe. Reopen the world or restart the server to apply.");
         config.remove("search.maxSamples"); // Retired: searches are bounded by radius.
 		// Keep the established order of all other sections and settings.
 		moveToPosition(config, "compass", 0);

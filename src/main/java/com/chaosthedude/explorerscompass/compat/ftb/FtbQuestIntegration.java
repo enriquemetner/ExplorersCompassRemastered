@@ -1,6 +1,7 @@
 package com.chaosthedude.explorerscompass.compat.ftb;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.gui.CompassTextures;
 import com.chaosthedude.explorerscompass.unlocking.FtbStructureRewards;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
 import dev.ftb.mods.ftblibrary.config.ConfigGroup;
@@ -42,7 +43,7 @@ public final class FtbQuestIntegration {
 
     public static void register() {
         type = RewardTypes.register(new Identifier(ExplorersCompass.MODID, "unlock_structures"),
-                UnlockStructuresReward::new, () -> Icon.getIcon(ExplorersCompass.STILL_COMPASS_ICON));
+                UnlockStructuresReward::new, () -> Icon.getIcon(CompassTextures.stillIcon()));
         type.setDisplayName(Text.translatable("ftb_reward.explorerscompass.unlock_structures"));
         FtbVisitStructuresTask.register();
         FtbStructureRewards.register(FtbQuestIntegration::snapshot);

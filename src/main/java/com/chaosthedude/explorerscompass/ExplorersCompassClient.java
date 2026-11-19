@@ -62,6 +62,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
             ClientPacketHandlers.pendingNoticeRevision = 0;
             ClientPacketHandlers.whitelistActive = false;
             ClientPacketHandlers.showNetherEquivalent = false;
+            ClientPacketHandlers.useClassicCompass = false;
             ClientPacketHandlers.excludedStructures = java.util.Set.of();
             ClientPacketHandlers.partyRequirements = java.util.Map.of();
             ClientPacketHandlers.latestUnlockedStructures = java.util.Set.of();
@@ -70,6 +71,9 @@ public class ExplorersCompassClient implements ClientModInitializer {
         });
 		
 		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM, new Identifier("angle"), needle);
+		ModelPredicateProviderRegistry.register(ExplorersCompass.EXPLORERS_COMPASS_ITEM,
+				new Identifier(ExplorersCompass.MODID, "classic"),
+				(stack, world, entity, seed) -> ClientPacketHandlers.useClassicCompass ? 1 : 0);
 	}
 
     private static boolean consumeCompassItems(HandledScreen<?> screen, double x, double y, boolean wholeStack) {

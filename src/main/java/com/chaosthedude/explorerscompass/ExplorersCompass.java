@@ -9,6 +9,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
+import com.chaosthedude.explorerscompass.recipe.ClassicCompassRecipe;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
 import com.chaosthedude.explorerscompass.items.ExplorersCompassItem;
 import com.chaosthedude.explorerscompass.workers.WorldWorkerManager;
@@ -63,7 +64,10 @@ public class ExplorersCompass implements ModInitializer {
         com.chaosthedude.explorerscompass.network.AcknowledgeNoticePacket.register();
 		if (net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("ftbquests"))
 			com.chaosthedude.explorerscompass.compat.ftb.FtbQuestIntegration.register();
-        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTING.register(ExplorersCompassConfig::loadServer);
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTING.register(server -> {
+            ExplorersCompassConfig.loadServer(server);
+            ClassicCompassRecipe.apply(server);
+        });
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents.LOAD.register((server, world) -> {
             if (!ExplorersCompassConfig.findOldStructures) return;
             var worker = world.getChunkManager().threadedAnvilChunkStorage.getWorker();
@@ -114,8 +118,7 @@ public class ExplorersCompass implements ModInitializer {
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
 				com.chaosthedude.explorerscompass.unlocking.UnlockReloads.left(handler.player.getUuid()));
 		ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
-				CompassSettingsPacket.send(handler.player,
-                        ExplorersCompassConfig.showNetherEquivalent));
+				CompassSettingsPacket.send(handler.player));
         // Also validate idle sessions awaiting "Keep searching" during normal gameplay.
         // Active searches validate ownership in every queued slice, including while paused.
         ServerTickEvents.START_SERVER_TICK.register(EXPLORERS_COMPASS_ITEM::tickSearchOwnership);

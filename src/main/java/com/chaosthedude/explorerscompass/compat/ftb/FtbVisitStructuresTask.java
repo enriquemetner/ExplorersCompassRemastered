@@ -1,6 +1,7 @@
 package com.chaosthedude.explorerscompass.compat.ftb;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.gui.CompassTextures;
 import com.chaosthedude.explorerscompass.unlocking.UnlockingRules;
 import com.chaosthedude.explorerscompass.unlocking.VisitTaskMatch;
 import com.chaosthedude.explorerscompass.util.VisitedStructures;
@@ -53,7 +54,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
 
     static void register() {
         type = TaskTypes.register(new Identifier(ExplorersCompass.MODID, "visit_structures"),
-                FtbVisitStructuresTask::new, () -> Icon.getIcon(ExplorersCompass.STILL_COMPASS_ICON));
+                FtbVisitStructuresTask::new, () -> Icon.getIcon(CompassTextures.stillIcon()));
         type.setDisplayName(Text.translatable("ftb_task.explorerscompass.visit_structures"));
     }
 

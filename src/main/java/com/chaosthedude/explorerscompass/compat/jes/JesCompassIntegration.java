@@ -1,6 +1,7 @@
 package com.chaosthedude.explorerscompass.compat.jes;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
+import com.chaosthedude.explorerscompass.gui.CompassTextures;
 import com.chaosthedude.explorerscompass.gui.ExplorersCompassScreen;
 import com.chaosthedude.explorerscompass.util.ItemUtils;
 import com.chaosthedude.explorerscompass.util.StructureUtils;
@@ -24,7 +25,7 @@ public final class JesCompassIntegration {
             Class<?> link = Class.forName(COMPASS_LINK);
             Object provider = Proxy.newProxyInstance(link.getClassLoader(), new Class<?>[] {link},
                     (proxy, method, args) -> switch (method.getName()) {
-                        case "icon" -> ExplorersCompass.STILL_COMPASS_ICON;
+                        case "icon" -> CompassTextures.stillIcon();
                         case "holding" -> !usableCompass((PlayerEntity) args[0]).isEmpty();
                         case "open" -> open((PlayerEntity) args[0], (Identifier) args[1]);
                         case "status" -> status((PlayerEntity) args[0], (Identifier) args[1]);

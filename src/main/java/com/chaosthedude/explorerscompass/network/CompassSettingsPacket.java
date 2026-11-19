@@ -2,6 +2,7 @@ package com.chaosthedude.explorerscompass.network;
 
 import com.chaosthedude.explorerscompass.ExplorersCompass;
 import com.chaosthedude.explorerscompass.config.SearchCosts;
+import com.chaosthedude.explorerscompass.config.ExplorersCompassConfig;
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.PacketByteBuf;
@@ -13,15 +14,16 @@ public final class CompassSettingsPacket {
 
     private CompassSettingsPacket() {}
 
-    public static void send(ServerPlayerEntity player, boolean showNetherEquivalent) {
+    public static void send(ServerPlayerEntity player) {
         var costs = SearchCosts.active();
         var packet = new PacketByteBuf(Unpooled.buffer());
         packet.writeEnumConstant(costs.type());
         packet.writeVarInt(costs.initialEnergy());
         packet.writeMap(costs.items(), PacketByteBuf::writeIdentifier, PacketByteBuf::writeVarInt);
-        packet.writeBoolean(showNetherEquivalent);
+        packet.writeBoolean(ExplorersCompassConfig.showNetherEquivalent);
         packet.writeVarInt(costs.defaultCost());
         packet.writeMap(costs.overrides(), PacketByteBuf::writeIdentifier, PacketByteBuf::writeVarInt);
+        packet.writeBoolean(ExplorersCompassConfig.useClassicCompass);
         ServerPlayNetworking.send(player, ID, packet);
     }
 }

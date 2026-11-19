@@ -6,6 +6,7 @@
     "FtbQuestEditMessageMixin",
     "FtbQuestFileMixin",
     "PlayerAdvancementTrackerMixin",
+    "PlayerManagerMixin",
     "StructureLocatorMixin",
     "StorageIoWorkerMixin",
     "RegionFileIndexMixin",

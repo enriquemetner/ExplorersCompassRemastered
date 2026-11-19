@@ -30,6 +30,7 @@ public final class ClientPacketHandlers {
     public static boolean showNewlyUnlockedFilter;
     public static boolean whitelistActive;
     public static boolean showNetherEquivalent;
+    public static boolean useClassicCompass;
     public static java.util.Set<Identifier> excludedStructures = java.util.Set.of();
     public static Map<Identifier, RequirementNode> partyRequirements = Map.of();
     public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
@@ -135,9 +136,11 @@ public final class ClientPacketHandlers {
         boolean equivalent = buf.readBoolean();
         int defaultCost = buf.readVarInt();
         var overrides = buf.readMap(PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);
+        boolean classic = buf.isReadable() && buf.readBoolean();
         client.execute(() -> {
             SearchCosts.setRemote(type, defaultCost, overrides, energy, items);
             showNetherEquivalent = equivalent;
+            useClassicCompass = classic;
         });
     }
 

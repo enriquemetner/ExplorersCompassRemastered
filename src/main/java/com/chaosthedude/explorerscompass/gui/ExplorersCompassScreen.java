@@ -2652,7 +2652,7 @@ public class ExplorersCompassScreen extends Screen {
             }
         } else if (dialog == Dialog.SEARCHING) {
             int frame = (int)((System.currentTimeMillis() - dialogStarted) / 31L % 32L);
-            Identifier texture = new Identifier(ExplorersCompass.MODID, String.format(Locale.ROOT, "textures/item/explorerscompass_%02d.png", frame));
+            Identifier texture = CompassTextures.frame(frame);
             context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
             int centerX = x + w / 2;
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Locating..."), centerX, y + SEARCH_DIALOG_TITLE_Y, 0xffffff);
@@ -2679,7 +2679,7 @@ public class ExplorersCompassScreen extends Screen {
             double targetAngle = client.player == null ? 0.0D : Math.atan2(foundZ - client.player.getZ(), foundX - client.player.getX());
             double angle = MathHelper.floorMod((Math.PI - ((yaw - 90.0D) * (Math.PI / 180.0D) - targetAngle)) / (Math.PI * 2.0D), 1.0D);
             int frame = (16 + (int)Math.floor(angle * 32.0D + 0.5D)) % 32;
-            Identifier texture = new Identifier(ExplorersCompass.MODID, String.format(Locale.ROOT, "textures/item/explorerscompass_%02d.png", frame));
+            Identifier texture = CompassTextures.frame(frame);
             context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
             context.drawCenteredTextWithShadow(textRenderer, Text.literal("Structure Located"), x + w / 2, y + SEARCH_DIALOG_TITLE_Y, 0xffffff);
             renderFoundDetails(context, x, y, w);
@@ -2734,7 +2734,7 @@ public class ExplorersCompassScreen extends Screen {
                 notFoundCompassAngle = MathHelper.floorMod(notFoundCompassAngle + notFoundCompassSpeed, 1.0D);
             }
             int frame = (16 + (int)Math.floor(notFoundCompassAngle * 32.0D + 0.5D)) % 32;
-            Identifier texture = new Identifier(ExplorersCompass.MODID, String.format(Locale.ROOT, "textures/item/explorerscompass_%02d.png", frame));
+            Identifier texture = CompassTextures.frame(frame);
             context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
         }
 
