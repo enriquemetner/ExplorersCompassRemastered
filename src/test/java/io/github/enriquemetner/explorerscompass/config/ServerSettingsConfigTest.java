@@ -1,5 +1,6 @@
 package io.github.enriquemetner.explorerscompass.config;
 
+import com.electronwill.nightconfig.core.CommentedConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -18,6 +19,31 @@ class ServerSettingsConfigTest {
 
     @AfterEach void resetSettings() {
         ExplorersCompassConfig.loadServerSettings(directory.resolve("missing.toml"), null);
+    }
+
+    @Test void movesLegacyProgressionSettingsAndUsesTheNewValueWhenBothArePresent() throws IOException {
+        Path file = Files.writeString(directory.resolve("settings.toml"), """
+                [unlocking]
+                opacPartySharing = true
+                visitsSharing = true
+                compassSharing = true
+                relockOnReload = true
+                [progression]
+                opacPartySharing = false
+                """);
+
+        ExplorersCompassConfig.loadServerSettings(file, null);
+        assertFalse(ExplorersCompassConfig.opacPartySharing);
+        assertTrue(ExplorersCompassConfig.visitsSharing);
+        assertTrue(ExplorersCompassConfig.compassSharing);
+        assertTrue(ExplorersCompassConfig.relockOnReload);
+        var saved = ServerToml.read(file).config();
+        assertEquals(List.of("compass", "search", "progression"), List.copyOf(saved.valueMap().keySet()));
+        CommentedConfig progression = saved.get("progression");
+        assertEquals(List.of("relockOnReload", "compassSharing", "opacPartySharing", "visitsSharing"),
+                List.copyOf(progression.valueMap().keySet()));
+        assertEquals(Boolean.FALSE, progression.get("opacPartySharing"));
+        assertEquals(Boolean.TRUE, progression.get("visitsSharing"));
     }
 
     @Test void invalidValuesUseTheirOwnDefaultsAndPreserveTheFile() throws IOException {

@@ -1,6 +1,6 @@
 # Compass ownership and sharing
 
-`config/explorerscompass/server/settings.toml` contains `unlocking.compassSharing` (default `false`, server controlled).
+`config/explorerscompass/server/settings.toml` contains `progression.compassSharing` (default `false`, server controlled).
 A compass remembers its last player holder. Dropping it, storing it, or placing it in a display
 keeps its target. Taking your own compass back preserves it.
 

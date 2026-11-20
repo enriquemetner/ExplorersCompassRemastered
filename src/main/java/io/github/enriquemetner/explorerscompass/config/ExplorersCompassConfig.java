@@ -41,8 +41,6 @@ public class ExplorersCompassConfig {
 			  "prerequisites": {}
 			}
 			""";
-	private static final String RELOCK_COMMENT =
-			"Relock player structures at world startup when unlocking definitions changed, then restore satisfied requirements.";
 	private static final String SERVER_SETTINGS = "server/settings.toml";
 	private static final String CLIENT_SETTINGS = "client/settings.toml";
 	private static final String WHITELIST_KEY = "structureWhitelist";
@@ -64,7 +62,6 @@ public class ExplorersCompassConfig {
 	public static boolean relockOnReload = false;
 	public static boolean compassSharing = false;
 	public static boolean visitsSharing = false;
-    private static final String OPAC_SHARING_COMMENT = "Temporarily share saved personal structure unlocks among current OPAC party members when Open Parties and Claims is installed. Requires a restart to change.";
     public static boolean opacPartySharing = true;
 	public static boolean displayCoordinates = true;
 	public static boolean displayDistance = true;
@@ -241,20 +238,10 @@ public class ExplorersCompassConfig {
 		var result = new Section(summary, diagnostics.isEmpty() ? null : Severity.WARNING, diagnostics);
 		if (!settings.valid) return result;
 
-		if (common.contains("compass.compassDurability") || common.contains("search.defaultXpCost")
-                || common.contains("search.allowSearchWithoutEnoughXp") || common.get("permissions.allowTeleport") != null || common.get("unlocking.compassSharing") == null
-				|| !isAtPosition(common, "compass", 0) || !isAtPosition(common, "unlocking", 2)
-				|| !isAtPosition(common.get("unlocking"), "visitsSharing", 2)
-				|| common.get("unlocking.opacPartySharing") == null || common.get(SEARCH_RADIUS) == null
-                    || common.get(SEARCH_SAVED_STRUCTURES) == null || common.get("compass.showNetherEquivalent") == null
-                    || common.get("compass.useClassicCompass") == null
-                    || !RELOCK_COMMENT.equals(String.valueOf(common.getComment("unlocking.relockOnReload")).strip())
-                    || !OPAC_SHARING_COMMENT.equals(String.valueOf(common.getComment("unlocking.opacPartySharing")).strip())) {
-			common.remove("permissions.allowTeleport");
-			common.remove("compass.compassDurability");
-			common.remove("search.defaultXpCost");
-			common.remove("search.allowSearchWithoutEnoughXp");
-			writeCommon(common);
+		TomlWriter writer = new TomlWriter();
+		String before = writer.writeToString(common);
+		writeCommon(common);
+		if (!before.equals(writer.writeToString(common))) {
 			try {
 				write(selectedFile, common);
 			} catch (IOException ignored) {
@@ -445,11 +432,11 @@ public class ExplorersCompassConfig {
 		var settings = new ServerSettingsReader(document, filename);
 		maxSearchRadius = settings.searchRadius();
 		findOldStructures = settings.bool(SEARCH_SAVED_STRUCTURES, false);
-		compassSharing = settings.bool("unlocking.compassSharing", false);
-		visitsSharing = settings.bool("unlocking.visitsSharing", false);
-		opacPartySharing = settings.bool("unlocking.opacPartySharing", true);
+		compassSharing = settings.progressionBool("compassSharing", false);
+		visitsSharing = settings.progressionBool("visitsSharing", false);
+		opacPartySharing = settings.progressionBool("opacPartySharing", true);
 		allowExcludeVisited = settings.bool("search.allowExcludeVisited", true);
-		relockOnReload = settings.bool("unlocking.relockOnReload", false);
+		relockOnReload = settings.progressionBool("relockOnReload", false);
 		displayCoordinates = settings.bool("compass.displayCoordinates", true);
 		displayDistance = settings.bool("compass.displayDistance", true);
 		showNetherEquivalent = settings.bool("compass.showNetherEquivalent", false);
@@ -496,6 +483,14 @@ public class ExplorersCompassConfig {
 			}
 			diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Invalid setting " + quotedDiagnosticValue(key) + location
 					+ ". Expected " + expected + (received == null ? "" : ", found " + quotedDiagnosticValue(received))));
+		}
+
+		private boolean progressionBool(String key, boolean fallback) {
+			Object progression = document.config().get("progression");
+			if (progression == null || progression instanceof CommentedConfig section && !section.contains(key)) {
+				return bool("unlocking." + key, fallback);
+			}
+			return bool("progression." + key, fallback);
 		}
 
 		private boolean bool(String key, boolean fallback) {
@@ -589,24 +584,68 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeCommon(CommentedConfig config) {
-        config.set("unlocking.opacPartySharing", opacPartySharing);
-        config.setComment("unlocking.opacPartySharing", OPAC_SHARING_COMMENT);
-		put(config, "unlocking.compassSharing", compassSharing, "Preserve located targets and unlock structures that the previous compass holder had unlocked when a different player gets hold of the compass.");
-		put(config, "unlocking.visitsSharing", visitsSharing, "Share temporary visit history in OPAC parties and copy saved visits on compass transfer when the respective sharing option is enabled.");
-		put(config, "search.allowExcludeVisited", allowExcludeVisited, "Allow players to exclude visited structure instances from searches. Visits are always recorded.");
-		put(config, SEARCH_SAVED_STRUCTURES, findOldStructures,
-                "Find existing structures saved under older world generation rules. Searches can be much slower in explored areas. Usually only needed if world or structure generation changed significantly through mods or datapacks after those chunks were generated.");
-		put(config, SEARCH_RADIUS, maxSearchRadius, "Maximum horizontal search radius in blocks (1 to 50000). Requires a restart to change.");
-		put(config, "unlocking.relockOnReload", relockOnReload, RELOCK_COMMENT);
-		put(config, "compass.displayCoordinates", displayCoordinates, "Show precise coordinates for located structures.");
-		put(config, "compass.displayDistance", displayDistance, "Show distance to located structures.");
-		put(config, "compass.showNetherEquivalent", showNetherEquivalent, "Point to equivalent coordinates when tracking a structure across the Overworld and Nether.");
-		put(config, "compass.useClassicCompass", useClassicCompass, "Use the original Explorer’s Compass textures and crafting recipe. Reopen the world or restart the server to apply.");
-        config.remove("search.maxSamples"); // Retired: searches are bounded by radius.
-		// Keep the established order of all other sections and settings.
+		config.remove("permissions.allowTeleport");
+		config.remove("compass.compassDurability");
+		config.remove("search.defaultXpCost");
+		config.remove("search.allowSearchWithoutEnoughXp");
+		config.remove("search.maxSamples");
+
+		if (config.get("unlocking") instanceof CommentedConfig legacy) {
+			for (String key : List.of("relockOnReload", "compassSharing", "opacPartySharing", "visitsSharing")) {
+				legacy.remove(key);
+			}
+			if (legacy.isEmpty()) config.remove("unlocking");
+		}
+
+		CommentedConfig compass = config.get("compass");
+		if (compass == null) {
+			compass = config.createSubConfig();
+			config.set("compass", compass);
+		}
 		moveToPosition(config, "compass", 0);
-		moveToPosition(config, "unlocking", 2);
-		moveToPosition(config.get("unlocking"), "visitsSharing", 2);
+		writeCommonSetting(compass, "displayCoordinates", displayCoordinates, 0,
+				"Show the coordinates of located structures.");
+		writeCommonSetting(compass, "displayDistance", displayDistance, 1,
+				"Show the distance to located structures.");
+		writeCommonSetting(compass, "showNetherEquivalent", showNetherEquivalent, 2,
+				"Point to equivalent coordinates when tracking a structure across the Overworld and Nether.");
+		writeCommonSetting(compass, "useClassicCompass", useClassicCompass, 3,
+				"Use the original Explorer’s Compass texture and crafting recipe.");
+
+		CommentedConfig search = config.get("search");
+		if (search == null) {
+			search = config.createSubConfig();
+			config.set("search", search);
+		}
+		moveToPosition(config, "search", 1);
+		writeCommonSetting(search, "allowExcludeVisited", allowExcludeVisited, 0,
+				"Allow players to exclude visited structure instances from searches. Visits are always recorded.");
+		writeCommonSetting(search, "findOldStructures", findOldStructures, 1,
+				"Find existing structures saved under older world generation rules. This has highly variable impact on search duration in explored areas." + "\n"
+				+ "Usually only needed if world or structure generation changed significantly through mods or datapacks AFTER those chunks were generated.");
+		writeCommonSetting(search, "maxSearchRadius", maxSearchRadius, 2,
+				"Maximum search radius in blocks (Max. 50000).");
+
+		CommentedConfig progression = config.get("progression");
+		if (progression == null) {
+			progression = config.createSubConfig();
+			config.set("progression", progression);
+		}
+		moveToPosition(config, "progression", 2);
+		writeCommonSetting(progression, "relockOnReload", relockOnReload, 0,
+				"Relock player structures at world startup when unlocking rules changed.");
+		writeCommonSetting(progression, "compassSharing", compassSharing, 1,
+				"Unlock structures which a previous compass holder had unlocked after getting a hold of their compass.");
+		writeCommonSetting(progression, "opacPartySharing", opacPartySharing, 2,
+				"Share structure unlocks among OPAC party members (not permanent). Requires Open Parties and Claims mod.");
+		writeCommonSetting(progression, "visitsSharing", visitsSharing, 3,
+				"Include visit history when sharing is enabled for OPAC parties or compass transfers");
+	}
+
+	private static void writeCommonSetting(CommentedConfig section, String key, Object value, int index, String comment) {
+		section.set(key, value);
+		section.setComment(key, comment);
+		moveToPosition(section, key, index);
 	}
 
 	static String serializeClientSettings() {
