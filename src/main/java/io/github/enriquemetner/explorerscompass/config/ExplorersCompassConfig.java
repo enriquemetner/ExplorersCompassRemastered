@@ -34,7 +34,13 @@ import net.minecraft.util.Identifier;
 public class ExplorersCompassConfig {
 	public static final String SEARCH_COSTS = "server/search_costs.json";
 	public static final String UNLOCKING_RULES = "server/unlocking_rules.json";
-	public static final String DEFAULT_UNLOCKING_RULES = "{\n  \"default\": \"unlocked\",\n  \"requirements\": {}\n}\n";
+	public static final String DEFAULT_UNLOCKING_RULES = """
+			{
+			  "default": "unlocked",
+			  "requirements": {},
+			  "prerequisites": {}
+			}
+			""";
 	private static final String RELOCK_COMMENT =
 			"Relock player structures at world startup when unlocking definitions changed, then restore satisfied requirements.";
 	private static final String SERVER_SETTINGS = "server/settings.toml";
@@ -42,7 +48,9 @@ public class ExplorersCompassConfig {
 	private static final String WHITELIST_KEY = "structureWhitelist";
 	private static final String BLACKLIST_KEY = "structureBlacklist";
 	private static final String WHITELIST = "server/whitelist.toml";
-	private static final String WHITELIST_PRECEDENCE = "When the structure whitelist contains any entries, the blacklist is ignored.";
+	private static final String STRUCTURE_LIST_COMMENTS =
+			" Supports the * wildcard. Omitted namespaces default to minecraft:.\n"
+			+ " If the whitelist is modified, the blacklist is ignored.";
 	private static final String BLACKLIST = "server/blacklist.toml";
 	private static final String HIDDEN_STRUCTURES = "client/hidden_structures.toml";
 	private static final String SEARCH_SAVED_STRUCTURES = "search.findOldStructures";
@@ -642,15 +650,15 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeCommonWhitelist(CommentedConfig config) {
-		put(config, WHITELIST_KEY, List.of(), "Structures allowed by the server. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
+		put(config, WHITELIST_KEY, List.of(), " Structures allowed to be listed by the server.\n" + STRUCTURE_LIST_COMMENTS);
 	}
 
 	private static void writeCommonBlacklist(CommentedConfig config) {
-		put(config, BLACKLIST_KEY, List.of(), "Structures excluded from the compass. Supports the * wildcard. Omitted namespaces default to minecraft:.\n" + WHITELIST_PRECEDENCE);
+		put(config, BLACKLIST_KEY, List.of(), " Structures excluded from the compass list.\n" + STRUCTURE_LIST_COMMENTS);
 	}
 
 	private static void writeHiddenStructures(CommentedConfig config) {
-		put(config, "hiddenStructures", hiddenStructures, "Structures hidden from this client's compass list.");
+		put(config, "hiddenStructures", hiddenStructures, " Structures hidden from this client's compass list.");
 	}
 
 	private static void saveFile(String name, java.util.function.Consumer<CommentedConfig> update) {
