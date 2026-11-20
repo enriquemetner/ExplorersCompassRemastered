@@ -86,17 +86,17 @@ public class ExplorersCompassConfig {
 		OVERLAY_SIDE(() -> overlaySide = OverlaySide.LEFT),
 		OVERLAY_LINE_OFFSET(() -> overlayLineOffset = 0),
 		DISPLAY_WITH_CHAT_OPEN(() -> displayWithChatOpen = true),
-		CHECKED_FILTERS_FIRST(() -> checkedFiltersFirst = true),
 		ADJUST_ROWS_TO_FIT_VIEW(() -> adjustRowsToFitView = true),
-		CLOSE_ON_FOUND(() -> closeOnFound = true),
-		CLEAR_FILTERS_ON_CLOSE(() -> clearFiltersOnClose = true),
-		CLEAR_SEARCH_BAR_ON_CLOSE(() -> clearSearchBarOnClose = true),
-		SHOW_ONLY_MATCHING_FILTER_OPTIONS(() -> showOnlyMatchingFilterOptions = false),
+		CHECKED_FILTERS_FIRST(() -> checkedFiltersFirst = false),
 		HIDE_SEARCH_COST(() -> hideSearchCost = false),
+		CLOSE_ON_FOUND(() -> closeOnFound = false),
+		CLEAR_SEARCH_BAR_ON_CLOSE(() -> clearSearchBarOnClose = false),
+		CLEAR_FILTERS_ON_CLOSE(() -> clearFiltersOnClose = false),
 		MATCH_SEARCH_WORDS_IN_ANY_ORDER(() -> matchSearchWordsInAnyOrder = false),
+		SHOW_ONLY_MATCHING_FILTER_OPTIONS(() -> showOnlyMatchingFilterOptions = false),
+		CREATIVE_UNLOCKS_ALL(() -> creativeUnlocksAll = true),
+		SHOW_TELEPORT_ONLY_IN_CREATIVE(() -> showTeleportOnlyInCreative = false),
 		PAUSE_GAME_WHEN_OPEN(() -> pauseGameWhenOpen = false),
-		CREATIVE_UNLOCKS_ALL(() -> creativeUnlocksAll = false),
-		SHOW_TELEPORT_ONLY_IN_CREATIVE(() -> showTeleportOnlyInCreative = true),
 		SORT_ORDER(() -> sortOrder = defaultSortOrder());
 
 		private final Runnable reset;
@@ -136,24 +136,10 @@ public class ExplorersCompassConfig {
 			loadServerSettings(directory().resolve(SERVER_SETTINGS), null);
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
-				Files.createDirectories(directory().resolve("client"));
-				CommentedConfig clientConfig = readOrCreate(CLIENT_SETTINGS);
-				boolean migrateClient = clientConfig.get("behavior.allowIdSearches") != null
-						|| clientConfig.get("behavior.searchTechnicalNames") != null
-						|| clientConfig.get("view.showTechnicalNames") != null
-						|| clientConfig.get("behavior.showOnlyMatchingFilterOptions") == null
-						|| clientConfig.get("behavior.hideSearchCost") == null
-						|| clientConfig.get("behavior.matchSearchWordsInAnyOrder") == null
-						|| !new ArrayList<>(clientConfig.valueMap().keySet()).get(clientConfig.valueMap().size() - 1).equals("sorting")
-						|| clientConfig.get("behavior.pauseGameWhenOpen") != null
-						|| clientConfig.get("singleplayerAndCreative.pauseGameWhenOpen") == null
-						|| clientConfig.get("singleplayerAndCreative.creativeUnlocksAll") == null
-						|| clientConfig.get("singleplayerAndCreative.showTeleportOnlyInCreative") == null;
-				if (loadClient(clientConfig) || migrateClient) {
-					clientConfig.remove("behavior.pauseGameWhenOpen");
-					writeClient(clientConfig);
-					write(directory().resolve(CLIENT_SETTINGS), clientConfig);
-				}
+				Path clientSettings = directory().resolve(CLIENT_SETTINGS);
+				restoreClientDefaults();
+				if (Files.exists(clientSettings)) loadClient(parse(clientSettings));
+				writeClient(clientSettings);
 				hiddenStructures = strings(readOrCreate(HIDDEN_STRUCTURES), "hiddenStructures", hiddenStructures);
 			}
 		} catch (IOException e) {
@@ -389,7 +375,6 @@ public class ExplorersCompassConfig {
 				loadCommon(new ServerToml(config, List.of()), "settings.toml");
 				writeCommon(config);
 			}
-			case CLIENT_SETTINGS -> writeClient(config);
 			case WHITELIST -> writeCommonWhitelist(config);
 			case BLACKLIST -> writeCommonBlacklist(config);
 			case HIDDEN_STRUCTURES -> writeHiddenStructures(config);
@@ -538,34 +523,41 @@ public class ExplorersCompassConfig {
 	}
 
 	static boolean loadClient(CommentedConfig config) {
-		displayWithChatOpen = bool(config, "overlay.displayWithChatOpen", displayWithChatOpen);
-		pauseGameWhenOpen = config.get("singleplayerAndCreative.pauseGameWhenOpen") != null
-				? bool(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen)
-				: bool(config, "behavior.pauseGameWhenOpen", pauseGameWhenOpen);
-		creativeUnlocksAll = bool(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll);
-		showTeleportOnlyInCreative = bool(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative);
-		clearFiltersOnClose = bool(config, "behavior.clearFiltersOnClose", clearFiltersOnClose);
-		clearSearchBarOnClose = bool(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose);
-		closeOnFound = bool(config, "behavior.closeOnFound", closeOnFound);
-		checkedFiltersFirst = bool(config, "view.checkedFiltersFirst", checkedFiltersFirst);
-		adjustRowsToFitView = bool(config, "view.adjustRowsToFitView", adjustRowsToFitView);
-		hideSearchCost = bool(config, "behavior.hideSearchCost", hideSearchCost);
-		showOnlyMatchingFilterOptions = bool(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions);
-		matchSearchWordsInAnyOrder = bool(config, "behavior.matchSearchWordsInAnyOrder", false);
-		overlayLineOffset = number(config, "overlay.overlayLineOffset", overlayLineOffset, Integer.MIN_VALUE);
-		Object side = config.get("overlay.overlaySide");
+		displayWithChatOpen = bool(config, clientPath(config, "hud.displayWithChatOpen", "overlay.displayWithChatOpen"), displayWithChatOpen);
+		String offsetPath = clientPath(config, "hud.verticalOffset", "overlay.overlayLineOffset");
+		overlayLineOffset = Math.max(0, number(config, offsetPath, overlayLineOffset, Integer.MIN_VALUE));
+		String sidePath = clientPath(config, "hud.hudSide", "overlay.overlaySide");
+		Object side = config.get(sidePath);
 		if (side != null) {
 			try {
 				overlaySide = OverlaySide.valueOf((String) side);
 			} catch (ClassCastException | IllegalArgumentException e) {
-				throw bad("overlay.overlaySide", "LEFT or RIGHT");
+				throw bad(sidePath, "LEFT or RIGHT");
 			}
 		}
+		adjustRowsToFitView = bool(config, "view.adjustRowsToFitView", adjustRowsToFitView);
+		checkedFiltersFirst = bool(config, clientPath(config, "view.checkedFiltersOnTop", "view.checkedFiltersFirst"), checkedFiltersFirst);
+		hideSearchCost = bool(config, clientPath(config, "view.hideSearchCosts", "behavior.hideSearchCost"), hideSearchCost);
+		closeOnFound = bool(config, "behavior.closeOnFound", closeOnFound);
+		clearSearchBarOnClose = bool(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose);
+		clearFiltersOnClose = bool(config, "behavior.clearFiltersOnClose", clearFiltersOnClose);
+		matchSearchWordsInAnyOrder = bool(config, clientPath(config, "behavior.flexibleSearch", "behavior.matchSearchWordsInAnyOrder"), matchSearchWordsInAnyOrder);
+		showOnlyMatchingFilterOptions = bool(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions);
+		creativeUnlocksAll = bool(config, clientPath(config, "creativeAndSingleplayer.creativeUnlocksAll",
+				"singleplayerAndCreative.creativeUnlocksAll"), creativeUnlocksAll);
+		showTeleportOnlyInCreative = bool(config, clientPath(config, "creativeAndSingleplayer.showTeleportOnlyInCreative",
+				"singleplayerAndCreative.showTeleportOnlyInCreative"), showTeleportOnlyInCreative);
+		String legacyPausePath = clientPath(config, "singleplayerAndCreative.pauseGameWhenOpen", "behavior.pauseGameWhenOpen");
+		pauseGameWhenOpen = bool(config, clientPath(config, "creativeAndSingleplayer.pauseGameWhileOpen", legacyPausePath), pauseGameWhenOpen);
 		List<String> order = strings(config, "sorting.sortOrder", sortOrder);
 		boolean migratedSortOrder = Collections.replaceAll(order, "GROUP", "SET");
 		if (!normalizeSortOrder(order).equals(order)) throw bad("sorting.sortOrder", "permutation of NAME, SOURCE, DIMENSION, SET");
 		sortOrder = order;
 		return migratedSortOrder;
+	}
+
+	private static String clientPath(CommentedConfig config, String key, String legacyKey) {
+		return config.get(key) == null ? legacyKey : key;
 	}
 
 	private static void put(CommentedConfig config, String key, Object value, String comment) {
@@ -609,30 +601,44 @@ public class ExplorersCompassConfig {
 		moveToPosition(config.get("unlocking"), "visitsSharing", 2);
 	}
 
-	private static void writeClient(CommentedConfig config) {
-		put(config, "overlay.overlaySide", overlaySide.name(), "HUD overlay side: LEFT or RIGHT.");
-		put(config, "overlay.overlayLineOffset", overlayLineOffset, "Vertical line offset of the HUD overlay.");
-		put(config, "overlay.displayWithChatOpen", displayWithChatOpen, "Show compass information while chat is open.");
-		put(config, "view.checkedFiltersFirst", checkedFiltersFirst, "Show checked filters before unchecked filters.");
-		put(config, "view.adjustRowsToFitView", adjustRowsToFitView, "Adjust row spacing so list entries fit the view.");
-		config.remove("view.showTechnicalNames");
-		put(config, "behavior.closeOnFound", closeOnFound, "Close the compass screen after finding a structure.");
-		put(config, "behavior.clearFiltersOnClose", clearFiltersOnClose, "Clear filters when the compass screen closes.");
-		put(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose, "Clear the search bar when the compass screen closes.");
-		config.remove("behavior.pauseGameWhenOpen");
-		config.remove("behavior.searchTechnicalNames");
-		config.remove("behavior.allowIdSearches");
+	static String serializeClientSettings() {
+		CommentedConfig config = TomlFormat.newConfig(LinkedHashMap::new);
+		put(config, "hud.hudSide", overlaySide.name(), " HUD side: LEFT or RIGHT.");
+		put(config, "hud.verticalOffset", overlayLineOffset, " Vertical offset of the HUD overlay.");
+		put(config, "hud.displayWithChatOpen", displayWithChatOpen, " Show compass information while chat is open.");
+
+		put(config, "view.adjustRowsToFitView", adjustRowsToFitView, " Adjust row spacing so list entries fit the view.");
+		put(config, "view.checkedFiltersOnTop", checkedFiltersFirst,
+				" Show checked filter options separately above unchecked ones.");
+		put(config, "view.hideSearchCosts", hideSearchCost,
+				" Hide all structure search costs from the list. Reasonable when all structures have the same search cost.");
+
+		put(config, "behavior.closeOnFound", closeOnFound,
+				" Immediately close the compass screen when the compass finds a structure.");
+		put(config, "behavior.clearSearchBarOnClose", clearSearchBarOnClose,
+				" Clear the search bar when the compass screen closes.");
+		put(config, "behavior.clearFiltersOnClose", clearFiltersOnClose, " Clear filters when the compass screen closes.");
+		put(config, "behavior.flexibleSearch", matchSearchWordsInAnyOrder,
+				" Match every typed word fragment contained in a structure name, in any order.\n Example: \"vil pla\" can match \"Village Plains\".");
 		put(config, "behavior.showOnlyMatchingFilterOptions", showOnlyMatchingFilterOptions,
-				"Show only unchecked filter options with matching structures under the filters in the other columns.");
-		put(config, "behavior.matchSearchWordsInAnyOrder", matchSearchWordsInAnyOrder, "Match every part of the main structure search in any order.");
-		put(config, "behavior.hideSearchCost", hideSearchCost, "Hide the search cost on structure entries.\nReasonable when all structures have the same search cost.");
-		put(config, "singleplayerAndCreative.pauseGameWhenOpen", pauseGameWhenOpen, "Pause singleplayer while the compass screen is open, except while locating a structure.");
-		put(config, "singleplayerAndCreative.creativeUnlocksAll", creativeUnlocksAll, "Temporarily unlock all structures while in Creative mode without changing saved unlocks.");
-		put(config, "singleplayerAndCreative.showTeleportOnlyInCreative", showTeleportOnlyInCreative, "Show the Teleport button only in Creative mode. Teleport permission is still required.");
-		// Keep sorting last, including when rewriting an existing configuration.
-		CommentedConfig sorting = config.remove("sorting");
-		if (sorting != null) config.set("sorting", sorting);
-		put(config, "sorting.sortOrder", sortOrder, "Order of the four structure sorting keys.");
+				" Hide filter options which would produce an empty list if checked.\n Example: Checking \"The Nether\" would hide the \"Villages\" set.");
+
+		put(config, "creativeAndSingleplayer.creativeUnlocksAll", creativeUnlocksAll,
+				" Unlock all structures while in Creative mode. Changing the mode back relocks the right structures.");
+		put(config, "creativeAndSingleplayer.showTeleportOnlyInCreative", showTeleportOnlyInCreative,
+				" Hide the Teleport button in any game mode other than Creative.");
+		put(config, "creativeAndSingleplayer.pauseGameWhileOpen", pauseGameWhenOpen,
+				" Pause your Singleplayer world while the compass screen is open.");
+
+		put(config, "sorting.sortOrder", sortOrder, " Order of the four structure sorting keys.");
+		return new TomlWriter().writeToString(config);
+	}
+
+	private static void writeClient(Path path) throws IOException {
+		String settings = serializeClientSettings();
+		if (Files.exists(path) && Files.readString(path).equals(settings)) return;
+		Files.createDirectories(path.getParent());
+		Files.writeString(path, settings);
 	}
 
 	private static void writeCommonWhitelist(CommentedConfig config) {
@@ -659,7 +665,11 @@ public class ExplorersCompassConfig {
 	}
 
 	public static void saveClient() {
-		saveFile(CLIENT_SETTINGS, ExplorersCompassConfig::writeClient);
+		try {
+			writeClient(directory().resolve(CLIENT_SETTINGS));
+		} catch (IOException e) {
+			throw new RuntimeException("Could not save Explorer's Compass " + CLIENT_SETTINGS, e);
+		}
 	}
 
 	public static void saveHiddenStructures() {

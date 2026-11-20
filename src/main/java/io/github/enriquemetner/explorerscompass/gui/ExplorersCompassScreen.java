@@ -95,14 +95,17 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SETTINGS_RESET_LABEL_GAP = 4;
 	private static final String SETTINGS_RESET_ALL_LABEL = "All";
 	private static final int SETTINGS_OFFSET_ROW = 2;
-	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 11;
+	private static final int SETTINGS_HIDE_SEARCH_COST_ROW = 7;
+	private static final int SETTINGS_CLOSE_ON_FOUND_ROW = 9;
+	private static final int SETTINGS_CLEAR_SEARCH_ROW = 10;
+	private static final int SETTINGS_CLEAR_FILTERS_ROW = 11;
 	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 12;
-	private static final int SETTINGS_HIDE_SEARCH_COST_ROW = 13;
+	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 13;
 	private static final int SETTINGS_HIDDEN_ROW = 19;
 	private static final String HIDDEN_STRUCTURES_TITLE = "Hidden Structures";
-	private static final int SETTINGS_PAUSE_ROW = 15;
-	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 16;
-	private static final int SETTINGS_TELEPORT_ROW = 17;
+	private static final int SETTINGS_PAUSE_ROW = 17;
+	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 15;
+	private static final int SETTINGS_TELEPORT_ROW = 16;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
 	private String lastSearchFieldText;
@@ -113,46 +116,46 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int FOUND_ACTION_BUTTON_GAP = 5;
 	private static final int NOT_FOUND_BUTTON_GAP = 5;
 	private static final String[] SETTINGS_LABELS = {
-		"Overlay",
+		"HUD",
 		"HUD Side",
-		"HUD Line Offset",
+		"Vertical HUD offset",
 		"Show While Chat Is Open",
 		"View",
-		"Checked Filters on Top",
 		"Adjust Rows to Fit View",
+		"Checked Filters On Top",
+		"Hide Search Costs",
 		"Behavior",
-		"Close UI when located",
-		"Clear Filters on Close",
+		"Close UI When located",
 		"Clear Search Bar on Close",
+		"Clear Filters on Close",
+		"Flexible Search",
 		"Show Only Matching Filter Options",
-		"Match Search Words in Any Order",
-		"Hide Search Cost",
-		"Singleplayer & Creative",
-		"Pause Game When Open",
+		"Creative & Singleplayer",
 		"Unlock All Structures in Creative",
 		"Show Teleport Only in Creative",
+		"Pause Game While Open",
 		"Other",
 		HIDDEN_STRUCTURES_TITLE,
 	};
 	private static final String[] SETTINGS_TOOLTIPS = {
 		null,
-		"Choose whether compass information appears on the left or right side of the HUD.",
-		"Move compass information vertically. Higher values move it down; lower values move it up.",
-		"Keep compass information visible while the chat screen is open.",
+		"Choose the position of the compass pointing information on the screen.",
+		"Move the compass pointing information vertically.\nHigher values move it down;\nLower values move it up.",
+		"Keep compass pointing information visible while the chat is shown.",
 		null,
-		"Show checked options above unchecked options in each filter column. The selection itself does not change.",
-		"Adjusts row spacing, showing less content but only fully visible list entries. Smooth scrolling may still show partial entries.",
+		"Adjusts the spacing of rows, showing less content but only fully visible list entries.",
+		"Show checked filter options separately above unchecked ones.",
+		"Hide all structure search costs from the list.\nReasonable when all structures have the same search cost.",
 		null,
-		"Close the compass screen when a structure is located.",
-		"Clear selected structure filters when you close the compass screen.",
-		"Clears the search bar when you close the compass screen.",
-		"Show unchecked sources, dimensions, and structure sets only when they match at least one structure with the filters in the other columns. Checked options stay available so you can uncheck them.",
-		"Match every part of your search in any order, like in Settings.\nExample: 'Plains Village' or 'vil pl' match 'Village Plains'.",
-		"Hide the search cost on structure entries.\nReasonable when all structures have the same search cost.",
+		"Immediately close the compass screen when the compass finds a structure.",
+		"Clear the search bar when you close the screen.",
+		"Clear selected filters when you close the compass screen.",
+		"Match every typed word fragment contained in a structure name, in any order.\nExample: \"vil pla\" can match \"Village Plains\".",
+		"Hide filter options which would produce an empty list if checked.\nExample: Checking \"The Nether\" would hide the \"Villages\" set.",
 		null,
-		"Pauses singleplayer while the compass screen is open, except while locating a structure. Searches need the game to keep ticking to make progress.",
-		"Temporarily unlock all structures while in Creative mode. Changing the mode back relocks previously locked structures.",
-		"Show the Teleport button only in Creative Mode. Teleport permission is still required.",
+		"Unlock all structures while in Creative mode.\nChanging the mode back relocks the right structures.",
+		"Hide the teleport button in any game mode other than Creative.",
+		"Pauses your Singleplayer world while the compass screen is open.",
 		null,
 		"View and restore structures hidden on this client.",
 	};
@@ -2929,7 +2932,7 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 		}));
 		offsetDecreaseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_OFFSET_ROW), 20, settingsControlHeight(), Text.literal("−"), (onPress) -> {
-			if (ExplorersCompassConfig.overlayLineOffset > Integer.MIN_VALUE) {
+			if (ExplorersCompassConfig.overlayLineOffset > 0) {
 				ExplorersCompassConfig.overlayLineOffset--;
 				ExplorersCompassConfig.saveClient();
 			}
@@ -2945,17 +2948,17 @@ public class ExplorersCompassScreen extends Screen {
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 		}));
-		clearSearchBarOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(10), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+		clearSearchBarOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLEAR_SEARCH_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
 			ExplorersCompassConfig.clearSearchBarOnClose = !ExplorersCompassConfig.clearSearchBarOnClose;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 		}));
-		clearOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(9), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
+		clearOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLEAR_FILTERS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
 			ExplorersCompassConfig.clearFiltersOnClose = !ExplorersCompassConfig.clearFiltersOnClose;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
 		}));
-		checkedFiltersFirstButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(5), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
+		checkedFiltersFirstButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(6), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
 			ExplorersCompassConfig.checkedFiltersFirst = !ExplorersCompassConfig.checkedFiltersFirst;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
@@ -2981,7 +2984,7 @@ public class ExplorersCompassScreen extends Screen {
 			updateSettingsButtonLabels();
 			processSearchTerm();
 		}));
-		adjustRowsToFitViewButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(6), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
+		adjustRowsToFitViewButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(5), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
 			ExplorersCompassConfig.adjustRowsToFitView = !ExplorersCompassConfig.adjustRowsToFitView;
 			ExplorersCompassConfig.saveClient();
 			remove(selectionList);
@@ -2989,7 +2992,7 @@ public class ExplorersCompassScreen extends Screen {
 			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
 			updateSettingsButtonLabels();
 		}));
-		closeOnFoundButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(8), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
+		closeOnFoundButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLOSE_ON_FOUND_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
 			ExplorersCompassConfig.closeOnFound = !ExplorersCompassConfig.closeOnFound;
 			ExplorersCompassConfig.saveClient();
 			updateSettingsButtonLabels();
@@ -3017,17 +3020,17 @@ public class ExplorersCompassScreen extends Screen {
 		addSettingResetButton(1, ClientSetting.OVERLAY_SIDE);
 		addSettingResetButton(SETTINGS_OFFSET_ROW, ClientSetting.OVERLAY_LINE_OFFSET);
 		addSettingResetButton(3, ClientSetting.DISPLAY_WITH_CHAT_OPEN);
-		addSettingResetButton(5, ClientSetting.CHECKED_FILTERS_FIRST);
-		addSettingResetButton(6, ClientSetting.ADJUST_ROWS_TO_FIT_VIEW);
-		addSettingResetButton(8, ClientSetting.CLOSE_ON_FOUND);
-		addSettingResetButton(9, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
-		addSettingResetButton(10, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
+		addSettingResetButton(5, ClientSetting.ADJUST_ROWS_TO_FIT_VIEW);
+		addSettingResetButton(6, ClientSetting.CHECKED_FILTERS_FIRST);
 		addSettingResetButton(SETTINGS_HIDE_SEARCH_COST_ROW, ClientSetting.HIDE_SEARCH_COST);
-		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
+		addSettingResetButton(SETTINGS_CLOSE_ON_FOUND_ROW, ClientSetting.CLOSE_ON_FOUND);
+		addSettingResetButton(SETTINGS_CLEAR_SEARCH_ROW, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
+		addSettingResetButton(SETTINGS_CLEAR_FILTERS_ROW, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
 		addSettingResetButton(SETTINGS_MATCH_SEARCH_WORDS_ROW, ClientSetting.MATCH_SEARCH_WORDS_IN_ANY_ORDER);
-		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
+		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
 		addSettingResetButton(SETTINGS_CREATIVE_UNLOCK_ROW, ClientSetting.CREATIVE_UNLOCKS_ALL);
 		addSettingResetButton(SETTINGS_TELEPORT_ROW, ClientSetting.SHOW_TELEPORT_ONLY_IN_CREATIVE);
+		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
 
 		cancelButton = addDrawableChild(new TransparentButton(width - 30, 10, 20, 20, Text.literal(""), (onPress) -> {
 			client.setScreen(null);
@@ -3292,14 +3295,14 @@ public class ExplorersCompassScreen extends Screen {
 		placeSetting(offsetDecreaseButton, SETTINGS_OFFSET_ROW);
 		placeSetting(offsetIncreaseButton, SETTINGS_OFFSET_ROW);
 		placeSetting(chatOverlayButton, 3);
-		placeSetting(checkedFiltersFirstButton, 5);
-		placeSetting(adjustRowsToFitViewButton, 6);
+		placeSetting(adjustRowsToFitViewButton, 5);
+		placeSetting(checkedFiltersFirstButton, 6);
 		placeSetting(hideSearchCostButton, SETTINGS_HIDE_SEARCH_COST_ROW);
 		placeSetting(matchSearchWordsButton, SETTINGS_MATCH_SEARCH_WORDS_ROW);
 		placeSetting(showOnlyMatchingFilterOptionsButton, SETTINGS_MATCHING_FILTER_OPTIONS_ROW);
-		placeSetting(closeOnFoundButton, 8);
-		placeSetting(clearOnCloseButton, 9);
-		placeSetting(clearSearchBarOnCloseButton, 10);
+		placeSetting(closeOnFoundButton, SETTINGS_CLOSE_ON_FOUND_ROW);
+		placeSetting(clearOnCloseButton, SETTINGS_CLEAR_FILTERS_ROW);
+		placeSetting(clearSearchBarOnCloseButton, SETTINGS_CLEAR_SEARCH_ROW);
 		placeSetting(pauseGameWhenOpenButton, SETTINGS_PAUSE_ROW);
 		placeSetting(creativeUnlocksAllButton, SETTINGS_CREATIVE_UNLOCK_ROW);
 		placeSetting(showTeleportOnlyInCreativeButton, SETTINGS_TELEPORT_ROW);
