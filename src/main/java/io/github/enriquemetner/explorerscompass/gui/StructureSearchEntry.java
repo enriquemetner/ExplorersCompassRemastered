@@ -73,16 +73,22 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
                     top + (height - client.textRenderer.fontHeight) / 2, "", cost, "");
         }
         String readableName = StructureUtils.getStructureName(structureID);
-        int nameY = top + (height / 2) - ((client.textRenderer.fontHeight + 2) * 2);
+        boolean showSource = parentScreen.showsStructureSource();
+        int lineHeight = client.textRenderer.fontHeight + StructureSearchList.TEXT_LINE_GAP;
+        int lineCount = showSource ? 4 : 3;
+        int nameY = top + (height - lineCount * lineHeight) / 2;
         context.drawText(client.textRenderer, client.textRenderer.trimToWidth(readableName, textWidth), left + 5, nameY, nameColor, true);
-        int lineHeight = client.textRenderer.fontHeight + 2;
-        drawDetail(context, "Source: ", StructureUtils.getStructureSource(structureID),
-                left + 5, nameY + lineHeight, textWidth, infoColor);
+        int detailY = nameY + lineHeight;
+        if (showSource) {
+            drawDetail(context, "Source: ", StructureUtils.getStructureSource(structureID),
+                    left + 5, detailY, textWidth, infoColor);
+            detailY += lineHeight;
+        }
         drawDetail(context, "Set: ", StructureUtils.formatIdPath(getSetID()),
-                left + 5, nameY + 2 * lineHeight, textWidth, infoColor);
+                left + 5, detailY, textWidth, infoColor);
         drawDetail(context, "Dimension: ",
                 StructureUtils.structureDimensionsToString(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureID)),
-                left + 5, nameY + 3 * lineHeight, textWidth, infoColor);
+                left + 5, detailY + lineHeight, textWidth, infoColor);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
         buttonY = structuresList.rowActionY(top, height, true);
         context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, RenderUtils.ROW_BUTTON_BORDER);

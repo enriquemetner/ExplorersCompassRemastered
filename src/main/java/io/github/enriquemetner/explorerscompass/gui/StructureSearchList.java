@@ -22,6 +22,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	static final int ACTION_BUTTON_HEIGHT = 16;
 	static final int ACTION_BUTTON_GAP = 2;
 	static final int ACTION_BUTTONS_HEIGHT = ACTION_BUTTON_HEIGHT * 2 + ACTION_BUTTON_GAP;
+	static final int TEXT_LINE_GAP = 2;
 	private static final long DOUBLE_CLICK_INTERVAL_MS = 250L;
 
 	private final ExplorersCompassScreen parentScreen;
@@ -32,7 +33,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	private double scrollbarGrabOffset;
 
 	public StructureSearchList(ExplorersCompassScreen parentScreen, MinecraftClient client, StructureSelection selection, int x, int y, int width, int height, int slotHeight) {
-		super(client, width, height, y, y + height, ExplorersCompassConfig.adjustRowsToFitView ? fittedRowHeight(height, slotHeight) : slotHeight);
+		super(client, width, height, y, y + height, rowHeight(parentScreen, client, width, height, slotHeight));
 		this.parentScreen = parentScreen;
 		this.selection = selection;
 		// Cancel the list widget's default 4px top padding so rows meet the scrollbar track.
@@ -41,7 +42,15 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 		refreshList();
 	}
 
-	private static int fittedRowHeight(int viewportHeight, int preferredRowHeight) {
+	private static int rowHeight(ExplorersCompassScreen parentScreen, MinecraftClient client, int width,
+			int viewportHeight, int preferredRowHeight) {
+		if (!parentScreen.showsStructureSource()) {
+			// JES support can become available after the list has been created.
+			int controlsHeight = canFitPreviews(parentScreen, width) ? JesThumbnails.SIZE : ACTION_BUTTONS_HEIGHT;
+			int lineHeight = client.textRenderer.fontHeight + TEXT_LINE_GAP;
+			preferredRowHeight = Math.max(preferredRowHeight - lineHeight, controlsHeight + 2);
+		}
+		if (!ExplorersCompassConfig.adjustRowsToFitView) return preferredRowHeight;
 		int visibleRows = Math.max(1, viewportHeight / preferredRowHeight);
 		return Math.max(preferredRowHeight, viewportHeight / visibleRows);
 	}
@@ -334,8 +343,11 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	}
 
     boolean hasPreviews() {
-        var previews = parentScreen.jesThumbnails();
-        return previews != null && previews.available() && getRowWidth() >= 2 * JesThumbnails.SIZE + 42;
+        return canFitPreviews(parentScreen, getRowWidth()) && parentScreen.jesThumbnails().available();
+    }
+
+    private static boolean canFitPreviews(ExplorersCompassScreen parentScreen, int width) {
+        return parentScreen.jesThumbnails() != null && width >= 2 * JesThumbnails.SIZE + 42;
     }
 
     int previewX() {

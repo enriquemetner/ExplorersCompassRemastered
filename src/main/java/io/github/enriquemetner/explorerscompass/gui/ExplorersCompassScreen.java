@@ -279,7 +279,7 @@ public class ExplorersCompassScreen extends Screen {
 	private double scrollbarGrabOffset;
 	private final List<List<FilterOption>> filterOptions = List.of(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
 	private FilterSelections.AvailableOptions availableFilterOptions;
-	private boolean showSourceColumn = true;
+	private boolean showSourceColumn;
 	private final List<SortCriterion> sortOrder = new ArrayList<SortCriterion>();
 	private boolean sortMenuOpen;
 	private int draggedSortRow = -1;
@@ -312,7 +312,7 @@ public class ExplorersCompassScreen extends Screen {
 		lastCreativeBypass = creativeBypassActive();
 		FilterSelections.openedInDimension(world.getRegistryKey().getValue());
 
-		this.allowedStructureIDs = new ArrayList<Identifier>(allowedStructureIDs);
+		setAllowedStructureIDs(allowedStructureIDs);
 		structureIDsMatchingSearch = new ArrayList<Identifier>(allowedStructureIDs);
 		for (String name : ExplorersCompassConfig.sortOrder) {
 			sortOrder.add(SortCriterion.valueOf(name));
@@ -483,7 +483,7 @@ public class ExplorersCompassScreen extends Screen {
 			foundStructureId = ClientPacketHandlers.trackedStructureId;
 			double scroll = restoreQuestListAfterSync ? questReturnScroll : selectionList.getScrollAmount();
 			remove(selectionList);
-			allowedStructureIDs = new ArrayList<Identifier>(ExplorersCompass.allowedStructureIDs);
+			setAllowedStructureIDs(ExplorersCompass.allowedStructureIDs);
 			structureSelection.retain(new HashSet<>(allowedStructureIDs)::contains);
 			structureIDsMatchingSearch = new ArrayList<Identifier>(allowedStructureIDs);
 			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
@@ -950,6 +950,15 @@ public class ExplorersCompassScreen extends Screen {
 		};
 	}
 
+	boolean showsStructureSource() {
+		return showSourceColumn;
+	}
+
+	private void setAllowedStructureIDs(List<Identifier> ids) {
+		allowedStructureIDs = new ArrayList<>(ids);
+		showSourceColumn = ids.isEmpty() || ids.stream().anyMatch(id -> !"minecraft".equals(id.getNamespace()));
+	}
+
 	private void rebuildFilterOptions() {
 		availableFilterOptions = null;
 		for (List<FilterOption> options : filterOptions) {
@@ -967,7 +976,6 @@ public class ExplorersCompassScreen extends Screen {
 				sets.add(set);
 			}
 		}
-		showSourceColumn = sources.size() != 1 || !sources.containsKey("minecraft");
 		if (!showSourceColumn && !FilterSelections.sources.isEmpty()) {
 			FilterSelections.sources.clear();
 			showNormalResults();
