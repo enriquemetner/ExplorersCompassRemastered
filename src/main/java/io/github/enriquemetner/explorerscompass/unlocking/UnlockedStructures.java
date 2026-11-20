@@ -1,5 +1,7 @@
 package io.github.enriquemetner.explorerscompass.unlocking;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -19,8 +21,12 @@ public final class UnlockedStructures extends PersistentState {
     private final Map<UUID, Set<Identifier>> unlockedStructures = new HashMap<>();
     private final Set<UUID> notificationsEnabled = new HashSet<>();
     private final Map<UUID, Set<Identifier>> pendingNotifications = new HashMap<>();
-    private final Set<UUID> pendingRelock = new HashSet<>();
-    private String definitionHistory;
+    record Relock(Set<Identifier> direct, Set<Identifier> dependent) {
+        static final Relock EMPTY = new Relock(Set.of(), Set.of());
+    }
+
+    private final Map<UUID, Relock> pendingRelock = new HashMap<>();
+    private UnlockDefinitions definitions;
     private final Map<UUID, Set<Identifier>> latestUnlockedStructures = new HashMap<>();
     private final Map<UUID, Set<Identifier>> unlockEventBaselines = new HashMap<>();
 
@@ -45,41 +51,81 @@ public final class UnlockedStructures extends PersistentState {
         return Set.copyOf(unlockedStructures.getOrDefault(player, Set.of()));
     }
 
-    public Set<UUID> knownPlayers() {
-        Set<UUID> players = new HashSet<>(unlockedStructures.keySet());
-        players.addAll(notificationsEnabled);
-        players.addAll(pendingRelock);
-        return players;
-    }
+    UnlockDefinitions definitions() { return definitions; }
 
-    public String definitionHistory() { return definitionHistory; }
-
-    public boolean updateDefinitionHistory(String definition) {
-        if (definition.equals(definitionHistory)) return false;
-        boolean changed = definitionHistory != null;
-        definitionHistory = definition;
-        markDirty();
-        return changed;
-    }
-
-    public void queueRelock(Set<UUID> players) {
-        if (pendingRelock.addAll(players)) {
-            PartySharing.changed();
+    void saveDefinitions(UnlockDefinitions current) {
+        if (!current.equals(definitions)) {
+            definitions = current;
             markDirty();
         }
     }
 
-    boolean hasPendingRelock(UUID player) {
-        return pendingRelock.contains(player);
+    Set<String> savedStructureIds() {
+        Set<Identifier> ids = new HashSet<>();
+        unlockedStructures.values().forEach(ids::addAll);
+        pendingRelock.values().forEach(pending -> ids.addAll(pending.dependent()));
+        return UnlockDefinitions.ids(ids);
     }
 
-    public boolean takePendingRelock(UUID player) {
-        if (!pendingRelock.remove(player)) return false;
-        PartySharing.changed();
+    void relock(Set<Identifier> changed, Map<Identifier, UnlockPrerequisites.Gate> gates) {
+        if (changed.isEmpty()) return;
+        Map<Identifier, Set<Identifier>> dependents = new HashMap<>();
+        gates.forEach((target, gate) -> gate.required().keySet().forEach(dependency ->
+                dependents.computeIfAbsent(dependency, ignored -> new HashSet<>()).add(target)));
+
+        Set<UUID> players = new HashSet<>(unlockedStructures.keySet());
+        players.addAll(pendingRelock.keySet());
+        for (UUID player : players) {
+            Set<Identifier> saved = unlockedStructures.getOrDefault(player, Set.of());
+            Relock previous = pendingRelock.getOrDefault(player, Relock.EMPTY);
+            Set<Identifier> removed = new HashSet<>();
+            Set<Identifier> direct = new HashSet<>(previous.direct());
+            Set<Identifier> dependent = new HashSet<>(previous.dependent());
+            Set<Identifier> smaller = saved.size() < changed.size() ? saved : changed;
+            Set<Identifier> larger = smaller == saved ? changed : saved;
+            for (Identifier id : smaller) if (larger.contains(id)) removed.add(id);
+            direct.addAll(removed);
+            var previouslyDependent = dependent.iterator();
+            while (previouslyDependent.hasNext()) {
+                Identifier id = previouslyDependent.next();
+                if (changed.contains(id)) {
+                    previouslyDependent.remove();
+                    direct.add(id);
+                }
+            }
+
+            var queue = new ArrayDeque<>(removed);
+            while (!queue.isEmpty()) {
+                Identifier dependency = queue.removeFirst();
+                for (Identifier id : dependents.getOrDefault(dependency, Set.of())) {
+                    var gate = gates.get(id);
+                    if (saved.contains(id) && !removed.contains(id)
+                            && gate.satisfied(saved::contains)
+                            && !gate.satisfied(required -> saved.contains(required) && !removed.contains(required))) {
+                        if (!direct.contains(id)) dependent.add(id);
+                        removed.add(id);
+                        queue.addLast(id);
+                    }
+                }
+            }
+
+            if (!removed.isEmpty()) remove(player, removed);
+            Relock pending = new Relock(Set.copyOf(direct), Set.copyOf(dependent));
+            if (!pending.equals(previous)) {
+                pendingRelock.put(player, pending);
+                markDirty();
+            }
+        }
+    }
+
+    boolean hasPendingRelock(UUID player) { return pendingRelock.containsKey(player); }
+
+    Relock takePendingRelock(UUID player) {
+        Relock pending = pendingRelock.remove(player);
+        if (pending == null) return Relock.EMPTY;
         markDirty();
-        return true;
+        return pending;
     }
-
 
     public void clearStructures(UUID player) {
         if (unlockedStructures.remove(player) != null) {
@@ -116,6 +162,13 @@ public final class UnlockedStructures extends PersistentState {
     }
 
     public int add(UUID player, Set<Identifier> structures) {
+        Relock pending = pendingRelock.get(player);
+        if (pending != null && !structures.isEmpty()) {
+            // Keep these unlocks out of the saved and shared sets until join reconciliation.
+            structures = new HashSet<>(structures);
+            structures.removeAll(pending.direct());
+            structures.removeAll(pending.dependent());
+        }
         if (structures.isEmpty()) return 0;
         Set<Identifier> saved = unlockedStructures.computeIfAbsent(player, ignored -> new HashSet<>());
         int before = saved.size();
@@ -152,36 +205,26 @@ public final class UnlockedStructures extends PersistentState {
 
     public static UnlockedStructures fromNbt(NbtCompound nbt) {
         UnlockedStructures state = new UnlockedStructures();
-        if (nbt.contains("DefinitionHistory", NbtElement.STRING_TYPE))
-            state.definitionHistory = nbt.getString("DefinitionHistory");
+        if (nbt.getInt("UnlockDefinitionsVersion") == UnlockDefinitions.VERSION
+                && nbt.contains("UnlockDefinitions", NbtElement.BYTE_ARRAY_TYPE)) {
+            state.definitions = UnlockDefinitions.deserialize(
+                    new String(nbt.getByteArray("UnlockDefinitions"), StandardCharsets.UTF_8));
+        }
         NbtList players = nbt.getList("Players", NbtElement.COMPOUND_TYPE);
         for (int i = 0; i < players.size(); i++) {
             NbtCompound player = players.getCompound(i);
             if (!player.containsUuid("UUID")) continue;
-            Set<Identifier> structures = new HashSet<>();
-            NbtList ids = player.getList("UnlockedStructures", NbtElement.STRING_TYPE);
-            for (int j = 0; j < ids.size(); j++) {
-                Identifier id = Identifier.tryParse(ids.getString(j));
-                if (id != null) structures.add(id);
-            }
-            Set<Identifier> latest = new HashSet<>();
-            NbtList latestIds = player.getList("LatestUnlockedStructures", NbtElement.STRING_TYPE);
-            for (int j = 0; j < latestIds.size(); j++) {
-                Identifier id = Identifier.tryParse(latestIds.getString(j));
-                if (id != null) latest.add(id);
-            }
-            if (!latest.isEmpty()) state.latestUnlockedStructures.put(player.getUuid("UUID"), latest);
-            state.unlockedStructures.put(player.getUuid("UUID"), structures);
             UUID uuid = player.getUuid("UUID");
+            Set<Identifier> structures = readIds(player, "UnlockedStructures");
+            if (!structures.isEmpty()) state.unlockedStructures.put(uuid, new HashSet<>(structures));
+            Set<Identifier> latest = readIds(player, "LatestUnlockedStructures");
+            if (!latest.isEmpty()) state.latestUnlockedStructures.put(uuid, latest);
             if (player.getBoolean("NotificationsEnabled")) state.notificationsEnabled.add(uuid);
-            if (player.getBoolean("PendingRelock")) state.pendingRelock.add(uuid);
-            Set<Identifier> pending = new HashSet<>();
-            NbtList queued = player.getList("PendingNotifications", NbtElement.STRING_TYPE);
-            for (int j = 0; j < queued.size(); j++) {
-                Identifier id = Identifier.tryParse(queued.getString(j));
-                if (id != null) pending.add(id);
-            }
-            if (!pending.isEmpty()) state.pendingNotifications.put(uuid, pending);
+            Set<Identifier> direct = readIds(player, "PendingDirectRelock");
+            Set<Identifier> dependent = readIds(player, "PendingDependentRelock");
+            if (!direct.isEmpty() || !dependent.isEmpty()) state.pendingRelock.put(uuid, new Relock(direct, dependent));
+            Set<Identifier> pending = readIds(player, "PendingNotifications");
+            if (!pending.isEmpty()) state.pendingNotifications.put(uuid, new HashSet<>(pending));
         }
         return state;
     }
@@ -192,26 +235,43 @@ public final class UnlockedStructures extends PersistentState {
         Set<UUID> uuids = new HashSet<>(unlockedStructures.keySet());
         uuids.addAll(notificationsEnabled);
         uuids.addAll(pendingNotifications.keySet());
-        uuids.addAll(pendingRelock);
+        uuids.addAll(pendingRelock.keySet());
         uuids.addAll(latestUnlockedStructures.keySet());
         uuids.forEach(uuid -> {
             NbtCompound player = new NbtCompound();
             player.putUuid("UUID", uuid);
-            NbtList ids = new NbtList();
-            unlockedStructures.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> ids.add(NbtString.of(id.toString())));
-            player.put("UnlockedStructures", ids);
-            NbtList latest = new NbtList();
-            latestUnlockedStructures.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> latest.add(NbtString.of(id.toString())));
-            player.put("LatestUnlockedStructures", latest);
+            writeIds(player, "UnlockedStructures", unlockedStructures.getOrDefault(uuid, Set.of()));
+            writeIds(player, "LatestUnlockedStructures", latestUnlockedStructures.getOrDefault(uuid, Set.of()));
             player.putBoolean("NotificationsEnabled", notificationsEnabled.contains(uuid));
-            player.putBoolean("PendingRelock", pendingRelock.contains(uuid));
-            NbtList queued = new NbtList();
-            pendingNotifications.getOrDefault(uuid, Set.of()).stream().sorted().forEach(id -> queued.add(NbtString.of(id.toString())));
-            player.put("PendingNotifications", queued);
+            Relock pending = pendingRelock.get(uuid);
+            if (pending != null) {
+                writeIds(player, "PendingDirectRelock", pending.direct());
+                writeIds(player, "PendingDependentRelock", pending.dependent());
+            }
+            writeIds(player, "PendingNotifications", pendingNotifications.getOrDefault(uuid, Set.of()));
             players.add(player);
         });
         nbt.put("Players", players);
-        if (definitionHistory != null) nbt.putString("DefinitionHistory", definitionHistory);
+        if (definitions != null) {
+            nbt.putInt("UnlockDefinitionsVersion", UnlockDefinitions.VERSION);
+            nbt.putByteArray("UnlockDefinitions", definitions.serialize().getBytes(StandardCharsets.UTF_8));
+        }
         return nbt;
+    }
+    private static Set<Identifier> readIds(NbtCompound player, String key) {
+        Set<Identifier> ids = new HashSet<>();
+        NbtList list = player.getList(key, NbtElement.STRING_TYPE);
+        for (int i = 0; i < list.size(); i++) {
+            Identifier id = Identifier.tryParse(list.getString(i));
+            if (id != null) ids.add(id);
+        }
+        return Set.copyOf(ids);
+    }
+
+    private static void writeIds(NbtCompound player, String key, Set<Identifier> ids) {
+        if (ids.isEmpty()) return;
+        NbtList list = new NbtList();
+        ids.stream().sorted().forEach(id -> list.add(NbtString.of(id.toString())));
+        player.put(key, list);
     }
 }

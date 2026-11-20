@@ -84,6 +84,16 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         nbt.putString("match", match.name().toLowerCase(Locale.ROOT));
     }
 
+    void normalizeDefinition(MinecraftServer server, NbtCompound data) {
+        var targets = UnlockingRules.resolveRewardTargets(server, structures, structureSets);
+        NbtList ids = new NbtList();
+        targets.stream().sorted().forEach(id -> ids.add(NbtString.of(id.toString())));
+        data.remove("structures");
+        data.remove("structure_sets");
+        data.put("targets", ids);
+        data.putString("match", match == Match.ALL && targets.size() > 1 ? "all" : "any");
+    }
+
     @Override public void readData(NbtCompound nbt) {
         super.readData(nbt);
         NbtList values = nbt.getList("structures", NbtElement.STRING_TYPE);

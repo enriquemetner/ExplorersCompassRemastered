@@ -632,7 +632,7 @@ public class ExplorersCompassConfig {
 		}
 		moveToPosition(config, "progression", 2);
 		writeCommonSetting(progression, "relockOnReload", relockOnReload, 0,
-				"Relock player structures at world startup when unlocking rules changed.");
+				"Relock structures at world startup when their unlock requirements change or a prerequisite is no longer met.");
 		writeCommonSetting(progression, "compassSharing", compassSharing, 1,
 				"Unlock structures which a previous compass holder had unlocked after getting a hold of their compass.");
 		writeCommonSetting(progression, "opacPartySharing", opacPartySharing, 2,

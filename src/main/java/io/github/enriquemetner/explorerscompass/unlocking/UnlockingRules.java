@@ -42,10 +42,11 @@ import net.minecraft.util.Identifier;
 
 /** Server-owned rule definitions. Reloading replaces definitions without touching player data. */
 public final class UnlockingRules {
-    private static final String DEFAULT_DEFINITION = new UnlockingRuleDocument(ExplorersCompassConfig.DEFAULT_UNLOCKING_RULES).root.toString();
+    private static final JsonElement GENERATED_DEFAULTS =
+            new UnlockingRuleDocument(ExplorersCompassConfig.DEFAULT_UNLOCKING_RULES).root;
     private static final Logger LOGGER = LogManager.getLogger("explorerscompass");
     private static UnlockingRules active = new UnlockingRules();
-    private static String activeDefinition = "";
+    private static boolean loaded;
     private enum DefaultMode { UNLOCKED, LOCKED_UNTIL_VISITED, LOCKED_UNTIL_VISITED_SET }
 
     public enum Severity { ERROR, WARNING }
@@ -71,13 +72,22 @@ public final class UnlockingRules {
     }
 
     private DefaultMode defaultMode = DefaultMode.UNLOCKED;
+    private boolean usesGeneratedDefaults;
     private final Map<Identifier, UnlockPrerequisites.Gate> prerequisites = new LinkedHashMap<>();
+    private final List<UnlockDefinitions.Rule> prerequisiteDefinitions = new ArrayList<>();
     private final Map<String, Requirement> rules = new LinkedHashMap<>();
     private final Map<Identifier, Requirement> byStructure = new LinkedHashMap<>();
     private final Map<Identifier, List<Set<Identifier>>> visitSetsByStructure = new LinkedHashMap<>();
+    private final Map<String, Set<String>> visitSetDefinitions = new LinkedHashMap<>();
 
     private record Condition(Predicate<Progress> test, Function<Progress, RequirementNode> display,
-                             Set<Identifier> visits, Set<Identifier> advancements) {}
+                             Set<Identifier> visits, Set<Identifier> advancements, boolean all) {
+        String definition() {
+            if (!visits.isEmpty()) return UnlockDefinitions.condition("visit", all, UnlockDefinitions.ids(visits));
+            if (!advancements.isEmpty()) return UnlockDefinitions.condition("advancement", all, UnlockDefinitions.ids(advancements));
+            return "always";
+        }
+    }
     private record Requirement(Set<Identifier> targets, Condition condition) {}
 
     public static UnlockingRules get() { return active; }
@@ -139,9 +149,21 @@ public final class UnlockingRules {
         };
     }
 
-    public static void clear() { active = new UnlockingRules(); activeDefinition = ""; }
+    public static void clear() { active = new UnlockingRules(); loaded = false; }
 
-    public static String definition() { return activeDefinition; }
+    static boolean loaded() { return loaded; }
+
+    UnlockDefinitions definitions(List<FtbStructureRewards.RewardDefinition> rewards) {
+        if (diagnostics.stream().anyMatch(diagnostic -> diagnostic.severity() == Severity.ERROR)) return null;
+        var definitions = rules.entrySet().stream().map(entry -> new UnlockDefinitions.Rule(entry.getKey(),
+                UnlockDefinitions.ids(entry.getValue().targets), entry.getValue().condition.definition())).toList();
+        var rewardDefinitions = rewards.stream().map(reward -> new UnlockDefinitions.Rule(Long.toString(reward.id()),
+                UnlockDefinitions.ids(reward.targets()), reward.requirement()))
+                .sorted(java.util.Comparator.comparing(UnlockDefinitions.Rule::id)).toList();
+        return new UnlockDefinitions(defaultMode.name(), visitSetDefinitions, definitions, prerequisiteDefinitions, rewardDefinitions);
+    }
+
+    Map<Identifier, UnlockPrerequisites.Gate> prerequisiteGates() { return prerequisites; }
 
     public static io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Section reload(MinecraftServer server) {
         Path file = ExplorersCompassConfig.serverConfigFile(server, ExplorersCompassConfig.UNLOCKING_RULES);
@@ -149,28 +171,32 @@ public final class UnlockingRules {
         var details = active.diagnostics(null);
         String summary = count < 0 ? "Could not load unlocking_rules.json"
                 : "Successfully loaded " + count + " unlocking requirements and " + active.prerequisiteCount + " prerequisites";
+        if (count >= 0 && details.stream().anyMatch(diagnostic -> diagnostic.severity() == Severity.ERROR)) {
+            summary = "Loaded " + count + " valid unlocking requirements and " + active.prerequisiteCount
+                    + " prerequisites. Some entries were rejected";
+        }
         return new io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Section(
                 summary, count < 0 ? Severity.ERROR : null, details);
     }
 
     static int reload(Path file, Catalog catalog) {
-        var loaded = readFile(file, catalog);
-        active = loaded.rules();
-        activeDefinition = loaded.definition();
+        var result = readFile(file, catalog);
+        active = result.rules();
+        loaded = true;
         PartySharing.changed();
-        return loaded.fallback() ? -1 : active.rules.size();
+        return result.fallback() ? -1 : active.rules.size();
     }
 
-    private record LoadedRules(UnlockingRules rules, String definition, boolean fallback) {}
+    private record LoadedRules(UnlockingRules rules, boolean fallback) {}
 
     private static LoadedRules readFile(Path file, Catalog catalog) {
         try {
             var document = new UnlockingRuleDocument(Files.readString(file));
-            return new LoadedRules(parse(document, catalog, file), document.root.toString(), false);
+            return new LoadedRules(parse(document, catalog, file), false);
         } catch (IOException | IllegalArgumentException e) {
             UnlockingRules fallback = new UnlockingRules();
             fallback.diagnose(Severity.ERROR, "Could not load unlocking_rules.json: " + failureReason(e));
-            return new LoadedRules(fallback, DEFAULT_DEFINITION, true);
+            return new LoadedRules(fallback, true);
         }
     }
 
@@ -259,6 +285,7 @@ public final class UnlockingRules {
                     + "; the last requirement takes precedence");
         }
         result.loadPrerequisites(root, document, catalog, file);
+        result.usesGeneratedDefaults = GENERATED_DEFAULTS.equals(root);
         return result;
     }
 
@@ -285,6 +312,8 @@ public final class UnlockingRules {
                         (id, line) -> required.computeIfAbsent(id, ignored -> new ArrayList<>()).add(line), warning);
                 boolean all = matchAll(document, value);
                 targets.forEach((id, lines) -> prerequisites.put(id, new UnlockPrerequisites.Gate(all, required, lines)));
+                prerequisiteDefinitions.add(new UnlockDefinitions.Rule(entry.getKey(), UnlockDefinitions.ids(targets.keySet()),
+                        UnlockDefinitions.condition("unlocked", all, UnlockDefinitions.ids(required.keySet()))));
                 prerequisiteCount++;
             } catch (IllegalArgumentException e) {
                 String message = e instanceof LocatedError ? e.getMessage()
@@ -303,6 +332,7 @@ public final class UnlockingRules {
         for (Identifier setId : catalog.structureSets().stream().sorted().toList()) {
             Set<Identifier> members = new LinkedHashSet<>(catalog.structureSet(setId));
             members.retainAll(known);
+            if (!members.isEmpty()) visitSetDefinitions.put(setId.toString(), UnlockDefinitions.ids(members));
             for (Identifier member : members) {
                 visitSetsByStructure.computeIfAbsent(member, ignored -> new ArrayList<>()).add(members);
             }
@@ -325,6 +355,14 @@ public final class UnlockingRules {
         return defaultMode != DefaultMode.UNLOCKED || !prerequisites.isEmpty() || byStructure.values().stream().anyMatch(requirement ->
                 !requirement.condition.visits.isEmpty() || !requirement.condition.advancements.isEmpty())
                 || !rewards.rewardTargets().isEmpty();
+    }
+
+    boolean shouldShowUnlockToast(ServerPlayerEntity player) {
+        return !usesGeneratedDefaults || shouldShowUnlockToast(FtbStructureRewards.snapshot(player));
+    }
+
+    boolean shouldShowUnlockToast(FtbStructureRewards.Snapshot rewards) {
+        return !usesGeneratedDefaults || !rewards.rewardTargets().isEmpty();
     }
 
     public Set<String> requirementNames() { return Set.copyOf(rules.keySet()); }
@@ -539,7 +577,7 @@ public final class UnlockingRules {
             if (json.has("match"))
                 throw located(document, json.get("match"), "\"match\" cannot be used with \"alwaysUnlocked\"");
             return new Condition(progress -> true,
-                    progress -> new RequirementNode(Text.literal("Always Unlocked"), true, List.of()), Set.of(), Set.of());
+                    progress -> new RequirementNode(Text.literal("Always Unlocked"), true, List.of()), Set.of(), Set.of(), false);
         }
         boolean all = matchAll(document, json);
         if (json.has("requiredAdvancements")) {
@@ -565,7 +603,7 @@ public final class UnlockingRules {
                         String label = required.size() == 1 ? "Complete Advancement:"
                                 : all ? "Complete all Advancements:" : "Complete any Advancements:";
                         return new RequirementNode(Text.literal(label), checked, all, leaves);
-                    }, Set.of(), required);
+                    }, Set.of(), required, all);
         }
         Set<Identifier> required = resolveRequirementStructures(catalog, document, json, "requiredVisits",
                 (id, line) -> {}, warning);
@@ -574,7 +612,7 @@ public final class UnlockingRules {
             Predicate<Identifier> visited = id -> known.contains(id)
                     && player.visited(id);
             return !required.isEmpty() && (all ? required.stream().allMatch(visited) : required.stream().anyMatch(visited));
-        }, player -> visitNode(required, all, known, player), required, Set.of());
+        }, player -> visitNode(required, all, known, player), required, Set.of(), all);
     }
 
     private static RequirementNode visitNode(Set<Identifier> required, boolean all, Set<Identifier> known, Progress progress) {

@@ -9,8 +9,13 @@ public final class UnlockNotifications {
 
     public static void newlyAdded(ServerPlayerEntity player, int count) {
         if (count > 0) io.github.enriquemetner.explorerscompass.network.PartyRefreshPacket.send(player);
-        if (count > 0 && UnlockedStructures.get(player.getServer()).notificationsEnabled(player.getUuid())) {
-            UnlockToastPacket.send(player, count);
+        toast(player, count, false);
+    }
+
+    static void toast(ServerPlayerEntity player, int count, boolean shared) {
+        if (count > 0 && UnlockedStructures.get(player.getServer()).notificationsEnabled(player.getUuid())
+                && UnlockingRules.get().shouldShowUnlockToast(player)) {
+            UnlockToastPacket.send(player, count, shared);
         }
     }
 
@@ -25,14 +30,14 @@ public final class UnlockNotifications {
         UnlockingRules rules = UnlockingRules.get();
         rules.evaluateOnOpen(player);
         PartySharing.synchronize(player.getServer());
-        if (state.enableNotifications(player.getUuid()) && rules.hasUnlockingRequirements(player)) {
-            UnlockToastPacket.send(player, state.getStructures(player.getUuid()).size());
+        if (state.enableNotifications(player.getUuid())) {
+            toast(player, state.getStructures(player.getUuid()).size(), false);
         }
     }
 
     public static void deliverPending(ServerPlayerEntity player) {
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
         if (!player.networkHandler.isConnectionOpen() || !state.notificationsEnabled(player.getUuid())) return;
-        UnlockToastPacket.send(player, state.takePendingNotificationCount(player.getUuid()));
+        toast(player, state.takePendingNotificationCount(player.getUuid()), false);
     }
 }

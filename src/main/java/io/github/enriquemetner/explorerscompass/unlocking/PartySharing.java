@@ -3,7 +3,6 @@ package io.github.enriquemetner.explorerscompass.unlocking;
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.network.PartyRefreshPacket;
-import io.github.enriquemetner.explorerscompass.network.UnlockToastPacket;
 import io.github.enriquemetner.explorerscompass.util.StructureUtils;
 import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
 import io.github.enriquemetner.explorerscompass.util.VisitedStructures.Visit;
@@ -75,7 +74,7 @@ public final class PartySharing {
             Set<Identifier> union = new HashSet<>();
             for (UUID member : members) {
                 partyByPlayer.put(member, party);
-                if (!state.hasPendingRelock(member)) union.addAll(state.getStructures(member));
+                union.addAll(state.getStructures(member));
             }
             union.removeIf(allowed.negate());
             unlocksByParty.put(party, Set.copyOf(union));
@@ -137,7 +136,7 @@ public final class PartySharing {
                 else lost = true;
             }
             if (lost) compass.revalidateAccess(player);
-            if (gained > 0 && state.notificationsEnabled(id)) UnlockToastPacket.send(player, gained, true);
+            UnlockNotifications.toast(player, gained, true);
             PartyRefreshPacket.send(player);
         }
     }

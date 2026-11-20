@@ -1,24 +1,26 @@
 package io.github.enriquemetner.explorerscompass.unlocking;
 
+import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
-import java.util.HexFormat;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.Identifier;
 
 /** Server-side reconciliation of saved unlocks after definition changes. */
 public final class UnlockReloads {
-    private static String observedDefinition;
+    private static boolean initialized;
+    private static boolean validDefinitions;
     private static final Set<UUID> joined = new HashSet<>();
     private UnlockReloads() {}
 
     public static void clear() {
-        observedDefinition = null;
+        initialized = false;
+        validDefinitions = false;
         joined.clear();
         FtbStructureRewards.clear();
     }
@@ -27,25 +29,22 @@ public final class UnlockReloads {
 
     public static void left(UUID player) { joined.remove(player); }
 
-    private static String definition(MinecraftServer server) {
-        if (UnlockingRules.definition().isEmpty()) return null;
-        String ftb = FtbStructureRewards.capture(server);
-        if (ftb == null) return null;
-        try {
-            byte[] bytes = MessageDigest.getInstance("SHA-256").digest(
-                    (UnlockingRules.definition() + "\n" + ftb).getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
-        }
-    }
-
     public static void tick(MinecraftServer server) {
-        if (observedDefinition == null) {
-            String current = definition(server);
-            if (current == null) return;
-            prepareStartup(UnlockedStructures.get(server), current, ExplorersCompassConfig.relockOnReload);
-            observedDefinition = current;
+        if (!initialized) {
+            if (!UnlockingRules.loaded()) return;
+            var ftb = FtbStructureRewards.capture(server);
+            if (ftb == null) return;
+            var rules = UnlockingRules.get();
+            var current = ftb.valid() ? rules.definitions(ftb.rewards()) : null;
+            validDefinitions = current != null;
+            if (!validDefinitions && ExplorersCompassConfig.relockOnReload) {
+                String source = ftb.valid() ? "unlocking_rules.json" : "FTB structure rewards or tasks";
+                ExplorersCompass.LOGGER.warn(
+                        "Skipped startup relock because {} contains invalid requirements. The last valid baseline was kept.", source);
+            }
+            prepareStartup(UnlockedStructures.get(server), current, ExplorersCompassConfig.relockOnReload,
+                    rules.prerequisiteGates());
+            initialized = true;
         }
         var reconciled = new java.util.ArrayList<ServerPlayerEntity>();
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
@@ -56,29 +55,44 @@ public final class UnlockReloads {
         }
         if (!reconciled.isEmpty()) {
             PartySharing.synchronize(server);
-            reconciled.forEach(io.github.enriquemetner.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM::revalidateAccess);
+            reconciled.forEach(ExplorersCompass.EXPLORERS_COMPASS_ITEM::revalidateAccess);
         }
     }
 
-    static void prepareStartup(UnlockedStructures state, String definition, boolean relock) {
-        if (state.updateDefinitionHistory(definition) && relock) {
-            state.queueRelock(state.knownPlayers());
+    static void prepareStartup(UnlockedStructures state, UnlockDefinitions current, boolean relock,
+                               Map<Identifier, UnlockPrerequisites.Gate> gates) {
+        if (current == null) return;
+        var previous = state.definitions();
+        if (relock && previous != null && !current.equals(previous)) {
+            Set<String> savedIds = current.defaultMode().equals(previous.defaultMode()) ? Set.of() : state.savedStructureIds();
+            state.relock(current.changedStructures(previous, savedIds), gates);
         }
+        state.saveDefinitions(current);
     }
 
     private static void reconcile(ServerPlayerEntity player) {
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
         UUID id = player.getUuid();
-        io.github.enriquemetner.explorerscompass.ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(player, -1);
-        Set<net.minecraft.util.Identifier> before = state.getStructures(id);
-        boolean relocked = state.takePendingRelock(id);
-        state.beginUnlockEvent(id, before);
+        ExplorersCompass.EXPLORERS_COMPASS_ITEM.cancelSearch(player, -1);
+        int added = reconcileUnlocks(state, id, validDefinitions,
+                dependent -> UnlockingRules.get().evaluateSilently(player, dependent));
+        UnlockNotifications.newlyAdded(player, added);
+    }
+
+    static int reconcileUnlocks(UnlockedStructures state, UUID id, boolean valid,
+                               Consumer<Set<Identifier>> evaluate) {
+        if (!valid && state.hasPendingRelock(id)) return 0;
+        Set<Identifier> before = state.getStructures(id);
+        var pending = state.takePendingRelock(id);
+        Set<Identifier> latestBaseline = new HashSet<>(before);
+        latestBaseline.addAll(pending.direct());
+        latestBaseline.addAll(pending.dependent());
+        state.beginUnlockEvent(id, latestBaseline);
         try {
-            if (relocked) state.clearStructures(id);
-            UnlockingRules.get().evaluateSilently(player);
+            evaluate.accept(pending.dependent());
         } finally { state.finishUnlockEvent(id); }
-        Set<net.minecraft.util.Identifier> added = new HashSet<>(state.getStructures(id));
+        Set<Identifier> added = new HashSet<>(state.getStructures(id));
         added.removeAll(before);
-        UnlockNotifications.newlyAdded(player, added.size());
+        return added.size();
     }
 }

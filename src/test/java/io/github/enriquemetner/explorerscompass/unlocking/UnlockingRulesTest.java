@@ -81,6 +81,8 @@ class UnlockingRulesTest {
 
     @Test void newlyUnlockedFilterDependsOnConfiguredRequirementsRatherThanCurrentLocks() {
         assertFalse(rules("{}").hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
+        assertFalse(rules(ExplorersCompassConfig.DEFAULT_UNLOCKING_RULES)
+                .hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
         assertTrue(rules("{\"default\":\"lockedUntilVisited\"}")
                 .hasUnlockingRequirements(FtbStructureRewards.Snapshot.EMPTY));
         assertTrue(condition("{\"requiredVisits\":[\"minecraft:ancient_city\"]}")
@@ -89,23 +91,23 @@ class UnlockingRulesTest {
                 java.util.Map.of(), java.util.Map.of(1L, Set.of()), Set.of())));
     }
 
-    @Test void reloadHistoryAndOfflineWorkSurviveRestart() {
-        UUID player = UUID.randomUUID();
-        UnlockedStructures saved = new UnlockedStructures();
-        saved.add(player, Set.of(A));
-        saved.enableNotifications(player);
-        assertFalse(saved.updateDefinitionHistory("first"));
-        assertFalse(saved.updateDefinitionHistory("first"));
-        assertTrue(saved.updateDefinitionHistory("second"));
-        saved.queueRelock(saved.knownPlayers());
-        saved = UnlockedStructures.fromNbt(saved.writeNbt(new NbtCompound()));
-        assertEquals("second", saved.definitionHistory());
-        assertTrue(saved.takePendingRelock(player));
-        assertFalse(saved.takePendingRelock(player));
-        saved.clearStructures(player);
-        assertTrue(saved.getStructures(player).isEmpty());
-        assertTrue(saved.notificationsEnabled(player));
+    @Test void onlyGeneratedDefaultsSuppressTheUnlockToast(@TempDir Path directory) throws Exception {
+        var noRewards = FtbStructureRewards.Snapshot.EMPTY;
+        var generated = rules(ExplorersCompassConfig.DEFAULT_UNLOCKING_RULES);
+        assertFalse(generated.shouldShowUnlockToast(noRewards));
+        assertFalse(rules("{\"requirements\":{},\"prerequisites\":{},\"default\":\"unlocked\"}")
+                .shouldShowUnlockToast(noRewards));
+        assertTrue(generated.shouldShowUnlockToast(new FtbStructureRewards.Snapshot(
+                java.util.Map.of(), java.util.Map.of(1L, Set.of(A)), Set.of())));
+        assertTrue(rules("{}").shouldShowUnlockToast(noRewards));
+        assertTrue(rules("{\"default\":\"unlocked\",\"requirements\":{\"invalid\":false},\"prerequisites\":{}}")
+                .shouldShowUnlockToast(noRewards));
+        assertTrue(rules("{\"default\":\"unlocked\",\"requirements\":{},\"prerequisites\":false}")
+                .shouldShowUnlockToast(noRewards));
+        Path malformed = Files.writeString(directory.resolve("unlocking_rules.json"), "{");
+        assertTrue(UnlockingRules.loadFile(malformed, catalog).shouldShowUnlockToast(noRewards));
     }
+
     private static final Set<Identifier> STRUCTURES = Set.of(A, B, C);
     private final UnlockingRules.Catalog catalog = catalog(STRUCTURES);
     private static UnlockingRules.Catalog catalog(Set<Identifier> structures) {

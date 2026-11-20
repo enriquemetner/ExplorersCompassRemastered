@@ -19,7 +19,9 @@ public final class FtbStructureRewards {
         public Set<Identifier> targets(long rewardId) { return rewardTargets.getOrDefault(rewardId, Set.of()); }
     }
     public interface Provider { Snapshot snapshot(ServerPlayerEntity player); }
-    public record Session(String definition, Provider progress) {}
+    public record RewardDefinition(long id, Set<Identifier> targets, String requirement) {}
+    public record Definitions(List<RewardDefinition> rewards, boolean valid) {}
+    public record Session(Definitions definitions, Provider progress) {}
 
     private static Function<MinecraftServer, Session> loader;
     private static Session session;
@@ -29,10 +31,10 @@ public final class FtbStructureRewards {
     public static void register(Function<MinecraftServer, Session> source) { loader = source; }
 
     /** Capture once, after the optional FTB quest book has loaded. */
-    static String capture(MinecraftServer server) {
-        if (loader == null) return "";
+    static Definitions capture(MinecraftServer server) {
+        if (loader == null) return new Definitions(List.of(), true);
         if (session == null) session = loader.apply(server);
-        return session == null ? null : session.definition();
+        return session == null ? null : session.definitions();
     }
 
     static void clear() { session = null; }

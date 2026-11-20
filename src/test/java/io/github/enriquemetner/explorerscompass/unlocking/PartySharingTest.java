@@ -95,7 +95,7 @@ class PartySharingTest {
         assertEquals(Set.of(fortress), state.getStructures(bob));
     }
 
-    @Test void rebuildsFromOfflinePersonalSavesAndSkipsIneligibleOrPendingResetEntries() {
+    @Test void rebuildsFromOfflinePersonalSavesAndSharesOnlyUnaffectedUnlocks() {
         var state = new UnlockedStructures();
         state.add(alice, Set.of(fortress, stronghold));
         state.add(bob, Set.of(village));
@@ -105,11 +105,9 @@ class PartySharingTest {
         assertEquals(Set.of(village), state.getStructures(bob));
         assertEquals(Set.of(fortress, village), PartySharing.build(state, parties, id -> !id.equals(stronghold)).forPlayer(bob));
 
-        state.queueRelock(Set.of(alice));
-        assertEquals(Set.of(village), PartySharing.build(state, parties, id -> true).forPlayer(bob));
-        assertTrue(state.takePendingRelock(alice));
-        state.clearStructures(alice);
-        state.add(alice, Set.of(fortress));
+        state.relock(Set.of(stronghold), Map.of());
+        state = UnlockedStructures.fromNbt(state.writeNbt(new NbtCompound()));
+        assertEquals(Set.of(stronghold), state.takePendingRelock(alice).direct());
         assertEquals(Set.of(fortress, village), PartySharing.build(state, parties, id -> true).forPlayer(bob));
     }
     @Test void visitUnionsDeduplicateAndFollowMembershipWithoutChangingPersonalHistory() {
