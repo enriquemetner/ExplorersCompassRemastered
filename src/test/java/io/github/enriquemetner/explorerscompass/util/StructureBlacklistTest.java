@@ -59,10 +59,7 @@ class StructureBlacklistTest {
         List<String> original = ExplorersCompassConfig.structureBlacklist;
         try {
             Identifier city = new Identifier("minecraft:ancient_city");
-            ExplorersCompassConfig.structureBlacklist = List.of("minecraft:ancient_cit?");
-            assertFalse(StructureUtils.structureIdIsExcluded(city));
-            ExplorersCompassConfig.structureBlacklist = List.of("minecraft:ancient_city?");
-            assertFalse(StructureUtils.structureIdIsExcluded(city));
+            assertThrows(IllegalArgumentException.class, () -> new StructureSelector("minecraft:ancient_cit?"));
             ExplorersCompassConfig.structureBlacklist = List.of("minecraft:ancient_.*");
             assertFalse(StructureUtils.structureIdIsExcluded(city));
             ExplorersCompassConfig.structureBlacklist = List.of("minecraft:ancient_city*");

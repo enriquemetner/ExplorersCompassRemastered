@@ -20,11 +20,11 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.util.StructureSelector;
 import io.github.enriquemetner.explorerscompass.util.StructureUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -607,7 +607,7 @@ public final class UnlockingRules {
         available.addAll(sets);
         for (JsonElement element : selectorArray(document, object, field)) {
             String selector = at(document, element, () -> selectorString(element));
-            Set<Identifier> matches = at(document, element, () -> matchPattern(selector, available));
+            Set<Identifier> matches = at(document, element, () -> new StructureSelector(selector).matchingIds(available));
             Set<Identifier> resolved = new LinkedHashSet<>();
             for (Identifier id : matches) {
                 if (structures.contains(id)) {
@@ -672,7 +672,7 @@ public final class UnlockingRules {
     }
 
     private static Set<Identifier> resolvePattern(String value, Set<Identifier> available) {
-        Set<Identifier> matches = matchPattern(value, available);
+        Set<Identifier> matches = new StructureSelector(value).matchingIds(available);
         if (matches.isEmpty()) {
             if (value.contains("*")) warn("No structure or structure set matches pattern " + value);
             else warn("Unavailable structure or structure set " + identifier(value));
@@ -686,27 +686,11 @@ public final class UnlockingRules {
         Set<Identifier> available = new LinkedHashSet<>(structures);
         available.addAll(catalog.structureSets());
         Set<Identifier> result = new LinkedHashSet<>();
-        for (Identifier id : matchPattern(selector, available)) {
+        for (Identifier id : new StructureSelector(selector).matchingIds(available)) {
             if (structures.contains(id)) result.add(id);
             else result.addAll(catalog.structureSet(id));
         }
         return result;
-    }
-
-    private static Set<Identifier> matchPattern(String value, Set<Identifier> available) {
-        String normalized = value.contains(":") ? value : "minecraft:" + value;
-        Identifier validated = Identifier.tryParse(normalized.replace('*', 'a'));
-        if (validated == null || normalized.indexOf(':') != normalized.lastIndexOf(':'))
-            throw invalid("Invalid structure ID or pattern " + value);
-        if (!normalized.contains("*")) return available.contains(validated) ? Set.of(validated) : Set.of();
-        StringBuilder regex = new StringBuilder("^");
-        for (char c : normalized.toCharArray()) {
-            if (c == '*') regex.append(".*");
-            else regex.append(Pattern.quote(String.valueOf(c)));
-        }
-        Pattern compiled = Pattern.compile(regex.append('$').toString());
-        return available.stream().filter(id -> compiled.matcher(id.toString()).matches())
-                .sorted().collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private static String string(JsonObject json, String key) {

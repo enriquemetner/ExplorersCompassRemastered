@@ -19,6 +19,7 @@ import io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Secti
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Diagnostic;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Severity;
 import io.github.enriquemetner.explorerscompass.util.OverlaySide;
+import io.github.enriquemetner.explorerscompass.util.StructureSelector;
 import io.github.enriquemetner.explorerscompass.util.StructureUtils;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.core.io.ParsingMode;
@@ -328,15 +329,13 @@ public class ExplorersCompassConfig {
 				}
 				selectors.add(selector);
 				String detail = quotedDiagnosticValue(selector) + document.selectorLocation(selector);
-				String normalized = selector.contains(":") ? selector : "minecraft:" + selector;
-				Identifier id = Identifier.tryParse(normalized.replace('*', 'a'));
-				if (id == null || id.getNamespace().isEmpty() || id.getPath().isEmpty()
-						|| normalized.startsWith(":") || normalized.indexOf(':') != normalized.lastIndexOf(':')) {
+				Set<Identifier> matches;
+				try {
+					matches = new StructureSelector(selector).matchingIds(registeredIds);
+				} catch (IllegalArgumentException error) {
 					diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Invalid structure selector " + detail));
 					continue;
 				}
-				var pattern = StructureUtils.structureIdPattern(selector);
-				var matches = registeredIds.stream().filter(candidate -> pattern.matcher(candidate.toString()).matches()).sorted().toList();
 				if (matches.isEmpty()) diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": No structures match selector " + detail));
 				for (Identifier match : matches) matchesById.computeIfAbsent(match, ignored -> new ArrayList<>()).add(detail);
 			}

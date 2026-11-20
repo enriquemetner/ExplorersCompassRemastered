@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 import org.apache.commons.lang3.text.WordUtils;
 
@@ -113,7 +112,7 @@ public class StructureUtils {
 		boolean whitelist = !ExplorersCompassConfig.structureWhitelist.isEmpty();
 		List<String> patterns = whitelist ? ExplorersCompassConfig.structureWhitelist : ExplorersCompassConfig.structureBlacklist;
 		for (String structureKey : patterns) {
-			if (structureIdPattern(structureKey).matcher(id.toString()).matches()) {
+			if (new StructureSelector(structureKey).matches(id)) {
 				return !whitelist;
 			}
 		}
@@ -214,16 +213,5 @@ public class StructureUtils {
 
 	private static Registry<StructureSet> getStructureSetRegistry(ServerWorld world) {
 		return world.getRegistryManager().get(RegistryKeys.STRUCTURE_SET);
-	}
-
-	public static Pattern structureIdPattern(String selector) {
-		String glob = selector.contains(":") ? selector : "minecraft:" + selector;
-		StringBuilder regex = new StringBuilder("^");
-		for (int i = 0; i < glob.length(); i++) {
-			char c = glob.charAt(i);
-			if (c == '*') regex.append(".*");
-			else regex.append(Pattern.quote(String.valueOf(c)));
-		}
-		return Pattern.compile(regex.append('$').toString());
 	}
 }

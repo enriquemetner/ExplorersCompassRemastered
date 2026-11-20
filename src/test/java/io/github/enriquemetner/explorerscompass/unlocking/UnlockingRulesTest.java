@@ -217,10 +217,14 @@ class UnlockingRulesTest {
 
     @Test void ftbRewardSelectorsExpandSetsAndWildcards() {
         assertEquals(STRUCTURES, UnlockingRules.resolveRewardTargets(catalog,
-                List.of("minecraft:strong*"), List.of("minecraft:test_set")));
+                List.of("*:strong*"), List.of("minecraft:test_set")));
         assertEquals(Set.of(B), UnlockingRules.resolveRewardTargets(catalog, List.of("fortress"), List.of()));
         assertThrows(IllegalArgumentException.class,
                 () -> UnlockingRules.resolveRewardTargets(catalog, List.of("minecraft:fortres?"), List.of()));
+        for (String selector : List.of(":fortress", ":fortress*")) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> UnlockingRules.resolveRewardTargets(catalog, List.of(selector), List.of()));
+        }
     }
 
     @Test void ftbFieldsOnlyResolveTheirOwnRegistryAndDeduplicateWithoutReorderingPreview() {

@@ -26,7 +26,7 @@ class StructureListsConfigTest {
         try {
             assertFilters("[]", "[\"ancient_city\"]", true, false);
             for (String invalid : List.of("[", "123", "[\"village_*\", false]", "[\"village_*\", \"missing\"]",
-                    "[\"no_such_mod:*\"]", "[\"village_?\"]")) {
+                    "[\"no_such_mod:*\"]", "[\"village_?\"]", "[\":village_plains\"]", "[\":village_*\"]")) {
                 assertFilters(invalid, "[\"ancient_city\"]", false, false);
                 assertFilters("[\"village_*\"]", invalid, true, false);
                 assertFilters("[]", invalid, false, false);
