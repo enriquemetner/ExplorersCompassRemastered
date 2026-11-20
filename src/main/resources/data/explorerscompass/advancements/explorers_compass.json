@@ -16,6 +16,17 @@
         ]
       }
     },
+    "has_explorer_map": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": ["minecraft:filled_map"],
+            "nbt": "{Decorations:[{id:\"+\"}]}"
+          }
+        ]
+      }
+    },
     "has_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -26,6 +37,7 @@
   "requirements": [
     [
       "has_compass",
+      "has_explorer_map",
       "has_recipe"
     ]
   ]
