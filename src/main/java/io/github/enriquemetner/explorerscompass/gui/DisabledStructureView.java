@@ -132,22 +132,24 @@ final class DisabledStructureView {
         return ButtonPress.at(mx, my, backButtonX(x, w), y + h - 30, bw, 20, this, "back", back);
     }
 
-    void click(double mx,double my,int button,int sw,int sh) {
+    boolean click(double mx,double my,int button,int sw,int sh) {
         int w = width(sw), h = height(sw, sh), x = (sw - w) / 2, y = (sh - h) / 2;
         if (mx < x - 1 || mx >= x + w + 1 || my < y - 1 || my >= y + h + 1) {
             back.run();
-            return;
+            return true;
         }
-        if (button != 0) return;
+        if (button != 0) return false;
         var lines = lines(w-32);
         Scrollbar bar = scrollbar(x, y, w, h, lines);
         if (bar.contains(mx, my)) {
             grabOffset = bar.grabOffset(my, 0);
             scroll = bar.offsetForMouse(my, grabOffset);
-            return;
+            return false;
         }
         scroll = MathHelper.clamp(scroll, 0, maxScroll(lines, h));
         int row = hoveredLink(lines, x, y, h, mx, my);
-        if (row >= 0) navigate.accept(lines.get(row).target);
+        if (row < 0) return false;
+        navigate.accept(lines.get(row).target);
+        return true;
     }
 }

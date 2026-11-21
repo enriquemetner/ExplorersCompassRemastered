@@ -1162,6 +1162,7 @@ public class ExplorersCompassScreen extends Screen {
 		List<EntryFilterRow> rows = entryFilterRows();
 		int x = entryFilterX(), y = entryFilterY(rows.size()), w = entryFilterWidth();
 		if (mouseX < x - 1 || mouseX >= x + w + 1 || mouseY < y - 1 || mouseY >= y + entryFilterHeight(rows.size()) + 1) {
+			playClickSound();
 			entryFiltersId = null;
 			return true;
 		}
@@ -1170,6 +1171,7 @@ public class ExplorersCompassScreen extends Screen {
 		if (mouseY >= y + 30 && index >= 0 && index < entryFilterVisibleRows(rows.size())) {
 			EntryFilterRow row = rows.get(entryFilterFirstRow + index);
 			double scroll = selectionList.getScrollAmount();
+			playClickSound();
 			toggleFilter(row.column(), row.option());
 			selectionList.setScrollAmount(scroll);
 			if (!selectionList.containsStructure(entryFiltersId)) entryFiltersId = null;
@@ -1549,13 +1551,17 @@ public class ExplorersCompassScreen extends Screen {
 		});
 	}
 
+	void playClickSound() {
+		client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+	}
+
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (button == 0) {
 			ButtonPress hit = buttonAt(mouseX, mouseY);
 			if (hit != null) {
 				selectionList.resetDoubleClick();
-				client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
+				playClickSound();
 				hit.action().run();
 				if (client.currentScreen == this) {
 					refreshSelectedOnlyRows();
@@ -1584,13 +1590,22 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private boolean handleMouseClicked(double mouseX, double mouseY, int button) {
-		if (currentStructurePopup != null) { currentStructurePopup.click(mouseX, mouseY, button, width, height); return true; }
-        if (dialog == Dialog.DISABLED) { disabledView.click(mouseX,mouseY,button,width,height); return true; }
-		if (entryDetails != null) { entryDetails.click(mouseX, mouseY, button, width, height); return true; }
+		if (currentStructurePopup != null) {
+			if (currentStructurePopup.click(mouseX, mouseY, button, width, height)) playClickSound();
+			return true;
+		}
+        if (dialog == Dialog.DISABLED) {
+            if (disabledView.click(mouseX, mouseY, button, width, height)) playClickSound();
+            return true;
+        }
+		if (entryDetails != null) {
+			if (entryDetails.click(mouseX, mouseY, button, width, height)) playClickSound();
+			return true;
+		}
 		if (entryFiltersId != null) return clickEntryFilters(mouseX, mouseY, button);
 		if (sortMenuOpen) return clickSortMenu(mouseX, mouseY, button);
         if (dialog == Dialog.LOCKED) {
-            if (lockedRequirementsView.click(mouseX, mouseY, button, width, height)) backLockedPopup();
+            if (lockedRequirementsView.click(mouseX, mouseY, button, width, height, this::backLockedPopup)) playClickSound();
             return true;
         }
         if (dialog == Dialog.SEARCHING && !searchConfirmed) return true;
@@ -1598,11 +1613,12 @@ public class ExplorersCompassScreen extends Screen {
             if (dialog == Dialog.FOUND && button == 0 && beginScrollbarDrag(ScrollPanel.FOUND, mouseX, mouseY)) return true;
             if (isSearchFailureDialog() && button == 0 && beginScrollbarDrag(ScrollPanel.SEARCH_FAILURE, mouseX, mouseY)) return true;
             if (mouseX < dialogX() - 1 || mouseX >= dialogX() + dialogWidth() + 1
-                    || mouseY < dialogY() - 1 || mouseY >= dialogY() + dialogHeight() + 1) {
+                    || mouseY < dialogY() - 1 || mouseY >= dialogY() + dialogHeight() + 1
+                    || dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_COST) {
+                playClickSound();
                 dismissDialog();
                 return true;
             }
-            if (dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_COST) { dismissDialog(); return true; }
             return true;
         }
 		if (button == 1) {
@@ -1626,6 +1642,7 @@ public class ExplorersCompassScreen extends Screen {
 				List<FilterOption> options = visibleFilterOptions(column);
 				int index = filterOptionIndexAt(mouseY, options, filterSectionStart(column, options));
 				if (index >= 0) {
+					playClickSound();
 					toggleFilter(column, options.get(index));
 				}
 				return true;
@@ -1637,12 +1654,16 @@ public class ExplorersCompassScreen extends Screen {
 	private boolean clickSortMenu(double mouseX, double mouseY, int button) {
 		int x = sortMenuX(), y = sortMenuY(), w = sortMenuWidth();
 		if (mouseX < x - 1 || mouseX >= x + w + 1 || mouseY < y - 1 || mouseY >= y + sortMenuHeight() + 1) {
+			playClickSound();
 			closeSortMenu();
 			return true;
 		}
 		if (button != 0) return true;
 		int row = sortRowAt(mouseX, mouseY);
-		if (row >= 0) draggedSortRow = row;
+		if (row >= 0) {
+			playClickSound();
+			draggedSortRow = row;
+		}
 		return true;
 	}
 

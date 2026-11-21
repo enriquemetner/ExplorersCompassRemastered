@@ -124,15 +124,17 @@ final class CurrentStructurePopup {
         return new ButtonPress(this, id, () -> select.accept(id));
     }
 
-    void click(double x, double y, int button, int width, int height) {
+    boolean click(double x, double y, int button, int width, int height) {
         Layout box = layout(width, height);
         if (!ButtonPress.contains(x, y, box.x - 1, box.y - 1, box.width + 2, box.height + 2)) {
             close.run();
+            return true;
         } else if (button == 0 && scrollbar(box).contains(x, y)) {
             dragging = true;
             grabOffset = scrollbar(box).grabOffset(y, 0);
             drag(y, width, height);
         }
+        return false;
     }
 
     void scroll(double amount, int width, int height) {

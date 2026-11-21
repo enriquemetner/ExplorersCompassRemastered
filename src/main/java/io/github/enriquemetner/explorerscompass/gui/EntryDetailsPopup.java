@@ -178,17 +178,18 @@ final class EntryDetailsPopup {
         return null;
     }
 
-    void click(double mouseX, double mouseY, int button, int width, int height) {
+    boolean click(double mouseX, double mouseY, int button, int width, int height) {
         Layout layout = layout(width, height);
         if (!inside(mouseX, mouseY, layout.x - 1, layout.y - 1, layout.width + 2, layout.height + 2)) {
             close.run();
-            return;
+            return true;
         }
         if (button == 0 && scrollbar(layout).contains(mouseX, mouseY)) {
             dragging = true;
             grabOffset = scrollbar(layout).grabOffset(mouseY, 0);
             drag(mouseY, width, height);
         }
+        return false;
     }
 
     void scroll(double amount, int width, int height) {

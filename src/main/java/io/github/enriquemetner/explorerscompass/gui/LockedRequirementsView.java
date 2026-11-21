@@ -215,15 +215,16 @@ final class LockedRequirementsView {
         return ButtonPress.at(mouseX, mouseY, p.backX(), p.buttonY, p.buttonWidth, 20, questPopup, "back", this::closeQuestPopup);
     }
 
-    /** Returns true when the area outside the panel was clicked. */
-    boolean click(double mouseX, double mouseY, int button, int width, int height) {
+    boolean click(double mouseX, double mouseY, int button, int width, int height, Runnable back) {
         layout(width, height);
         if (questPopup != null) {
-            clickQuestPopup(mouseX, mouseY, width, height);
-            return false;
+            return clickQuestPopup(mouseX, mouseY, width, height);
         }
         if (mouseX < x - 1 || mouseX >= x + this.width + 1
-                || mouseY < y - 1 || mouseY >= backTop() + 26) return true;
+                || mouseY < y - 1 || mouseY >= backTop() + 26) {
+            back.run();
+            return true;
+        }
         if (button != 0) return false;
         Scrollbar bar = scrollbar();
         if (bar.contains(mouseX, mouseY)) {
@@ -235,6 +236,7 @@ final class LockedRequirementsView {
         Row questRow = rowAt(mouseX, mouseY);
         if (questRow != null && questRow.questId == null && isClickable(questRow.node)) {
             onLink.accept(questRow.node);
+            return true;
         }
         if (questRow != null && questRow.questId != null) {
             FtbQuestNavigation.QuestInfo info = FtbQuestNavigation.info(questRow.questId);
@@ -246,7 +248,7 @@ final class LockedRequirementsView {
             } else {
                 questPopup = new QuestPopup(questRow.questId, info.invisibleUntilCompleted(), false);
             }
-            return false;
+            return true;
         }
         return false;
     }
@@ -334,11 +336,12 @@ final class LockedRequirementsView {
         context.drawCenteredTextWithShadow(renderer, label, buttonX + buttonWidth / 2, buttonY + 6, 0xffffff);
     }
 
-    private void clickQuestPopup(double mouseX, double mouseY, int screenWidth, int screenHeight) {
+    private boolean clickQuestPopup(double mouseX, double mouseY, int screenWidth, int screenHeight) {
         PopupLayout p = popupLayout(screenWidth, screenHeight);
         if (mouseX < p.x - 1 || mouseX >= p.x + p.width + 1 || mouseY < p.y - 1 || mouseY >= p.y + p.height + 1) {
-            closeQuestPopup();
+            return closeQuestPopup();
         }
+        return false;
     }
 
     void keyPressed(int key) {
