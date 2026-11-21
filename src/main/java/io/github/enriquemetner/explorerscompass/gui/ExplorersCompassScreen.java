@@ -79,6 +79,8 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int FILTER_COLUMN_GAP = 1;
 	private static final int FILTER_SECTION_GAP = 1;
 	private static final int FILTER_CHECKBOX_SIZE = 9;
+	private static final Identifier CHECKBOX_CHECKED = new Identifier(ExplorersCompass.MODID, "textures/gui/checkbox_checked.png");
+	private static final Identifier CHECKBOX_UNCHECKED = new Identifier(ExplorersCompass.MODID, "textures/gui/checkbox_unchecked.png");
 	private static final int HEADER_TITLE_MARGIN = 16;
 	private static final Identifier CLOSE_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/close.png");
 	private static final int CLOSE_ICON_SIZE = 7;
@@ -1180,14 +1182,8 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void drawFilterCheckbox(DrawContext context, int x, int y, boolean checked) {
-		context.fill(x, y, x + FILTER_CHECKBOX_SIZE, y + FILTER_CHECKBOX_SIZE, 0xffb0b0b0);
-		context.fill(x + 1, y + 1, x + FILTER_CHECKBOX_SIZE - 1, y + FILTER_CHECKBOX_SIZE - 1, 0xff161616);
-		if (checked) {
-			for (int pixel = 0; pixel < 5; pixel++) {
-				context.fill(x + 2 + pixel, y + 2 + pixel, x + 3 + pixel, y + 3 + pixel, 0xffffffff);
-				context.fill(x + 6 - pixel, y + 2 + pixel, x + 7 - pixel, y + 3 + pixel, 0xffffffff);
-			}
-		}
+		context.drawTexture(checked ? CHECKBOX_CHECKED : CHECKBOX_UNCHECKED, x, y, 0, 0,
+				FILTER_CHECKBOX_SIZE, FILTER_CHECKBOX_SIZE, FILTER_CHECKBOX_SIZE, FILTER_CHECKBOX_SIZE);
 	}
 
 	private void renderExcludeButton(DrawContext context, ButtonWidget button, boolean checked) {
@@ -2384,7 +2380,7 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private static void drawEnergyOrb(DrawContext context, TextRenderer font, int x, int y) {
-        Identifier texture = new Identifier(ExplorersCompass.MODID, "textures/gui/experience_orb_00.png");
+        Identifier texture = new Identifier(ExplorersCompass.MODID, "textures/gui/experience_orb.png");
         context.drawTexture(texture, x, y + (font.fontHeight - 6) / 2, 5, 5, 0, 0, 16, 16, 16, 16);
     }
 
