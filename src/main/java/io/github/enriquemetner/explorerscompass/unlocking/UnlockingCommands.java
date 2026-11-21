@@ -288,7 +288,7 @@ public final class UnlockingCommands {
                     if (name.equalsIgnoreCase(profile.get("name").getAsString())) return UUID.fromString(profile.get("uuid").getAsString());
                 }
             } catch (Exception e) {
-                ExplorersCompass.LOGGER.warn("Could not read cached player names", e);
+                ExplorersCompass.LOGGER.error("Could not read cached player names from usercache.json", e);
             }
         }
         throw error("Unknown cached player: " + name + ". Use the player's UUID instead.");

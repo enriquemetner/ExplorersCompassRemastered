@@ -146,12 +146,10 @@ public class ExplorersCompassConfig {
 			if (client) {
 				Path clientSettings = directory().resolve(CLIENT_SETTINGS);
 				restoreClientDefaults();
-				prepareDefaults(clientSettings, CLIENT_SETTINGS, false);
-				loadClient(parse(clientSettings));
+				loadClient(readClientConfig(clientSettings, CLIENT_SETTINGS));
 				writeClient(clientSettings);
 				Path hiddenFile = directory().resolve(HIDDEN_STRUCTURES);
-				prepareDefaults(hiddenFile, HIDDEN_STRUCTURES, false);
-				hiddenStructures = strings(parse(hiddenFile), "hiddenStructures", List.of());
+				hiddenStructures = strings(readClientConfig(hiddenFile, HIDDEN_STRUCTURES), "hiddenStructures", List.of());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass configuration", e);
@@ -223,7 +221,7 @@ public class ExplorersCompassConfig {
 		if (document == null) {
 			loadCommon(new ServerToml(TomlFormat.newConfig(LinkedHashMap::new), List.of()), "settings.toml");
 			return new Section("Could not load settings.toml. All settings fell back to built-in defaults",
-					Severity.WARNING, failures);
+					Severity.ERROR, failures);
 		}
 		CommentedConfig common = document.config();
 		var settings = loadCommon(document, selectedFile.getFileName().toString());
@@ -231,9 +229,10 @@ public class ExplorersCompassConfig {
 		diagnostics.addAll(settings.diagnostics);
 		String count = settings.loaded + "/" + settings.total;
 		String summary = settings.valid ? "Successfully loaded " + count + " settings"
-				: count + " settings loaded successfully";
+				: count + " settings loaded. Some settings were rejected";
 		if (!failures.isEmpty()) summary = "Could not load world settings.toml. Using instance settings. " + summary;
-		var result = new Section(summary, diagnostics.isEmpty() ? null : Severity.WARNING, diagnostics, selectedFile);
+		Severity level = !failures.isEmpty() ? Severity.ERROR : diagnostics.isEmpty() ? null : Severity.WARNING;
+		var result = new Section(summary, level, diagnostics, selectedFile);
 		if (!settings.valid) return result;
 
 		TomlWriter writer = new TomlWriter();
@@ -392,6 +391,16 @@ public class ExplorersCompassConfig {
 			default -> throw new IllegalArgumentException(name);
 		}
 		return new TomlWriter().writeToString(config);
+	}
+
+	private static CommentedConfig readClientConfig(Path path, String name) throws IOException {
+		try {
+			prepareDefaults(path, name, false);
+			return parse(path);
+		} catch (IOException | IllegalArgumentException error) {
+			ExplorersCompass.LOGGER.error("Could not load {}", name, error);
+			throw error;
+		}
 	}
 
 	private static CommentedConfig parse(Path path) throws IOException {

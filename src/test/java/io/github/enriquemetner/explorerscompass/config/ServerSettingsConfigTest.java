@@ -1,5 +1,7 @@
 package io.github.enriquemetner.explorerscompass.config;
 
+import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Severity;
+
 import com.electronwill.nightconfig.core.CommentedConfig;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -82,13 +84,15 @@ class ServerSettingsConfigTest {
                 maxSearchRadius = [1, 2
                 """;
         Path world = Files.writeString(directory.resolve("world.toml"), malformed);
-        ExplorersCompassConfig.loadServerSettings(instance, world);
+        var worldFailure = ExplorersCompassConfig.loadServerSettings(instance, world);
+        assertEquals(Severity.ERROR, worldFailure.level());
         assertEquals(12345, ExplorersCompassConfig.maxSearchRadius);
         assertTrue(ExplorersCompassConfig.useClassicCompass);
         assertEquals(malformed, Files.readString(world));
 
         Files.writeString(instance, malformed);
-        ExplorersCompassConfig.loadServerSettings(instance, world);
+        var completeFailure = ExplorersCompassConfig.loadServerSettings(instance, world);
+        assertEquals(Severity.ERROR, completeFailure.level());
         assertEquals(30_000, ExplorersCompassConfig.maxSearchRadius);
         assertFalse(ExplorersCompassConfig.useClassicCompass);
         assertEquals(malformed, Files.readString(instance));

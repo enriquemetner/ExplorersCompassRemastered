@@ -111,7 +111,7 @@ class StartupConfigReportTest {
                     "Whitelisted and loaded 1 structure",
                     "Successfully loaded 1 unlocking requirement and 0 prerequisites",
                     "Could not load search_costs.json. All structures fell back to costing nothing",
-                    "10/11 settings loaded successfully",
+                    "10/11 settings loaded. Some settings were rejected",
                     "Use /ecomp report for configuration diagnostics"
             ), messages);
             StartupConfigReport.publish(2, lists.override(), listSummary, rules, costs, settings);
