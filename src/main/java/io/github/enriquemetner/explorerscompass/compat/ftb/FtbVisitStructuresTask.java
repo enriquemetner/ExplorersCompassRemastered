@@ -46,6 +46,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
     private List<String> structures = List.of();
     private List<String> structureSets = List.of();
     private Match match = Match.ANY;
+    private final FtbStructureTooltipSettings tooltipSettings = new FtbStructureTooltipSettings();
     private FtbRewardPreview preview = FtbRewardPreview.EMPTY;
     private MinecraftServer cachedServer;
     private Set<Identifier> cachedTargets;
@@ -73,6 +74,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
 
     @Override public void writeData(NbtCompound nbt) {
         super.writeData(nbt);
+        tooltipSettings.writeData(nbt);
         NbtList values = new NbtList();
         structures.forEach(value -> values.add(NbtString.of(value)));
         nbt.put("structures", values);
@@ -83,6 +85,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
     }
 
     void normalizeDefinition(MinecraftServer server, NbtCompound data) {
+        FtbStructureTooltipSettings.removeFromDefinition(data);
         var targets = UnlockingRules.resolveRewardTargets(server, structures, structureSets);
         NbtList ids = new NbtList();
         targets.stream().sorted().forEach(id -> ids.add(NbtString.of(id.toString())));
@@ -94,6 +97,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
 
     @Override public void readData(NbtCompound nbt) {
         super.readData(nbt);
+        tooltipSettings.readData(nbt);
         NbtList values = nbt.getList("structures", NbtElement.STRING_TYPE);
         List<String> result = new ArrayList<>(values.size());
         for (int i = 0; i < values.size(); i++) result.add(values.getString(i));
@@ -116,6 +120,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         structureSets.forEach(value -> buf.writeString(value));
         buf.writeEnumConstant(match);
         currentPreview().write(buf);
+        tooltipSettings.writeNetData(buf);
     }
 
     @Override public void readNetData(PacketByteBuf buf) {
@@ -131,12 +136,15 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         for (int i = 0; i < setCount; i++) setResult.add(buf.readString(32767));
         structureSets = List.copyOf(setResult);
         match = buf.readEnumConstant(Match.class);
-        setPreview(FtbRewardPreview.read(buf));
+        var updatedPreview = FtbRewardPreview.read(buf);
+        tooltipSettings.readNetData(buf);
+        setPreview(updatedPreview);
         invalidateTargets();
     }
 
     @Override public void fillConfigGroup(ConfigGroup group) {
         super.fillConfigGroup(group);
+        tooltipSettings.fillConfigGroup(group);
         group.addList("structures", structures, new StringConfig(), values -> {
                     structures = List.copyOf(values);
                     invalidateTargets();
@@ -156,7 +164,13 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
         syncPreview();
     }
 
+    @Override public void addMouseOverHeader(TooltipList tooltip, TeamData team, boolean advanced) {
+        super.addMouseOverHeader(tooltip, team, advanced);
+        tooltipSettings.addTaskDescription(tooltip);
+    }
+
     @Override public void addMouseOverText(TooltipList tooltip, TeamData team) {
+        if (!tooltipSettings.showStructures(tooltip)) return;
         if (preview.totalCount() == 0) {
             tooltip.add(Text.translatable("ftb_reward.explorerscompass.no_matches").formatted(Formatting.GRAY));
             return;

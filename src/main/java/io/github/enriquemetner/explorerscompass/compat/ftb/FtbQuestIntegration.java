@@ -113,6 +113,7 @@ public final class FtbQuestIntegration {
     public static final class UnlockStructuresReward extends Reward {
         private List<String> structures = List.of();
         private List<String> structureSets = List.of();
+        private final FtbStructureTooltipSettings tooltipSettings = new FtbStructureTooltipSettings();
         private FtbRewardPreview preview = FtbRewardPreview.EMPTY;
 
         public UnlockStructuresReward(long id, Quest quest) { super(id, quest); }
@@ -124,6 +125,7 @@ public final class FtbQuestIntegration {
 
         @Override public void writeData(NbtCompound nbt) {
             super.writeData(nbt);
+            tooltipSettings.writeData(nbt);
             NbtList values = new NbtList();
             structures.forEach(value -> values.add(NbtString.of(value)));
             nbt.put("structures", values);
@@ -134,6 +136,7 @@ public final class FtbQuestIntegration {
 
         @Override public void readData(NbtCompound nbt) {
             super.readData(nbt);
+            tooltipSettings.readData(nbt);
             NbtList values = nbt.getList("structures", NbtElement.STRING_TYPE);
             List<String> result = new ArrayList<>(values.size());
             for (int i = 0; i < values.size(); i++) result.add(values.getString(i));
@@ -152,6 +155,7 @@ public final class FtbQuestIntegration {
             buf.writeVarInt(structureSets.size());
             structureSets.forEach(value -> buf.writeString(value));
             currentPreview().write(buf);
+            tooltipSettings.writeNetData(buf);
         }
 
         @Override public void readNetData(PacketByteBuf buf) {
@@ -166,7 +170,9 @@ public final class FtbQuestIntegration {
             List<String> setResult = new ArrayList<>(setCount);
             for (int i = 0; i < setCount; i++) setResult.add(buf.readString(32767));
             structureSets = List.copyOf(setResult);
-            setPreview(FtbRewardPreview.read(buf));
+            var updatedPreview = FtbRewardPreview.read(buf);
+            tooltipSettings.readNetData(buf);
+            setPreview(updatedPreview);
         }
 
         void setPreview(FtbRewardPreview updated) {
@@ -205,6 +211,7 @@ public final class FtbQuestIntegration {
 
         @Override public void fillConfigGroup(ConfigGroup group) {
             super.fillConfigGroup(group);
+            tooltipSettings.fillConfigGroup(group);
             group.addList("structures", structures, new StringConfig(), values -> {
                         structures = List.copyOf(values);
                         clearCachedData();
@@ -225,6 +232,8 @@ public final class FtbQuestIntegration {
         }
 
         @Override public void addMouseOverText(TooltipList tooltip) {
+            tooltipSettings.addRewardDescription(tooltip, getTitle());
+            if (!tooltipSettings.showStructures(tooltip)) return;
             if (preview.totalCount() == 0) {
                 tooltip.add(Text.translatable("ftb_reward.explorerscompass.no_matches").formatted(Formatting.GRAY));
                 return;
