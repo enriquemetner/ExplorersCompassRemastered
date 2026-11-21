@@ -6,6 +6,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -52,6 +53,7 @@ public class ExplorersCompassConfig {
 			+ " If the whitelist is modified, the blacklist is ignored.";
 	private static final String BLACKLIST = "server/blacklist.toml";
 	private static final String HIDDEN_STRUCTURES = "client/hidden_structures.toml";
+	private static final String HIDDEN_STRUCTURES_COMMENT = " Structures hidden from this client's compass list.";
 	private static final String SEARCH_SAVED_STRUCTURES = "search.findOldStructures";
 	private static final String SEARCH_RADIUS = "search.maxSearchRadius";
 	private static final int DEFAULT_SEARCH_RADIUS = 30_000;
@@ -138,15 +140,18 @@ public class ExplorersCompassConfig {
 	public static void load() {
 		try {
 			archiveLegacyConfig();
-			ensureServerDefaults();
+			ensureServerDefaults(null);
 			loadServerSettings(directory().resolve(SERVER_SETTINGS), null);
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
 				Path clientSettings = directory().resolve(CLIENT_SETTINGS);
 				restoreClientDefaults();
-				if (Files.exists(clientSettings)) loadClient(parse(clientSettings));
+				prepareDefaults(clientSettings, CLIENT_SETTINGS, false);
+				loadClient(parse(clientSettings));
 				writeClient(clientSettings);
-				hiddenStructures = strings(readOrCreate(HIDDEN_STRUCTURES), "hiddenStructures", hiddenStructures);
+				Path hiddenFile = directory().resolve(HIDDEN_STRUCTURES);
+				prepareDefaults(hiddenFile, HIDDEN_STRUCTURES, false);
+				hiddenStructures = strings(parse(hiddenFile), "hiddenStructures", List.of());
 			}
 		} catch (IOException e) {
 			throw new RuntimeException("Could not load Explorer's Compass configuration", e);
@@ -163,29 +168,25 @@ public class ExplorersCompassConfig {
 		}
 	}
 
-	private static void ensureServerDefaults() throws IOException {
-		Path defaults = directory();
-		Files.createDirectories(defaults.resolve("server"));
-		if (Files.notExists(defaults.resolve(SERVER_SETTINGS))) {
-			try {
-				readOrCreate(SERVER_SETTINGS);
-			} catch (IOException ignored) {
-				// The settings loader handles unavailable files independently.
+	private static final List<String> SERVER_CONFIGS = List.of(SERVER_SETTINGS, WHITELIST, BLACKLIST, UNLOCKING_RULES, SEARCH_COSTS);
+
+	private static void ensureServerDefaults(net.minecraft.server.MinecraftServer server) {
+		for (String name : SERVER_CONFIGS) {
+			Path instance = directory().resolve(name);
+			prepareServerDefaults(instance, name, false);
+			if (server != null) {
+				Path selected = serverConfigFile(server, name);
+				if (!selected.equals(instance)) prepareServerDefaults(selected, name, true);
 			}
 		}
-		for (String name : List.of(BLACKLIST, WHITELIST)) {
-			if (Files.notExists(defaults.resolve(name))) {
-				try {
-					readOrCreate(name);
-				} catch (IOException ignored) {
-					// The structure list loader handles unavailable files independently.
-				}
-			}
+	}
+
+	private static void prepareServerDefaults(Path path, String name, boolean worldOverride) {
+		try {
+			prepareDefaults(path, name, worldOverride);
+		} catch (IOException ignored) {
+			// Each server loader reports failures and applies its fallback independently.
 		}
-		Path rules = defaults.resolve(UNLOCKING_RULES);
-		if (Files.notExists(rules)) Files.writeString(rules, DEFAULT_UNLOCKING_RULES);
-		Path costs = defaults.resolve(SEARCH_COSTS);
-		if (Files.notExists(costs)) Files.writeString(costs, SearchCosts.DEFAULT_JSON);
 	}
 
 	public static Path serverConfigFile(net.minecraft.server.MinecraftServer server, String name) {
@@ -199,14 +200,10 @@ public class ExplorersCompassConfig {
 
 	public static void loadServer(net.minecraft.server.MinecraftServer server) {
 		StartupConfigReport.clear();
-		try {
-			ensureServerDefaults();
-			startupSettings = loadServerSettings(directory().resolve(SERVER_SETTINGS), serverConfigFile(server, SERVER_SETTINGS));
-			startupLists = loadStructureLists(serverConfigFile(server, WHITELIST), serverConfigFile(server, BLACKLIST),
-					server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds());
-		} catch (IOException e) {
-			throw new RuntimeException("Could not load Explorer's Compass server configuration", e);
-		}
+		ensureServerDefaults(server);
+		startupSettings = loadServerSettings(directory().resolve(SERVER_SETTINGS), serverConfigFile(server, SERVER_SETTINGS));
+		startupLists = loadStructureLists(serverConfigFile(server, WHITELIST), serverConfigFile(server, BLACKLIST),
+				server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds());
 	}
 
 	public static void logStartup(Set<Identifier> available, Section rules, Section costs) {
@@ -236,7 +233,7 @@ public class ExplorersCompassConfig {
 		String summary = settings.valid ? "Successfully loaded " + count + " settings"
 				: count + " settings loaded successfully";
 		if (!failures.isEmpty()) summary = "Could not load world settings.toml. Using instance settings. " + summary;
-		var result = new Section(summary, diagnostics.isEmpty() ? null : Severity.WARNING, diagnostics);
+		var result = new Section(summary, diagnostics.isEmpty() ? null : Severity.WARNING, diagnostics, selectedFile);
 		if (!settings.valid) return result;
 
 		TomlWriter writer = new TomlWriter();
@@ -267,14 +264,16 @@ public class ExplorersCompassConfig {
 		return new Diagnostic(Severity.ERROR, "Could not load " + file.getFileName() + ": " + StartupConfigReport.cause(error));
 	}
 
-	record StructureListLoad(String filename, boolean valid, Diagnostic override,
+	record StructureListLoad(Path file, boolean valid, Diagnostic override,
 							 List<Diagnostic> diagnostics) {
 		Section summary(int available, int loaded) {
 			String message;
-			if (!valid) message = "Could not load " + filename + ". Loaded all " + available + " structures";
-			else if (filename.equals("whitelist.toml")) message = "Whitelisted and loaded " + loaded + " structures";
-			else message = "Blacklisted " + (available - loaded) + " structures and loaded " + loaded + " structures";
-			return new Section(message, valid ? null : Severity.ERROR, diagnostics);
+			String filename = file.getFileName().toString();
+			String loadedCount = StartupConfigReport.structureCount(loaded);
+			if (!valid) message = "Could not load " + filename + ". Loaded all " + StartupConfigReport.structureCount(available);
+			else if (filename.equals("whitelist.toml")) message = "Whitelisted and loaded " + loadedCount;
+			else message = "Blacklisted " + StartupConfigReport.structureCount(available - loaded) + " and loaded " + loadedCount;
+			return new Section(message, valid ? null : Severity.ERROR, diagnostics, file);
 		}
 	}
 
@@ -290,7 +289,7 @@ public class ExplorersCompassConfig {
 			var warning = new Diagnostic(Severity.WARNING, "whitelist.toml overrides the nonempty blacklist.toml");
 			var diagnostics = new ArrayList<>(result.diagnostics());
 			diagnostics.add(0, warning);
-			return new StructureListLoad(result.filename(), result.valid(), warning, List.copyOf(diagnostics));
+			return new StructureListLoad(result.file(), result.valid(), warning, List.copyOf(diagnostics));
 		}
 		var blacklist = readStructureList(blacklistFile, BLACKLIST_KEY, registeredIds);
 		if (blacklist.selectors() != null) structureBlacklist = blacklist.selectors();
@@ -314,7 +313,7 @@ public class ExplorersCompassConfig {
 			document = ServerToml.read(file);
 		} catch (IOException | IllegalArgumentException error) {
 			var failure = List.of(fileFailure(file, error));
-			return new StructureList(null, new StructureListLoad(filename, false, null, failure));
+			return new StructureList(null, new StructureListLoad(file, false, null, failure));
 		}
 		List<Diagnostic> diagnostics = new ArrayList<>();
 		Object value = document.config().get(key);
@@ -349,7 +348,7 @@ public class ExplorersCompassConfig {
 					filename + ": " + id + " is listed more than once by " + String.join(", ", entries)));
 		});
 		return new StructureList(valid ? List.copyOf(selectors) : null,
-				new StructureListLoad(filename, valid, null, diagnostics));
+				new StructureListLoad(file, valid, null, diagnostics));
 	}
 
 	private static String quotedDiagnosticValue(Object value) {
@@ -360,9 +359,27 @@ public class ExplorersCompassConfig {
 		return FabricLoader.getInstance().getConfigDir().resolve(ExplorersCompass.MODID);
 	}
 
-	private static CommentedConfig readOrCreate(String name) throws IOException {
-		Path path = directory().resolve(name);
-		if (Files.exists(path)) return parse(path);
+	static void prepareDefaults(Path path, String name, boolean worldOverride) throws IOException {
+		boolean missing = Files.notExists(path);
+		if (!missing) {
+			String source = Files.readString(path);
+			boolean empty = source.isBlank() || name.endsWith(".toml")
+					&& source.lines().allMatch(line -> line.isBlank() || line.stripLeading().startsWith("#"));
+			if (!empty) return;
+		}
+		String defaults = switch (name) {
+			case UNLOCKING_RULES -> DEFAULT_UNLOCKING_RULES;
+			case SEARCH_COSTS -> SearchCosts.DEFAULT_JSON;
+			case CLIENT_SETTINGS -> serializeClientSettings();
+			default -> defaultToml(name);
+		};
+		Files.createDirectories(path.toAbsolutePath().getParent());
+		if (missing) Files.writeString(path, defaults, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+		else Files.writeString(path, defaults);
+		StartupConfigReport.prepared(path, worldOverride ? "world override " + name : name, missing, name.startsWith("client/"));
+	}
+
+	private static String defaultToml(String name) {
 		CommentedConfig config = TomlFormat.newConfig(LinkedHashMap::new);
 		switch (name) {
 			case SERVER_SETTINGS -> {
@@ -371,11 +388,10 @@ public class ExplorersCompassConfig {
 			}
 			case WHITELIST -> writeCommonWhitelist(config);
 			case BLACKLIST -> writeCommonBlacklist(config);
-			case HIDDEN_STRUCTURES -> writeHiddenStructures(config);
+			case HIDDEN_STRUCTURES -> put(config, "hiddenStructures", List.of(), HIDDEN_STRUCTURES_COMMENT);
 			default -> throw new IllegalArgumentException(name);
 		}
-		write(path, config);
-		return config;
+		return new TomlWriter().writeToString(config);
 	}
 
 	private static CommentedConfig parse(Path path) throws IOException {
@@ -696,7 +712,7 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void writeHiddenStructures(CommentedConfig config) {
-		put(config, "hiddenStructures", hiddenStructures, " Structures hidden from this client's compass list.");
+		put(config, "hiddenStructures", hiddenStructures, HIDDEN_STRUCTURES_COMMENT);
 	}
 
 	private static void saveFile(String name, java.util.function.Consumer<CommentedConfig> update) {

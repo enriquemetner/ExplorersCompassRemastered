@@ -62,9 +62,9 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
             attempt.add(failure);
             failed = true;
         }
-        String summary = !failed ? "Successfully loaded search_costs.json successfully"
+        String summary = !failed ? "Successfully loaded search_costs.json"
                 : "Could not load search_costs.json. All structures fell back to costing nothing";
-        return new StartupConfigReport.Section(summary, failed ? Severity.ERROR : null, attempt);
+        return new StartupConfigReport.Section(summary, failed ? Severity.ERROR : null, attempt, file);
     }
 
     static SearchCosts parse(String source, Function<String, Set<Identifier>> resolve, Predicate<Identifier> knownItem) {

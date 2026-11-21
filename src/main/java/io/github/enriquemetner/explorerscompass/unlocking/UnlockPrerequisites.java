@@ -83,6 +83,6 @@ final class UnlockPrerequisites {
         }
         String chain = path.stream().map(Identifier::toString).collect(Collectors.joining(" → ")) + " → " + start;
         error.accept("Prerequisite loop on lines " + lines.stream().map(String::valueOf).collect(Collectors.joining(", "))
-                + ": " + chain + ". Ignoring all prerequisites.");
+                + ": " + chain + ". Ignoring all prerequisites");
     }
 }

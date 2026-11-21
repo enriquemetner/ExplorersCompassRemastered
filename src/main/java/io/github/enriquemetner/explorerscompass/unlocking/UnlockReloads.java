@@ -40,7 +40,7 @@ public final class UnlockReloads {
             if (!validDefinitions && ExplorersCompassConfig.relockOnReload) {
                 String source = ftb.valid() ? "unlocking_rules.json" : "FTB structure rewards or tasks";
                 ExplorersCompass.LOGGER.warn(
-                        "Skipped startup relock because {} contains invalid requirements. The last valid baseline was kept.", source);
+                        "Skipped startup relock because {} contains invalid requirements. The last valid baseline was kept", source);
             }
             prepareStartup(UnlockedStructures.get(server), current, ExplorersCompassConfig.relockOnReload,
                     rules.prerequisiteGates());

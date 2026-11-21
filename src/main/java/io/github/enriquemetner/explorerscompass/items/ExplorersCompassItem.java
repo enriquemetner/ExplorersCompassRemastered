@@ -2,6 +2,8 @@ package io.github.enriquemetner.explorerscompass.items;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.Map;
@@ -144,33 +146,57 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
-    public void abortFailedSearch(PlayerEntity player, SearchWorker worker) {
+    public void abortFailedSearch(PlayerEntity player, SearchWorker worker, RuntimeException error) {
         UUID owner = player.getUuid();
         SearchSession session = searches.get(owner);
         if (session != null && session.workers.ownsWorker(worker)) {
-            stopDetachedSearch(owner, session);
+            failSearch(owner, session, error);
+        }
+    }
+
+    private void failSearch(UUID owner, SearchSession session, RuntimeException error) {
+        int radius = session.workers.currentRadius();
+        if (removeSearch(owner, session)) {
+            ExplorersCompass.LOGGER.error("Search {} error at radius {} blocks after {} ms",
+                    session.logId, radius, session.elapsedMillis(), error);
+            sendSearchRejected(owner, session);
         }
     }
 
     private void stopDetachedSearch(UUID owner, SearchSession session) {
-        stopSearch(owner, session);
+        if (stopSearch(owner, session)) sendSearchRejected(owner, session);
+    }
+
+    private void sendSearchRejected(UUID owner, SearchSession session) {
         ServerPlayerEntity player = session.world.getServer().getPlayerManager().getPlayer(owner);
         if (player != null) SearchResultPacket.send(player, session.requestId, SearchResultPacket.REJECTED, 0);
     }
 
-    private void stopSearch(UUID owner, SearchSession session) {
+    private boolean stopSearch(UUID owner, SearchSession session) {
+        int radius = session.workers.currentRadius();
+        if (!removeSearch(owner, session)) return false;
+        ExplorersCompass.LOGGER.info("Search {} cancelled at radius {} blocks after {} ms",
+                session.logId, radius, session.elapsedMillis());
+        return true;
+    }
+
+    private boolean removeSearch(UUID owner, SearchSession session) {
+        if (!searches.remove(owner, session)) return false;
         session.workers.stop();
         session.workers.clear();
-        searches.remove(owner);
         if (session.stack.hasNbt()) CompassSearchData.restore(session.stack.getNbt(), session.token);
+        return true;
     }
 
 
 	public static final String NAME = "explorerscompass";
 
+    private static final AtomicLong SEARCH_IDS = new AtomicLong();
 	private final Map<UUID, SearchSession> searches = new HashMap<>();
 
     private static class SearchSession {
+        final long logId = SEARCH_IDS.updateAndGet(id -> id == 9999 ? 1 : id + 1);
+        final long startedNanos = System.nanoTime();
         final SearchWorkerManager workers = new SearchWorkerManager();
         final ItemStack stack;
         final NbtCompound previousNbt;
@@ -180,6 +206,7 @@ public class ExplorersCompassItem extends Item {
         final List<Identifier> eligibleIds;
 		final boolean creativeBypass;
         AvailabilitySelection availability;
+        boolean reachedRadiusLimit;
         final int radiusLimit = ExplorersCompassConfig.maxSearchRadius;
         SearchSession(ServerWorld world, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass) {
             this.world = world;
@@ -189,14 +216,28 @@ public class ExplorersCompassItem extends Item {
             this.eligibleIds = List.copyOf(eligibleIds);
 			this.creativeBypass = creativeBypass;
         }
+
+        long elapsedMillis() {
+            return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
+        }
+
+        void logNotFound() {
+            if (reachedRadiusLimit) {
+                ExplorersCompass.LOGGER.info("Search {} not found within {} blocks after {} ms",
+                        logId, radiusLimit, elapsedMillis());
+            } else {
+                ExplorersCompass.LOGGER.info("Search {} not found after {} ms", logId, elapsedMillis());
+            }
+        }
     }
 
-    private SearchSession beginSearch(ServerWorld world, PlayerEntity player, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass) {
+    private SearchSession beginSearch(ServerWorld world, PlayerEntity player, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass, String target) {
         cancelSearch(player, -1);
         ensureHolder((ServerPlayerEntity) player, stack);
         SearchSession session = new SearchSession(world, stack, requestId, eligibleIds, creativeBypass);
         CompassSearchData.begin(stack.getOrCreateNbt(), session.token, session.previousNbt);
         searches.put(player.getUuid(), session);
+        ExplorersCompass.LOGGER.info("Search {} started for {}", session.logId, target);
         return session;
     }
 
@@ -220,8 +261,14 @@ public class ExplorersCompassItem extends Item {
         if (session != null) {
             session.workers.stop();
             session.workers.clear();
+            if (result == SearchResultPacket.FOUND) {
+                ExplorersCompass.LOGGER.info("Search {} located {} at radius {} blocks in {} ms",
+                        session.logId, foundId, radius, session.elapsedMillis());
+            } else {
+                session.logNotFound();
+            }
             if (player instanceof ServerPlayerEntity serverPlayer) {
-                SearchResultPacket.send(serverPlayer, session.requestId, result, radius, foundId, foundX, foundZ, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
+                SearchResultPacket.send(serverPlayer, session.requestId, result, result == SearchResultPacket.FOUND ? 0 : radius, foundId, foundX, foundZ, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
             }
         }
     }
@@ -405,19 +452,25 @@ public class ExplorersCompassItem extends Item {
                 ? searchable.stream().map(id -> StructureUtils.getStructureForID(world, id)).toList() : List.of();
         List<Structure> generation = selection.eligible().stream().map(id -> StructureUtils.getStructureForID(world, id)).toList();
         Identifier firstId = searchable.get(0);
-        SearchSession session = beginSearch(world, player, stack, requestId, searchable, creativeBypass);
-        session.availability = includeSaved ? selection : null;
-        setSearching(stack, firstId);
-        SearchAvailabilityPacket.send(player, requestId, includeSaved
-                ? new AvailabilitySelection(searchable, List.of(), 0, selection.locked()) : selection);
-        session.workers.createWorkers(world, player, stack, generation, structures, firstId, excludeVisited, creativeBypass, pos);
-        session.workers.setRadiusLimit(session.radiusLimit);
-        if (session.workers.start()) {
-            Hand hand = player.getMainHandStack() == stack ? Hand.MAIN_HAND : Hand.OFF_HAND;
-            player.swingHand(hand, true);
-            SearchProgressPacket.send(player, requestId, 0);
-        } else {
-            fail(player, stack, firstId, 0, 0);
+        String target = listed ? searchable.size() + " listed structures" : firstId.toString();
+        SearchSession session = beginSearch(world, player, stack, requestId, searchable, creativeBypass, target);
+        try {
+            session.availability = includeSaved ? selection : null;
+            setSearching(stack, firstId);
+            SearchAvailabilityPacket.send(player, requestId, includeSaved
+                    ? new AvailabilitySelection(searchable, List.of(), 0, selection.locked()) : selection);
+            session.workers.createWorkers(world, player, stack, generation, structures, excludeVisited, creativeBypass, pos);
+            session.workers.setRadiusLimit(session.radiusLimit);
+            if (session.workers.start()) {
+                Hand hand = player.getMainHandStack() == stack ? Hand.MAIN_HAND : Hand.OFF_HAND;
+                player.swingHand(hand, true);
+                SearchProgressPacket.send(player, requestId, 0);
+            } else {
+                fail(player, stack, false);
+            }
+        } catch (RuntimeException error) {
+            if (searches.get(player.getUuid()) != session) throw error;
+            failSearch(player.getUuid(), session, error);
         }
     }
 
@@ -428,10 +481,11 @@ public class ExplorersCompassItem extends Item {
         }
     }
 
-	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, ChunkPos startChunk, int x, int z, BlockBox bounds, int samples, boolean displayCoordinates, boolean displayDistance) {
+	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, ChunkPos startChunk, int x, int z, BlockBox bounds, int radius, int samples, boolean displayCoordinates, boolean displayDistance) {
         PartySharing.synchronize(player.getServer());
 		SearchSession session = searches.get(player.getUuid());
-		if (session == null || session.stack != stack || structureID == null) return;
+		if (session == null || session.stack != stack) return;
+        if (structureID == null) throw new IllegalStateException("Located structure has no registered ID");
         if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }
 		if (!(session.creativeBypass && player.getAbilities().creativeMode)
 				&& !UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), structureID)) {
@@ -462,30 +516,31 @@ public class ExplorersCompassItem extends Item {
                 ? VisitedStructures.hasEffectiveVisit(session.world.getServer(), player.getUuid(),
                         session.world.getRegistryKey().getValue(), structureID, startChunk)
                 : null;
+        if (!ItemUtils.verifyNBT(stack)) throw new IllegalStateException("Compass unavailable while saving search result");
         costs.pay(serverPlayer, stack, cost);
-		clearSearchData(stack);
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putString("StructureID", structureID.toString());
-			if (session.creativeBypass) stack.getNbt().putBoolean("CreativeBypass", true);
-			stack.getNbt().putInt("State", CompassState.FOUND.getID());
-			stack.getNbt().putInt("FoundX", x);
-			stack.getNbt().putInt("FoundZ", z);
-			stack.getNbt().putString("FoundDimension", player.getWorld().getRegistryKey().getValue().toString());
-            stack.getNbt().putLong(CompassSearchData.FOUND_START_CHUNK, startChunk.toLong());
-			stack.getNbt().putInt("Samples", samples);
-			stack.getNbt().putBoolean("DisplayCoordinates", displayCoordinates);
-			stack.getNbt().putBoolean("DisplayDistance", displayDistance);
-		}
+        NbtCompound data = stack.getNbt();
+        CompassSearchData.clear(data);
+        data.putString("StructureID", structureID.toString());
+        if (session.creativeBypass) data.putBoolean("CreativeBypass", true);
+        data.putInt("State", CompassState.FOUND.getID());
+        data.putInt("FoundX", x);
+        data.putInt("FoundZ", z);
+        data.putString("FoundDimension", player.getWorld().getRegistryKey().getValue().toString());
+        data.putLong(CompassSearchData.FOUND_START_CHUNK, startChunk.toLong());
+        data.putInt("Samples", samples);
+        data.putBoolean("DisplayCoordinates", displayCoordinates);
+        data.putBoolean("DisplayDistance", displayDistance);
         if (costs.type() == SearchCosts.Type.ITEMS) {
             serverPlayer.currentScreenHandler.sendContentUpdates();
         }
-		finishSearch(player, SearchResultPacket.FOUND, 0, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
+		finishSearch(player, SearchResultPacket.FOUND, radius, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
 	}
 
-	public void fail(PlayerEntity player, ItemStack stack, Identifier structureId, int radius, int samples) {
+	public void fail(PlayerEntity player, ItemStack stack, boolean reachedRadiusLimit) {
         SearchSession session = searches.get(player.getUuid());
         if (session == null) return;
         if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }
+        session.reachedRadiusLimit |= reachedRadiusLimit;
         session.workers.pop();
         boolean started = session.workers.start();
 		if (!started) {
@@ -494,7 +549,7 @@ public class ExplorersCompassItem extends Item {
                 var selection = session.availability;
                 if (!selection.disabled().isEmpty() && player instanceof ServerPlayerEntity serverPlayer
                         && ServerPlayNetworking.canSend(serverPlayer, SearchAvailabilityPacket.ID)) {
-                    cancelSearch(player, session.requestId);
+                    if (removeSearch(player.getUuid(), session)) session.logNotFound();
                     SearchAvailabilityPacket.send(serverPlayer, session.requestId, selection);
                     return;
                 }

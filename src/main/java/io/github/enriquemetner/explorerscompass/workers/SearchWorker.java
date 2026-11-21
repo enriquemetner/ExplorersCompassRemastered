@@ -40,7 +40,6 @@ public final class SearchWorker implements WorldWorkerManager.IWorker {
 
 	private static final int PROGRESS_INTERVAL_BLOCKS = 100;
 
-	private String managerId;
     private final EmptyChunkCache storageCache = new EmptyChunkCache();
 	private ServerWorld level;
 	private PlayerEntity player;
@@ -49,7 +48,6 @@ public final class SearchWorker implements WorldWorkerManager.IWorker {
 	private BlockPos currentPos;
 	private StructurePlacement placement;
 	private List<Structure> structureSet;
-	private Identifier structureOrSetId;
 	private boolean excludeVisited;
 	private boolean creativeBypass;
 	private int samples;
@@ -60,7 +58,6 @@ public final class SearchWorker implements WorldWorkerManager.IWorker {
 
 	public void start() {
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-			ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker starting with " + radiusLimit + " radius limit, no candidate limit");
 			WorldWorkerManager.addWorker(level.getServer(), this);
 		}
 	}
@@ -126,47 +123,41 @@ public final class SearchWorker implements WorldWorkerManager.IWorker {
 
 	private void succeed(Match match) {
         storageCache.clear();
-		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker succeeded with " + getRadius() + " radius, " + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
             StructureStart start = match.start() != null ? match.start()
                     : StructureDestination.readStart(level, match.startChunk(), match.structure());
             var pieces = StructureDestination.pieces(start);
             BlockPos pos = StructureDestination.refine(pieces, placement == null ? match.startChunk().getStartPos() : placement.getLocatePos(match.startChunk())).pos();
 			((ExplorersCompassItem) stack.getItem()).succeed(player, stack, StructureUtils.getIDForStructure(level, match.structure()),
-                    match.startChunk(), pos.getX(), pos.getZ(), BlockBox.encompass(pieces).orElse(null), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
+                    match.startChunk(), pos.getX(), pos.getZ(), BlockBox.encompass(pieces).orElse(null), getRadius(), samples, ExplorersCompassConfig.displayCoordinates, ExplorersCompassConfig.displayDistance);
 		} else {
-			ExplorersCompass.LOGGER.error("SearchWorkerManager " + managerId + ": SearchWorker found invalid compass after successful search");
+			throw new IllegalStateException("Compass unavailable after locating structure");
 		}
 		finished = true;
 	}
 
 	private void fail() {
         storageCache.clear();
-		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker failed with " + getRadius() + " radius, " + samples + " samples");
 		if (!stack.isEmpty() && stack.getItem() == ExplorersCompass.EXPLORERS_COMPASS_ITEM) {
-			((ExplorersCompassItem) stack.getItem()).fail(player, stack, structureOrSetId, getRadius(), samples);
+			((ExplorersCompassItem) stack.getItem()).fail(player, stack, !queue.isEmpty());
 		} else {
-			ExplorersCompass.LOGGER.error("SearchWorkerManager " + managerId + ": SearchWorker found invalid compass after failed search");
-			finished = true;
+			throw new IllegalStateException("Compass unavailable after exhausting search");
 		}
 	}
 
     @Override
     public void onSearchError(RuntimeException exception) {
-        ExplorersCompass.LOGGER.error("Compass search {} for {} in {} failed at radius {}",
-                managerId, structureOrSetId, level.getRegistryKey().getValue(), getRadius(), exception);
-        ExplorersCompass.EXPLORERS_COMPASS_ITEM.abortFailedSearch(player, this);
+        ExplorersCompass.EXPLORERS_COMPASS_ITEM.abortFailedSearch(player, this, exception);
     }
 
 	public void stop() {
         pendingTarget = null;
         pendingChunk = null;
         storageCache.clear();
-		ExplorersCompass.LOGGER.info("SearchWorkerManager " + managerId + ": SearchWorker stopped with " + getRadius() + " radius, " + samples + " samples");
 		finished = true;
 	}
 
-	private int getRadius() {
+	int getRadius() {
 		return StructureUtils.getHorizontalDistanceToLocation(startPos, currentPos.getX(), currentPos.getZ());
 	}
 
@@ -183,16 +174,14 @@ public final class SearchWorker implements WorldWorkerManager.IWorker {
     private final NearestFirstQueue<Target> queue;
 
     SearchWorker(ServerWorld world, PlayerEntity player, ItemStack stack, BlockPos origin,
-            Map<StructurePlacement, List<Structure>> placements, List<Structure> searchStructures, Identifier searchId,
-            boolean excludeVisited, String managerId) {
+            Map<StructurePlacement, List<Structure>> placements, List<Structure> searchStructures,
+            boolean excludeVisited) {
         this.level = world;
         this.player = player;
         this.stack = stack;
         this.startPos = origin;
         this.structureSet = List.of();
-        this.structureOrSetId = searchId;
         this.excludeVisited = excludeVisited && ExplorersCompassConfig.allowExcludeVisited;
-        this.managerId = managerId;
         currentPos = origin;
         samples = 0;
         finished = !level.getServer().getSaveProperties().getGeneratorOptions().shouldGenerateStructures();

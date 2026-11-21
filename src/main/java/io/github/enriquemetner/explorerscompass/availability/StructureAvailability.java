@@ -16,7 +16,7 @@ public final class StructureAvailability {
         public boolean loaded(String id) { return FabricLoader.getInstance().isModLoaded(id); }
         public Class<?> load(String name) throws ClassNotFoundException { return Class.forName(name); }
         public void unknown(String id, Throwable error) {
-            if (WARNED.add(id)) ExplorersCompass.LOGGER.warn("Unable to inspect disabling settings for {}. Keeping normal search behaviour.",id,error);
+            if (WARNED.add(id)) ExplorersCompass.LOGGER.warn("Unable to inspect disabling settings for {}. Keeping normal search behaviour",id,error);
         }
     });
     private StructureAvailability() {}

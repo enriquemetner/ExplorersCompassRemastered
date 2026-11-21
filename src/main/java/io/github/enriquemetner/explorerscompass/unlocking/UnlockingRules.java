@@ -169,14 +169,18 @@ public final class UnlockingRules {
         Path file = ExplorersCompassConfig.serverConfigFile(server, ExplorersCompassConfig.UNLOCKING_RULES);
         int count = reload(file, catalog(server));
         var details = active.diagnostics(null);
-        String summary = count < 0 ? "Could not load unlocking_rules.json"
-                : "Successfully loaded " + count + " unlocking requirements and " + active.prerequisiteCount + " prerequisites";
-        if (count >= 0 && details.stream().anyMatch(diagnostic -> diagnostic.severity() == Severity.ERROR)) {
-            summary = "Loaded " + count + " valid unlocking requirements and " + active.prerequisiteCount
-                    + " prerequisites. Some entries were rejected";
+        int prerequisites = active.prerequisiteCount;
+        String counts = count + (count == 1 ? " unlocking requirement and " : " unlocking requirements and ")
+                + prerequisites + (prerequisites == 1 ? " prerequisite" : " prerequisites");
+        if (count < 0) {
+            return new io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Section(
+                    "Could not load unlocking_rules.json", Severity.ERROR, details, file);
         }
+        boolean rejectedEntries = details.stream().anyMatch(diagnostic -> diagnostic.severity() == Severity.ERROR);
+        String summary = rejectedEntries ? "Loaded " + counts + ". Some entries were rejected"
+                : "Successfully loaded " + counts;
         return new io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Section(
-                summary, count < 0 ? Severity.ERROR : null, details);
+                summary, rejectedEntries ? Severity.WARNING : null, details, file);
     }
 
     static int reload(Path file, Catalog catalog) {

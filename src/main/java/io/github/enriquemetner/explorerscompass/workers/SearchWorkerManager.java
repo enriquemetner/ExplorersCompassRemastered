@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang3.RandomStringUtils;
-
 import io.github.enriquemetner.explorerscompass.util.StructureUtils;
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
@@ -13,14 +11,11 @@ import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.gen.chunk.placement.StructurePlacement;
 import net.minecraft.world.gen.structure.Structure;
 
 public class SearchWorkerManager {
-
-	private final String id = RandomStringUtils.random(8, "0123456789abcdef");
 
 	private List<SearchWorker> workers;
 	// Keep workers and their cursors across radius stages; index advances within the current stage.
@@ -30,7 +25,7 @@ public class SearchWorkerManager {
 		workers = new ArrayList<SearchWorker>();
 	}
 
-	public void createWorkers(ServerWorld world, PlayerEntity player, ItemStack stack, List<Structure> structures, List<Structure> savedStructures, Identifier structureOrSetId, boolean excludeVisited, boolean creativeBypass, BlockPos startPos) {
+	public void createWorkers(ServerWorld world, PlayerEntity player, ItemStack stack, List<Structure> structures, List<Structure> savedStructures, boolean excludeVisited, boolean creativeBypass, BlockPos startPos) {
 		workers.clear();
 		index = 0;
 
@@ -46,7 +41,7 @@ public class SearchWorkerManager {
 
         if (!placementToStructuresMap.isEmpty() || !savedStructures.isEmpty()) {
             SearchWorker worker = new SearchWorker(world, player, stack, startPos,
-                    placementToStructuresMap, savedStructures, structureOrSetId, excludeVisited, id);
+                    placementToStructuresMap, savedStructures, excludeVisited);
             worker.setCreativeBypass(creativeBypass);
             workers.add(worker);
         }
@@ -77,6 +72,10 @@ public class SearchWorkerManager {
     public boolean ownsWorker(SearchWorker worker) {
         return workers.contains(worker);
     }
+
+	public int currentRadius() {
+		return workers.stream().mapToInt(SearchWorker::getRadius).max().orElse(0);
+	}
 
 	public void stop() {
 		for (SearchWorker worker : workers) {

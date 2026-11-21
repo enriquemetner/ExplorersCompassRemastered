@@ -143,7 +143,10 @@ public final class CompassTeleport {
         }
 
         var pos = landing.position();
-        player.teleport(world, pos.x, pos.y, pos.z, Set.of(), player.getYaw(), player.getPitch());
+        if (player.teleport(world, pos.x, pos.y, pos.z, Set.of(), player.getYaw(), player.getPitch())) {
+            ExplorersCompass.LOGGER.info("{} teleported with the compass to {} at {}, {}, {}",
+                    player.getGameProfile().getName(), world.getRegistryKey().getValue(), pos.x, pos.y, pos.z);
+        }
         if (landing.pose() != null) player.setPose(landing.pose());
         if (!player.isFallFlying()) {
             player.setVelocity(player.getVelocity().getX(), 0, player.getVelocity().getZ());
