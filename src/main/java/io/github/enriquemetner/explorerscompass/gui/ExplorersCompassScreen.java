@@ -1538,7 +1538,8 @@ public class ExplorersCompassScreen extends Screen {
 		int firstY = filterTop() + 6;
 		if (mouseY < firstY || mouseY >= filterBottom()) return null;
 		int row = (int) (mouseY - firstY) / 25;
-		if (row >= hiddenVisibleRows() || !ButtonPress.contains(mouseX, mouseY, width - 95, firstY + row * 25, 78, 20)) return null;
+		if (row >= hiddenVisibleRows() || !ButtonPress.contains(mouseX, mouseY, hiddenRemoveButtonX(), hiddenRemoveButtonY(firstY + row * 25),
+				hiddenRemoveButtonWidth(), StructureSearchList.ACTION_BUTTON_HEIGHT)) return null;
 		List<String> visible = filteredHiddenStructures();
 		int index = hiddenScroll + row;
 		if (index >= visible.size()) return null;
@@ -2768,6 +2769,16 @@ public class ExplorersCompassScreen extends Screen {
 		return Math.max(0, filteredHiddenStructures().size() - hiddenVisibleRows());
 	}
 
+    private int hiddenRemoveButtonWidth() { return rowActionButtonWidth("Remove"); }
+
+    private int hiddenRemoveButtonX() {
+        return filterRight() - StructureSearchList.ACTION_BUTTON_RIGHT_INSET - hiddenRemoveButtonWidth();
+    }
+
+    private int hiddenRemoveButtonY(int rowY) {
+        return rowY + (20 - StructureSearchList.ACTION_BUTTON_HEIGHT) / 2;
+    }
+
     private void renderHiddenStructures(DrawContext context, int mouseX, int mouseY) {
         context.fill(filterLeft(), filterTop(), filterRight(), filterBottom(),
 				RenderUtils.blackWithOpacity(RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT));
@@ -2778,13 +2789,26 @@ public class ExplorersCompassScreen extends Screen {
                 Text.literal(ExplorersCompassConfig.hiddenStructures.isEmpty()
                         ? "No hidden structures" : "No matching hidden structures"),
                 width / 2, filterTop() + 20, 0xffffff);
+        int buttonX = hiddenRemoveButtonX();
+        int buttonWidth = hiddenRemoveButtonWidth();
+        int buttonHeight = StructureSearchList.ACTION_BUTTON_HEIGHT;
+        int textWidth = Math.max(1, buttonX - 21);
         for (int row = 0; row < hiddenVisibleRows() && hiddenScroll + row < ids.size(); row++) {
             int y = filterTop() + 6 + row * 25;
             String raw = ids.get(hiddenScroll + row);
             Identifier id = Identifier.tryParse(raw);
-            String label = id == null || !allowedStructureIDs.contains(id) ? raw : StructureUtils.getStructureName(id) + " (" + raw + ")";
-            context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(label, Math.max(1, width - 145)), 16, y + 6, 0xffffff);
-            drawDialogButton(context, Text.literal("Remove").getString(), width - 95, y, 78, mouseX, mouseY);
+            String technicalName = textRenderer.trimToWidth(raw, textWidth);
+            if (id != null && allowedStructureIDs.contains(id)) {
+                int nameY = y + (20 - 2 * textRenderer.fontHeight) / 2;
+                String name = textRenderer.trimToWidth(StructureUtils.getStructureName(id), textWidth);
+                context.drawTextWithShadow(textRenderer, name, 16, nameY, 0xffffff);
+                context.drawTextWithShadow(textRenderer, technicalName, 16, nameY + textRenderer.fontHeight, 0xaaaaaa);
+            } else {
+                context.drawTextWithShadow(textRenderer, technicalName, 16, y + (20 - textRenderer.fontHeight) / 2, 0xffffff);
+            }
+            int buttonY = hiddenRemoveButtonY(y);
+            StructureSearchEntry.drawActionButton(context, textRenderer, "Remove", buttonX, buttonY, buttonWidth,
+                    buttonHeight, ButtonPress.contains(mouseX, mouseY, buttonX, buttonY, buttonWidth, buttonHeight));
         }
         context.disableScissor();
         scrollbarFor(ScrollPanel.HIDDEN).render(context);
@@ -2807,7 +2831,11 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	public int rowActionButtonWidth() {
-		return textRenderer.getWidth(Text.literal("filters")) + 8;
+		return rowActionButtonWidth("filters");
+	}
+
+	private int rowActionButtonWidth(String label) {
+		return textRenderer.getWidth(label) + 8;
 	}
 
 	public void toggleStructureHidden(Identifier id) {

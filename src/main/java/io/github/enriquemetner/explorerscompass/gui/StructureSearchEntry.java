@@ -12,6 +12,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.widget.AlwaysSelectedEntryListWidget;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
@@ -56,7 +57,6 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
             context.drawBorder(x, y, size, size, RenderUtils.ROW_BUTTON_BORDER);
         }
         int buttonHeight = structuresList.rowActionHeight();
-        int labelOffset = (buttonHeight - 8) / 2;
         int actionsHeight = StructureSearchList.ACTION_BUTTONS_HEIGHT;
         int buttonY = top + (height - actionsHeight) / 2;
         int controlsX = structuresList.rowControlsX();
@@ -89,14 +89,10 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
                 left + 5, detailY + lineHeight, textWidth, infoColor);
         boolean filterHovered = structuresList.isFilterButtonClick(this, mouseX, mouseY);
         buttonY = structuresList.rowActionY(top, height, true);
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, RenderUtils.ROW_BUTTON_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(filterHovered));
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("Filters"), buttonX + buttonWidth / 2, buttonY + labelOffset, 0xffffff);
+        drawActionButton(context, client.textRenderer, "Filters", buttonX, buttonY, buttonWidth, buttonHeight, filterHovered);
         buttonY = structuresList.rowActionY(top, height, false);
         boolean buttonHovered = structuresList.isActionButtonClick(this, mouseX, mouseY);
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + buttonHeight, RenderUtils.ROW_BUTTON_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + buttonHeight - 1, actionBackground(buttonHovered));
-        context.drawCenteredTextWithShadow(client.textRenderer, Text.literal("More"), buttonX + buttonWidth / 2, buttonY + labelOffset, 0xffffff);
+        drawActionButton(context, client.textRenderer, "More", buttonX, buttonY, buttonWidth, buttonHeight, buttonHovered);
 		if (locked) {
 			RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
 			RenderSystem.enableBlend();
@@ -113,6 +109,13 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int labelWidth = client.textRenderer.getWidth(label);
         context.drawTextWithShadow(client.textRenderer, label, x, y, color);
         RenderUtils.drawTextToFit(context, client.textRenderer, Text.literal(value), x + labelWidth, y, width - labelWidth, color);
+    }
+
+    static void drawActionButton(DrawContext context, TextRenderer renderer, String label, int x, int y,
+                                 int width, int height, boolean hovered) {
+        context.fill(x, y, x + width, y + height, RenderUtils.ROW_BUTTON_BORDER);
+        context.fill(x + 1, y + 1, x + width - 1, y + height - 1, actionBackground(hovered));
+        context.drawCenteredTextWithShadow(renderer, label, x + width / 2, y + (height - 8) / 2, 0xffffff);
     }
 
     private static int actionBackground(boolean hovered) {

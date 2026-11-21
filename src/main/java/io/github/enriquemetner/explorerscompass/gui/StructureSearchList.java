@@ -20,6 +20,7 @@ import java.util.List;
 public class StructureSearchList extends AlwaysSelectedEntryListWidget<StructureSearchEntry> {
 	static final int SCROLLBAR_WIDTH = Scrollbar.WIDTH;
 	static final int ACTION_BUTTON_HEIGHT = 16;
+	static final int ACTION_BUTTON_RIGHT_INSET = 7;
 	static final int ACTION_BUTTON_GAP = 2;
 	static final int ACTION_BUTTONS_HEIGHT = ACTION_BUTTON_HEIGHT * 2 + ACTION_BUTTON_GAP;
 	static final int TEXT_LINE_GAP = 2;
@@ -359,7 +360,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
     }
 
 	int rowActionX() {
-		return getRowLeft() + getRowWidth() - 7 - rowActionWidth();
+		return getRowLeft() + getRowWidth() - ACTION_BUTTON_RIGHT_INSET - rowActionWidth();
 	}
 
     int rowControlsX() {
