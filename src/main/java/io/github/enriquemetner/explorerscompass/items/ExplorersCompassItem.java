@@ -463,8 +463,6 @@ public class ExplorersCompassItem extends Item {
             session.workers.createWorkers(world, player, stack, generation, structures, excludeVisited, creativeBypass, pos);
             session.workers.setRadiusLimit(session.radiusLimit);
             if (session.workers.start()) {
-                Hand hand = player.getMainHandStack() == stack ? Hand.MAIN_HAND : Hand.OFF_HAND;
-                player.swingHand(hand, true);
                 SearchProgressPacket.send(player, requestId, 0);
             } else {
                 fail(player, stack, false);
@@ -533,6 +531,11 @@ public class ExplorersCompassItem extends Item {
         data.putBoolean("DisplayDistance", displayDistance);
         if (costs.type() == SearchCosts.Type.ITEMS) {
             serverPlayer.currentScreenHandler.sendContentUpdates();
+        }
+        if (player.getMainHandStack() == stack) {
+            player.swingHand(Hand.MAIN_HAND, true);
+        } else if (player.getOffHandStack() == stack) {
+            player.swingHand(Hand.OFF_HAND, true);
         }
 		finishSearch(player, SearchResultPacket.FOUND, radius, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
 	}

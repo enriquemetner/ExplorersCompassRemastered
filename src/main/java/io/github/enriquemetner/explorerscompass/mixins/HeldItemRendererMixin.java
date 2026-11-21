@@ -53,7 +53,7 @@ public class HeldItemRendererMixin {
 	private static boolean skipEquipMotion(ItemStack previous, ItemStack current) {
 		if (!(previous.getItem() instanceof ExplorersCompassItem compass) || !current.isOf(compass)) return false;
 		CompassState previousState = compass.getState(previous);
-		// Search start uses a server-side hand swing. Only clearing a target needs equip motion here.
+		// A successful locate uses a server-side hand swing. Only clearing a target needs equip motion here.
 		return previousState != CompassState.FOUND || compass.getState(current) != CompassState.INACTIVE;
 	}
 }
