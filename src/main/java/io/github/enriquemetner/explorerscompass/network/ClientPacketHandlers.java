@@ -26,6 +26,7 @@ public final class ClientPacketHandlers {
     private ClientPacketHandlers() {}
     public static Identifier trackedStructureId;
     public static boolean showNewlyUnlockedFilter;
+    public static boolean showStructureRequirements;
     public static boolean whitelistActive;
     public static boolean showNetherEquivalent;
     public static boolean useClassicCompass;
@@ -42,6 +43,17 @@ public final class ClientPacketHandlers {
                     && client.world.getRegistryKey().getValue().equals(dimension)
                     && client.currentScreen instanceof ExplorersCompassScreen screen) {
                 screen.onCurrentStructure(request, matches);
+            }
+        });
+    }
+
+    public static void applyStructureRequirements(MinecraftClient client, ClientPlayNetworkHandler handler,
+                                                  PacketByteBuf buf, PacketSender sender) {
+        int requestId = buf.readVarInt();
+        RequirementNode requirements = buf.readBoolean() ? RequirementNode.read(buf) : null;
+        client.execute(() -> {
+            if (client.currentScreen instanceof ExplorersCompassScreen screen) {
+                screen.onStructureRequirements(requestId, requirements);
             }
         });
     }
@@ -177,6 +189,7 @@ public final class ClientPacketHandlers {
         }
 
         boolean whitelist = buf.isReadable() && buf.readBoolean();
+        boolean showRequirements = buf.isReadable() ? buf.readBoolean() : showLatestFilter;
         client.execute(() -> {
             whitelistActive = whitelist;
             ExplorersCompass.lockedRequirements = lockedRequirements;
@@ -187,6 +200,7 @@ public final class ClientPacketHandlers {
             trackedStructureId = tracked;
             latestUnlockedStructures = java.util.Set.copyOf(latest);
             showNewlyUnlockedFilter = showLatestFilter;
+            showStructureRequirements = showRequirements;
             if (!showLatestFilter && FilterSelections.newlyUnlocked()) {
                 FilterSelections.clearNewlyUnlocked();
                 if (client.currentScreen instanceof ExplorersCompassScreen screen) screen.showNormalResults();

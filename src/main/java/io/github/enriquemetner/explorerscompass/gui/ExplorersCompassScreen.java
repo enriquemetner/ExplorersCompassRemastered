@@ -28,6 +28,7 @@ import io.github.enriquemetner.explorerscompass.network.CancelSearchPacket;
 import io.github.enriquemetner.explorerscompass.network.SearchResultPacket;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
 import io.github.enriquemetner.explorerscompass.network.RefreshCompassPacket;
+import io.github.enriquemetner.explorerscompass.network.StructureRequirementsPacket;
 import io.github.enriquemetner.explorerscompass.network.TeleportPacket;
 import io.github.enriquemetner.explorerscompass.sorting.SortCriterion;
 import io.github.enriquemetner.explorerscompass.util.CompassState;
@@ -208,6 +209,8 @@ public class ExplorersCompassScreen extends Screen {
 	private StructureSearchList selectionList;
 	private boolean awaitingOpeningSync = true;
 	private EntryDetailsPopup entryDetails;
+	private EntryDetailsPopup requirementsReturnDetails;
+	private int requirementsRequestId;
 	private CurrentStructurePopup currentStructurePopup;
 	private UUID currentStructureRequest;
 	private Identifier revealedStructure;
@@ -450,7 +453,8 @@ public class ExplorersCompassScreen extends Screen {
 		hiddenSearchTextField.tick();
 		if (lastCreativeBypass != creativeBypassActive()) {
 			lastCreativeBypass = creativeBypassActive();
-			if (lastCreativeBypass && dialog == Dialog.LOCKED && !isUnlockedThroughParty(lockedRequirementsId)) {
+			if (lastCreativeBypass && dialog == Dialog.LOCKED && requirementsReturnDetails == null
+					&& !isUnlockedThroughParty(lockedRequirementsId)) {
 				dialog = Dialog.NONE;
 				lockedRequirementsView = null;
 				lockedRequirementsId = null;
@@ -466,7 +470,7 @@ public class ExplorersCompassScreen extends Screen {
 
 		// Check if the allowed structure list has synced
 		if (ExplorersCompass.synced) {
-			if (dialog == Dialog.LOCKED && lockedRequirementsId != null) {
+			if (dialog == Dialog.LOCKED && lockedRequirementsId != null && requirementsReturnDetails == null) {
 				var partyRequirements = ClientPacketHandlers.partyRequirements.get(lockedRequirementsId);
 				var updated = partyRequirements != null ? partyRequirements : ExplorersCompass.lockedRequirements.get(lockedRequirementsId);
 				if (updated == null) {
@@ -1058,7 +1062,34 @@ public class ExplorersCompassScreen extends Screen {
 		setFocused(null);
 		searchTextField.setFocused(false);
 		entryDetails = new EntryDetailsPopup(client, id, () -> isStructureHidden(id),
-				() -> toggleStructureHidden(id), this::closeEntryDetails);
+				() -> toggleStructureHidden(id), () -> ClientPacketHandlers.showStructureRequirements,
+				() -> openEntryRequirements(id), this::closeEntryDetails);
+	}
+
+	private void openEntryRequirements(Identifier id) {
+		requirementsReturnDetails = entryDetails;
+		entryDetails = null;
+		lockedHistory.clear();
+		boolean canRequest = ClientPlayNetworking.canSend(StructureRequirementsPacket.ID);
+		RequirementNode fallback = ClientPacketHandlers.partyRequirements.get(id);
+		if (fallback == null) fallback = ExplorersCompass.lockedRequirements.get(id);
+		setLockedPopup(id, canRequest ? requirementsMessage("Loading requirements…")
+				: fallback != null ? fallback : requirementsMessage("Requirements are unavailable"), "Requirements");
+		if (canRequest) {
+			requirementsRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
+			ClientPlayNetworking.send(StructureRequirementsPacket.ID, StructureRequirementsPacket.request(requirementsRequestId, id));
+		}
+	}
+
+	public void onStructureRequirements(int requestId, RequirementNode requirements) {
+		if (requirementsReturnDetails == null || dialog != Dialog.LOCKED || requirementsRequestId != requestId) return;
+		requirementsRequestId = 0;
+		setLockedPopup(lockedRequirementsId, requirements != null ? requirements
+				: requirementsMessage("Requirements are unavailable"), "Requirements");
+	}
+
+	private static RequirementNode requirementsMessage(String message) {
+		return new RequirementNode(Text.literal(message), false, List.of());
 	}
 
 	private void closeEntryDetails() {
@@ -2107,6 +2138,11 @@ public class ExplorersCompassScreen extends Screen {
 		dialog = Dialog.NONE;
 		lockedRequirementsView = null;
 		lockedRequirementsId = null;
+		if (requirementsReturnDetails != null) {
+			entryDetails = requirementsReturnDetails;
+			requirementsReturnDetails = null;
+			requirementsRequestId = 0;
+		}
 		focusActiveSearchField();
     }
 

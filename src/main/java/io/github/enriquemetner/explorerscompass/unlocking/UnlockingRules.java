@@ -369,6 +369,11 @@ public final class UnlockingRules {
         return !usesGeneratedDefaults || !rewards.rewardTargets().isEmpty();
     }
 
+    public boolean shouldShowRequirements(ServerPlayerEntity player) {
+        return !usesGeneratedDefaults || FtbStructureRewards.snapshot(player).rewardTargets().values().stream()
+                .anyMatch(targets -> !targets.isEmpty());
+    }
+
     public Set<String> requirementNames() { return Set.copyOf(rules.keySet()); }
     public Set<Identifier> requirementTargets(String id) {
         Requirement rule = rules.get(id);
@@ -513,16 +518,42 @@ public final class UnlockingRules {
         return result;
     }
 
+    public RequirementNode inspectRequirements(ServerPlayerEntity player, Identifier id) {
+        var unlocked = UnlockedStructures.get(player.getServer()).getStructures(player.getUuid());
+        var rewards = FtbStructureRewards.snapshot(player);
+        var quests = rewards.quests().get(id);
+        var rule = byStructure.get(id);
+        RequirementNode requirement = null;
+        if (quests != null) {
+            requirement = questNode(quests);
+        } else if (rule != null || defaultMode != DefaultMode.UNLOCKED) {
+            requirement = requirements(id, progress(player));
+        }
+        RequirementNode prerequisite = describePrerequisite(id, unlocked);
+        if (prerequisite == null) {
+            return requirement != null ? requirement
+                    : new RequirementNode(Text.literal("No unlocking requirements"), true, List.of());
+        }
+        if (requirement == null) return prerequisite;
+        return new RequirementNode(Text.literal("All of the following:"),
+                prerequisite.checked() && requirement.checked(), List.of(prerequisite, requirement));
+    }
+
     RequirementNode prerequisiteNode(Identifier id, Set<Identifier> unlocked) {
         var gate = prerequisites.get(id);
-        if (gate == null || gate.satisfied(unlocked::contains)) return null;
+        return gate == null || gate.satisfied(unlocked::contains) ? null : describePrerequisite(id, unlocked);
+    }
+
+    private RequirementNode describePrerequisite(Identifier id, Set<Identifier> unlocked) {
+        var gate = prerequisites.get(id);
+        if (gate == null) return null;
         List<RequirementNode> children = gate.required().keySet().stream()
                 .map(required -> RequirementNode.structure(Text.literal(readable(required)).formatted(Formatting.AQUA),
                         unlocked.contains(required), required))
                 .toList();
         String label = children.size() == 1 ? "Unlock Structure:"
                 : gate.all() ? "Unlock all Structures:" : "Unlock any Structure:";
-        return new RequirementNode(Text.literal(label), false, gate.all(), children);
+        return new RequirementNode(Text.literal(label), gate.satisfied(unlocked::contains), gate.all(), children);
     }
 
     RequirementNode requirements(Identifier id, Progress progress) {

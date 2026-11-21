@@ -133,7 +133,7 @@ final class LockedRequirementsView {
         context.fill(x - 1, y - 1, x + width + 1, backTop() + 26, 0xff909090);
         context.fill(x, y, x + width, backTop() + 25, 0xff000000);
         context.drawCenteredTextWithShadow(renderer, Text.literal(title != null ? title : partyUnlocked ? "Personal Requirements" : "Locked"),
-                x + width / 2, y + 10, partyUnlocked ? 0xffffffff : 0xffff5555);
+                x + width / 2, y + 10, title != null || partyUnlocked ? 0xffffffff : 0xffff5555);
         context.enableScissor(x + 10, bodyTop(), x + width - 18, bodyTop() + bodyHeight);
         int first = Math.max(0, (int) scroll / lineHeight);
         int last = Math.min(lines.size(), first + bodyHeight / lineHeight + 2);

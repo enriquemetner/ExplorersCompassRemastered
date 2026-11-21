@@ -19,6 +19,7 @@ import io.github.enriquemetner.explorerscompass.network.CancelSearchPacket;
 import io.github.enriquemetner.explorerscompass.network.ContinueSearchPacket;
 import io.github.enriquemetner.explorerscompass.network.ResetCompassPacket;
 import io.github.enriquemetner.explorerscompass.network.SyncPacket;
+import io.github.enriquemetner.explorerscompass.network.StructureRequirementsPacket;
 import io.github.enriquemetner.explorerscompass.network.CurrentStructurePacket;
 import io.github.enriquemetner.explorerscompass.network.ConsumeCompassItemsPacket;
 import io.github.enriquemetner.explorerscompass.network.TeleportPacket;
@@ -110,6 +111,7 @@ public class ExplorersCompass implements ModInitializer {
 		ServerPlayNetworking.registerGlobalReceiver(ContinueSearchPacket.ID, ContinueSearchPacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(ResetCompassPacket.ID, ResetCompassPacket::apply);
 		ServerPlayNetworking.registerGlobalReceiver(RefreshCompassPacket.ID, RefreshCompassPacket::apply);
+		ServerPlayNetworking.registerGlobalReceiver(StructureRequirementsPacket.ID, StructureRequirementsPacket::apply);
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> EXPLORERS_COMPASS_ITEM.cancelSearch(handler.player, -1));
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> VisitedStructures.get(server).forgetPosition(handler.player.getUuid()));
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->

@@ -380,7 +380,8 @@ public class ExplorersCompassItem extends Item {
                 UnlockingRules.get().hasUnlockingRequirements(player),
                 world.getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).getIds().stream()
                         .filter(StructureUtils::structureIdIsExcluded).sorted().toList(),
-                !ExplorersCompassConfig.structureWhitelist.isEmpty()));
+                !ExplorersCompassConfig.structureWhitelist.isEmpty(),
+                UnlockingRules.get().shouldShowRequirements(player)));
 	}
 
     public void searchForStructure(ServerWorld world, PlayerEntity player, BlockPos pos, Identifier structureOrSetId, boolean isSet, boolean excludeVisited, boolean creativeUnlocksAll, ItemStack stack, int requestId) {

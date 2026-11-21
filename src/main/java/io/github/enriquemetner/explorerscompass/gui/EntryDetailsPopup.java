@@ -15,15 +15,17 @@ import net.minecraft.util.math.MathHelper;
 
 /** A modal view of one entry, independent of the list's technical-name setting. */
 final class EntryDetailsPopup {
-    private static final int COPY_HEIGHT = StructureSearchList.ACTION_BUTTON_HEIGHT;
-    private final int copyWidth;
-    private static final int ACTION_WIDTH = 70;
+    private static final int ACTION_HEIGHT = 20;
+    private static final int TEXT_INSET = 12;
+    private static final String COPY_HINT = "Click on IDs to copy";
     static final String HIDE_TOOLTIP = "Removes the structure from the list on this client, across all worlds and servers. You can undo this in Settings.";
     private final MinecraftClient client;
     private final TextRenderer textRenderer;
     private final List<Detail> details = new ArrayList<>();
     private final BooleanSupplier hidden;
     private final Runnable toggleHidden;
+    private final BooleanSupplier requirementsVisible;
+    private final Runnable showRequirements;
     private final Runnable close;
     private double scroll;
     private boolean dragging;
@@ -36,19 +38,24 @@ final class EntryDetailsPopup {
         private static String value(String text) { return text == null || text.isEmpty() ? "None" : text; }
     }
 
-    private record Layout(int x, int y, int width, int height, int top, int bottom, int copyWidth) {
-        int copyX() { return x + width - copyWidth - 22; }
+    private record Layout(int x, int y, int width, int height, int top, int bottom, int actionCount) {
+        int textX() { return x + TEXT_INSET; }
+        int textWidth() { return width - 34; }
         int actionsY() { return y + height - 30; }
-        int hideX() { return x + (width - ACTION_WIDTH * 2 - 8) / 2; }
-        int backX() { return hideX() + ACTION_WIDTH + 8; }
+        int actionWidth() { return Math.min(82, (width - 8 * actionCount) / actionCount); }
+        int actionX(int index) {
+            return x + (width - actionCount * actionWidth() - (actionCount - 1) * 8) / 2 + index * (actionWidth() + 8);
+        }
     }
 
-    EntryDetailsPopup(MinecraftClient client, Identifier id, BooleanSupplier hidden, Runnable toggleHidden, Runnable close) {
+    EntryDetailsPopup(MinecraftClient client, Identifier id, BooleanSupplier hidden, Runnable toggleHidden,
+                      BooleanSupplier requirementsVisible, Runnable showRequirements, Runnable close) {
         this.client = client;
         this.textRenderer = client.textRenderer;
-        this.copyWidth = textRenderer.getWidth("Copy") + 8;
         this.hidden = hidden;
         this.toggleHidden = toggleHidden;
+        this.requirementsVisible = requirementsVisible;
+        this.showRequirements = showRequirements;
         this.close = close;
         details.add(new Detail("Name", StructureUtils.getStructureName(id), id.toString()));
         details.add(new Detail("Source", StructureUtils.getStructureSource(id), id.getNamespace()));
@@ -69,7 +76,7 @@ final class EntryDetailsPopup {
         int height = Math.min(contentHeight() + 64, screenHeight - 20);
         int x = (screenWidth - width) / 2;
         int y = (screenHeight - height) / 2;
-        return new Layout(x, y, width, height, y + 28, y + height - 36, copyWidth);
+        return new Layout(x, y, width, height, y + 28, y + height - 36, requirementsVisible.getAsBoolean() ? 3 : 2);
     }
 
     private int maxScroll(Layout layout) {
@@ -81,10 +88,7 @@ final class EntryDetailsPopup {
     }
 
     private int contentHeight() {
-        // Stop at the last text or button edge, excluding the gap after the last group.
-        int lastRowBottom = Math.max(4 + textRenderer.fontHeight * 2,
-                textRenderer.fontHeight + COPY_HEIGHT);
-        return (details.size() - 1) * rowHeight() + lastRowBottom;
+        return (details.size() - 1) * rowHeight() + 4 + textRenderer.fontHeight * 2;
     }
 
     private Scrollbar scrollbar(Layout layout) {
@@ -101,29 +105,34 @@ final class EntryDetailsPopup {
         context.fill(0, 0, width, height, 0x88000000);
         context.fill(layout.x - 1, layout.y - 1, layout.x + layout.width + 1, layout.y + layout.height + 1, 0xff909090);
         context.fill(layout.x, layout.y, layout.x + layout.width, layout.y + layout.height, 0xff000000);
-        context.drawCenteredTextWithShadow(textRenderer, "Details", width / 2, layout.y + 10, 0xffffff);
+        int titleY = layout.y + 10;
+        String title = "Details";
+        int hintX = layout.x + layout.width - TEXT_INSET - textRenderer.getWidth(COPY_HINT);
+        int titleCenter = Math.min(width / 2, hintX - 8 - (textRenderer.getWidth(title) + 1) / 2);
+        context.drawCenteredTextWithShadow(textRenderer, title, titleCenter, titleY, 0xffffff);
+        context.drawTextWithShadow(textRenderer, COPY_HINT, hintX, titleY, 0xaaaaaa);
         String hoveredText = null;
         context.enableScissor(layout.x + 8, layout.top, layout.x + layout.width - 18, layout.bottom);
         for (int i = 0; i < details.size(); i++) {
             Detail detail = details.get(i);
             int rowY = layout.top + i * rowHeight() - (int) scroll;
-            int textX = layout.x + 12;
             int technicalY = rowY + 4 + textRenderer.fontHeight;
-            int technicalWidth = layout.copyX() - textX - 8;
-            int readableWidth = technicalWidth;
-            drawLine(context, detail.readableLine(), textX, rowY + 4, readableWidth, 0xffffff);
-            drawLine(context, detail.technicalLine(), textX, technicalY, technicalWidth, 0xaaaaaa);
-            drawButton(context, "Copy", layout.copyX(), technicalY - 4, copyWidth, COPY_HEIGHT, mouseX, mouseY, detail.canCopy());
+            String readable = detail.readableLine();
+            String technical = detail.technicalLine();
+            boolean idHovered = idHovered(detail, layout, technicalY, mouseX, mouseY);
+            drawLine(context, readable, layout.textX(), rowY + 4, layout.textWidth(), 0xffffff);
+            drawLine(context, (idHovered ? "§l" : "") + technical, layout.textX(), technicalY, layout.textWidth(), 0xaaaaaa);
             if (mouseY >= layout.top && mouseY < layout.bottom) {
-                if (textHovered(detail.readableLine(), textX, rowY + 4, readableWidth, mouseX, mouseY)) hoveredText = detail.readableLine();
-                if (textHovered(detail.technicalLine(), textX, technicalY, technicalWidth, mouseX, mouseY)) hoveredText = detail.technicalLine();
+                if (textHovered(readable, layout.textX(), rowY + 4, layout.textWidth(), mouseX, mouseY)) hoveredText = readable;
+                if (idHovered && textRenderer.getWidth("§l" + technical) > layout.textWidth()) hoveredText = technical;
             }
         }
         context.disableScissor();
         scrollbar(layout).render(context, 0xff242424, 0xff909090);
-        drawButton(context, hidden.getAsBoolean() ? "Undo" : "Hide", layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true);
-        drawButton(context, "Back", layout.backX(), layout.actionsY(), ACTION_WIDTH, 20, mouseX, mouseY, true);
-        if (!hidden.getAsBoolean() && inside(mouseX, mouseY, layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20)) {
+        drawButton(context, hidden.getAsBoolean() ? "Undo" : "Hide", layout, 0, mouseX, mouseY);
+        if (layout.actionCount() == 3) drawButton(context, "Requirements", layout, 1, mouseX, mouseY);
+        drawButton(context, "Close", layout, layout.actionCount() - 1, mouseX, mouseY);
+        if (!hidden.getAsBoolean() && actionHovered(layout, 0, mouseX, mouseY)) {
             context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(HIDE_TOOLTIP), Math.min(220, width - 30)), mouseX, mouseY);
         } else if (hoveredText != null) {
             context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(hoveredText), Math.min(300, width - 30)), mouseX, mouseY);
@@ -141,30 +150,38 @@ final class EntryDetailsPopup {
         return textRenderer.getWidth(text) > width && inside(mouseX, mouseY, x, y, width, textRenderer.fontHeight);
     }
 
-    private void drawButton(DrawContext context, String label, int x, int y, int width, int height,
-                            int mouseX, int mouseY, boolean enabled) {
-        boolean hovered = inside(mouseX, mouseY, x, y, width, height);
-        boolean available = enabled;
-        context.fill(x, y, x + width, y + height, available ? 0xff909090 : 0xff505050);
-        context.fill(x + 1, y + 1, x + width - 1, y + height - 1,
-                available && hovered ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(textRenderer, label, x + width / 2, y + (height == COPY_HEIGHT ? 4 : 6),
-                available ? 0xffffff : 0x808080);
+    private boolean idHovered(Detail detail, Layout layout, int y, double mouseX, double mouseY) {
+        return detail.canCopy() && mouseY >= layout.top && mouseY < layout.bottom
+                && inside(mouseX, mouseY, layout.textX(), y,
+                        Math.min(textRenderer.getWidth("§l" + detail.technical()), layout.textWidth()), textRenderer.fontHeight);
+    }
+
+    private boolean actionHovered(Layout layout, int index, double mouseX, double mouseY) {
+        return inside(mouseX, mouseY, layout.actionX(index), layout.actionsY(), layout.actionWidth(), ACTION_HEIGHT);
+    }
+
+    private void drawButton(DrawContext context, String label, Layout layout, int index, int mouseX, int mouseY) {
+        int x = layout.actionX(index);
+        int y = layout.actionsY();
+        int width = layout.actionWidth();
+        context.fill(x, y, x + width, y + ACTION_HEIGHT, 0xff909090);
+        context.fill(x + 1, y + 1, x + width - 1, y + ACTION_HEIGHT - 1,
+                actionHovered(layout, index, mouseX, mouseY) ? 0xff424242 : 0xff242424);
+        context.drawCenteredTextWithShadow(textRenderer, label, x + width / 2, y + 6, 0xffffff);
     }
 
     ButtonPress buttonAt(double mouseX, double mouseY, int width, int height) {
         Layout layout = layout(width, height);
-        if (inside(mouseX, mouseY, layout.hideX(), layout.actionsY(), ACTION_WIDTH, 20)) {
-            return new ButtonPress(this, "hide", toggleHidden);
+        if (actionHovered(layout, 0, mouseX, mouseY)) return new ButtonPress(this, "hide", toggleHidden);
+        if (layout.actionCount() == 3 && actionHovered(layout, 1, mouseX, mouseY)) {
+            return new ButtonPress(this, "requirements", showRequirements);
         }
-        if (inside(mouseX, mouseY, layout.backX(), layout.actionsY(), ACTION_WIDTH, 20)) {
-            return new ButtonPress(this, "back", close);
-        }
+        if (actionHovered(layout, layout.actionCount() - 1, mouseX, mouseY)) return new ButtonPress(this, "close", close);
         if (mouseY >= layout.top && mouseY < layout.bottom) {
             for (int i = 0; i < details.size(); i++) {
                 int rowY = layout.top + i * rowHeight() - (int) scroll;
                 Detail detail = details.get(i);
-                if (detail.canCopy() && inside(mouseX, mouseY, layout.copyX(), rowY + textRenderer.fontHeight, copyWidth, COPY_HEIGHT)) {
+                if (idHovered(detail, layout, rowY + 4 + textRenderer.fontHeight, mouseX, mouseY)) {
                     return new ButtonPress(this, i, () -> client.keyboard.setClipboard(detail.technical));
                 }
             }

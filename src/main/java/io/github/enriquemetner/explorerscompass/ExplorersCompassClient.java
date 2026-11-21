@@ -2,6 +2,7 @@ package io.github.enriquemetner.explorerscompass;
 
 import io.github.enriquemetner.explorerscompass.gui.ExplorersCompassScreen;
 import io.github.enriquemetner.explorerscompass.network.SyncPacket;
+import io.github.enriquemetner.explorerscompass.network.StructureRequirementsPacket;
 import io.github.enriquemetner.explorerscompass.network.CurrentStructurePacket;
 import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
 import io.github.enriquemetner.explorerscompass.network.SearchResultPacket;
@@ -45,6 +46,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
 			io.github.enriquemetner.explorerscompass.compat.ftb.FtbQuestClientIntegration.register();
 		ClientPlayNetworking.registerGlobalReceiver(CurrentStructurePacket.ID, ClientPacketHandlers::applyCurrentStructure);
 		ClientPlayNetworking.registerGlobalReceiver(SyncPacket.ID, ClientPacketHandlers::applySync);
+		ClientPlayNetworking.registerGlobalReceiver(StructureRequirementsPacket.ID, ClientPacketHandlers::applyStructureRequirements);
 		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, ClientPacketHandlers::applySearchResult);
 		ClientPlayNetworking.registerGlobalReceiver(SearchProgressPacket.ID, ClientPacketHandlers::applySearchProgress);
         ClientPlayNetworking.registerGlobalReceiver(io.github.enriquemetner.explorerscompass.network.SearchAvailabilityPacket.ID, ClientPacketHandlers::applySearchAvailability);
@@ -63,6 +65,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
             ClientPacketHandlers.partyRequirements = java.util.Map.of();
             ClientPacketHandlers.latestUnlockedStructures = java.util.Set.of();
             ClientPacketHandlers.showNewlyUnlockedFilter = false;
+            ClientPacketHandlers.showStructureRequirements = false;
             client.execute(ExplorersCompassScreen::clearWorldSearchState);
         });
 		
