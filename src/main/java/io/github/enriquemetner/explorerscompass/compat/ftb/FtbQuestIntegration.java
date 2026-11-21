@@ -7,7 +7,6 @@ import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules;
 import dev.ftb.mods.ftblibrary.config.ConfigGroup;
 import dev.ftb.mods.ftblibrary.config.StringConfig;
 import dev.ftb.mods.ftblibrary.icon.Icon;
-import dev.ftb.mods.ftblibrary.ui.Widget;
 import dev.ftb.mods.ftblibrary.util.TooltipList;
 import dev.ftb.mods.ftbquests.quest.Quest;
 import dev.ftb.mods.ftbquests.quest.ServerQuestFile;
@@ -32,7 +31,6 @@ import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 /** Loaded only when FTB Quests is installed. */
 public final class FtbQuestIntegration {
@@ -227,10 +225,6 @@ public final class FtbQuestIntegration {
         }
 
         @Override public void addMouseOverText(TooltipList tooltip) {
-            if (!Widget.isKeyDown(GLFW.GLFW_KEY_LEFT_ALT)) {
-                tooltip.add(Text.translatable("ftb_reward.explorerscompass.hold_alt").formatted(Formatting.DARK_GRAY));
-                return;
-            }
             if (preview.totalCount() == 0) {
                 tooltip.add(Text.translatable("ftb_reward.explorerscompass.no_matches").formatted(Formatting.GRAY));
                 return;

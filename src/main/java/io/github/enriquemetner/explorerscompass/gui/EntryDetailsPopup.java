@@ -18,7 +18,7 @@ final class EntryDetailsPopup {
     private static final int ACTION_HEIGHT = 20;
     private static final int TEXT_INSET = 12;
     private static final String COPY_HINT = "Click on IDs to copy";
-    static final String HIDE_TOOLTIP = "Removes the structure from the list on this client, across all worlds and servers. You can undo this in Settings.";
+    static final String HIDE_TOOLTIP = "Removes the structure from the list on this client, across all worlds and servers.\nYou can undo this in Settings.";
     private final MinecraftClient client;
     private final TextRenderer textRenderer;
     private final List<Detail> details = new ArrayList<>();
@@ -111,7 +111,6 @@ final class EntryDetailsPopup {
         int titleCenter = Math.min(width / 2, hintX - 8 - (textRenderer.getWidth(title) + 1) / 2);
         context.drawCenteredTextWithShadow(textRenderer, title, titleCenter, titleY, 0xffffff);
         context.drawTextWithShadow(textRenderer, COPY_HINT, hintX, titleY, 0xaaaaaa);
-        String hoveredText = null;
         context.enableScissor(layout.x + 8, layout.top, layout.x + layout.width - 18, layout.bottom);
         for (int i = 0; i < details.size(); i++) {
             Detail detail = details.get(i);
@@ -122,10 +121,6 @@ final class EntryDetailsPopup {
             boolean idHovered = idHovered(detail, layout, technicalY, mouseX, mouseY);
             drawLine(context, readable, layout.textX(), rowY + 4, layout.textWidth(), 0xffffff);
             drawLine(context, (idHovered ? "§l" : "") + technical, layout.textX(), technicalY, layout.textWidth(), 0xaaaaaa);
-            if (mouseY >= layout.top && mouseY < layout.bottom) {
-                if (textHovered(readable, layout.textX(), rowY + 4, layout.textWidth(), mouseX, mouseY)) hoveredText = readable;
-                if (idHovered && textRenderer.getWidth("§l" + technical) > layout.textWidth()) hoveredText = technical;
-            }
         }
         context.disableScissor();
         scrollbar(layout).render(context, 0xff242424, 0xff909090);
@@ -134,8 +129,6 @@ final class EntryDetailsPopup {
         drawButton(context, "Close", layout, layout.actionCount() - 1, mouseX, mouseY);
         if (!hidden.getAsBoolean() && actionHovered(layout, 0, mouseX, mouseY)) {
             context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(HIDE_TOOLTIP), Math.min(220, width - 30)), mouseX, mouseY);
-        } else if (hoveredText != null) {
-            context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(hoveredText), Math.min(300, width - 30)), mouseX, mouseY);
         }
         context.getMatrices().pop();
     }
@@ -144,10 +137,6 @@ final class EntryDetailsPopup {
         String visible = textRenderer.getWidth(value) > width
                 ? textRenderer.trimToWidth(value, Math.max(0, width - textRenderer.getWidth("..."))) + "..." : value;
         context.drawTextWithShadow(textRenderer, visible, x, y, color);
-    }
-
-    private boolean textHovered(String text, int x, int y, int width, int mouseX, int mouseY) {
-        return textRenderer.getWidth(text) > width && inside(mouseX, mouseY, x, y, width, textRenderer.fontHeight);
     }
 
     private boolean idHovered(Detail detail, Layout layout, int y, double mouseX, double mouseY) {

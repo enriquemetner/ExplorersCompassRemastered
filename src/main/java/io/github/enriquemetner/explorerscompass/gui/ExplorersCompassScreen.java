@@ -565,9 +565,9 @@ public class ExplorersCompassScreen extends Screen {
                 renderEnergyTooltip(context, mouseX, mouseY);
             }
         }
-		renderExcludeButton(context, excludeVisitedButton, "Exclude Visited", FilterSelections.excludeVisited(), mouseX, mouseY);
-		renderExcludeButton(context, excludeLockedButton, "Exclude Locked", FilterSelections.excludeLocked(), mouseX, mouseY);
-        renderExcludeButton(context, newlyUnlockedButton, "Newly Unlocked", FilterSelections.newlyUnlocked(), mouseX, mouseY);
+		renderExcludeButton(context, excludeVisitedButton, FilterSelections.excludeVisited());
+		renderExcludeButton(context, excludeLockedButton, FilterSelections.excludeLocked());
+        renderExcludeButton(context, newlyUnlockedButton, FilterSelections.newlyUnlocked());
 		if (excludeVisitedButton.visible && excludeVisitedButton.isMouseOver(mouseX, mouseY)) {
 			drawQuestionTooltip(context, "Skip locations you’ve already visited when locating a structure.", mouseX, mouseY);
 		}
@@ -575,11 +575,8 @@ public class ExplorersCompassScreen extends Screen {
 			drawQuestionTooltip(context, "Hide structures you haven’t unlocked from the structure list.", mouseX, mouseY);
 		}
         if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY))
-            drawQuestionTooltip(context, "Shows only structures unlocked in your most recent unlocking event.", mouseX, mouseY);
+            drawQuestionTooltip(context, "List only structures from your most recent unlock event", mouseX, mouseY);
 		renderCloseIcon(context, cancelButton);
-		if (filtersOpen) {
-			renderFilterTooltip(context, mouseX, mouseY);
-		}
 		if (filtersOpen) {
 			context.drawTextWithShadow(textRenderer, Text.literal("Filters"), HEADER_TITLE_MARGIN, 15, 0xffffff);
         } else if (hiddenStructuresOpen) {
@@ -601,7 +598,7 @@ public class ExplorersCompassScreen extends Screen {
     private void renderEnergyTooltip(DrawContext context, int mouseX, int mouseY) {
         Text instructions = Text.literal(
                 "In your inventory, pick up a valid energy item and hold it over the compass.\n"
-                + "Middle-click to consume the whole stack, or scroll to consume one item at a time.");
+                + "Then Middle-Click to consume the whole stack, or scroll to consume one item at a time.");
         List<TooltipComponent> rows = new ArrayList<>();
         textRenderer.wrapLines(instructions, Math.max(1, Math.min(220, width - 30)))
                 .forEach(line -> rows.add(TooltipComponent.of(line)));
@@ -628,26 +625,24 @@ public class ExplorersCompassScreen extends Screen {
 
         @Override
         public int getWidth(TextRenderer font) {
-            return font.getWidth("• ") + iconSize + 2 + font.getWidth(label) + font.getWidth(rate) + 8;
+            return iconSize + 2 + font.getWidth(label) + font.getWidth(rate) + 8;
         }
 
         @Override
         public void drawItems(TextRenderer font, int x, int y, DrawContext context) {
             int textY = y + (getHeight() - font.fontHeight) / 2;
-            context.drawTextWithShadow(font, "• ", x, textY, 0xffffff);
-            int iconX = x + font.getWidth("• ");
             if (item.isOf(ExplorersCompass.EXPLORERS_COMPASS_ITEM)) {
-                CompassTextures.drawStillIcon(context, iconX, textY, iconSize);
+                CompassTextures.drawStillIcon(context, x, textY, iconSize);
             } else {
                 float scale = iconSize / 16.0f;
                 var matrices = context.getMatrices();
                 matrices.push();
-                matrices.translate(iconX, textY, 0);
+                matrices.translate(x, textY, 0);
                 matrices.scale(scale, scale, 1);
                 context.drawItem(item, 0, 0);
                 matrices.pop();
             }
-            int labelX = iconX + iconSize + 2;
+            int labelX = x + iconSize + 2;
             context.drawTextWithShadow(font, label, labelX, textY, 0xffffff);
             int rateX = labelX + font.getWidth(label);
             drawExperienceNumber(context, font, rate, rateX, textY);
@@ -1140,7 +1135,6 @@ public class ExplorersCompassScreen extends Screen {
 		int backY = bodyY + visible * ENTRY_FILTER_ROW_HEIGHT + 10;
 		int checkboxX = x + w - 19;
 		int valueX = x + 12 + textRenderer.getWidth("Dimension:") + 8;
-		String hoveredValue = null;
 		context.getMatrices().push();
 		context.getMatrices().translate(0, 0, 300);
 		context.fill(0, 0, width, height, 0x88000000);
@@ -1156,16 +1150,12 @@ public class ExplorersCompassScreen extends Screen {
 			context.drawTextWithShadow(textRenderer, row.category(), x + 12, rowY + 6, 0xffffff);
 			context.drawTextWithShadow(textRenderer,
 					textRenderer.trimToWidth(row.value(), Math.max(1, checkboxX - valueX - 8)), valueX, rowY + 6, 0xffffff);
-			if (textRenderer.getWidth(row.value()) > checkboxX - valueX - 8
-					&& mouseX >= valueX && mouseX < checkboxX && mouseY >= rowY && mouseY < rowY + ENTRY_FILTER_ROW_HEIGHT)
-				hoveredValue = row.value();
 			drawFilterCheckbox(context, checkboxX, rowY + 5, filterChecked(row.column(), row.option()));
 		}
 		context.disableScissor();
 		int buttonX = x + (w - 70) / 2;
 		drawDialogButton(context, "Back", buttonX, backY, 70, mouseX, mouseY);
 		context.getMatrices().pop();
-		if (hoveredValue != null) context.drawTooltip(textRenderer, Text.literal(hoveredValue), mouseX, mouseY);
 	}
 
 	private boolean clickEntryFilters(double mouseX, double mouseY, int button) {
@@ -1198,16 +1188,11 @@ public class ExplorersCompassScreen extends Screen {
 		}
 	}
 
-	private void renderExcludeButton(DrawContext context, ButtonWidget button, String label, boolean checked, int mouseX, int mouseY) {
+	private void renderExcludeButton(DrawContext context, ButtonWidget button, boolean checked) {
 		if (!button.visible) return;
 		drawFilterCheckbox(context,
 				button.getX() + button.getWidth() - FILTER_CHECKBOX_SIZE - EXCLUDE_BUTTON_CONTENT_PADDING,
 				button.getY() + (button.getHeight() - FILTER_CHECKBOX_SIZE) / 2, checked);
-		int availableTextWidth = button.getWidth() - EXCLUDE_BUTTON_CONTENT_PADDING * 2
-				- FILTER_CHECKBOX_SIZE - EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP;
-		if (textRenderer.getWidth(label) > availableTextWidth && button.isHovered()) {
-			context.drawTooltip(textRenderer, Text.literal(label), mouseX, mouseY);
-		}
 	}
 
 	private void renderCloseIcon(DrawContext context, ButtonWidget button) {
@@ -1490,25 +1475,6 @@ public class ExplorersCompassScreen extends Screen {
 		context.getMatrices().scale(scale, scale, 1.0f);
 		context.drawTextWithShadow(textRenderer, label, 0, 0, 0xffffff);
 		context.getMatrices().pop();
-	}
-
-	private void renderFilterTooltip(DrawContext context, int mouseX, int mouseY) {
-		int column = filterColumnAt(mouseX, mouseY);
-		if (column < 0 || mouseY < filterRowsTop()) {
-			return;
-		}
-		List<FilterOption> options = visibleFilterOptions(column);
-		int index = filterOptionIndexAt(mouseY, options, filterSectionStart(column, options));
-		if (index < 0) {
-			return;
-		}
-		int availableWidth = Math.max(0, filterColumnRight(column) - FILTER_CHECKBOX_SIZE - 7 - filterColumnLeft(column) - 9);
-		FilterOption option = options.get(index);
-		var label = filterOptionText(option, option.label).copy();
-		if (option.current) label.append(currentDimensionSuffix(option));
-		if (textRenderer.getWidth(label) > availableWidth) {
-			context.drawTooltip(textRenderer, label, mouseX, mouseY);
-		}
 	}
 
 	private ButtonPress buttonAt(double mouseX, double mouseY) {
