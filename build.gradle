@@ -26,6 +26,7 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 	// Needed by the FTB mods in the development run directory, but not by this mod.
 	modLocalRuntime 'dev.architectury:architectury-fabric:9.2.14'
+	modCompileOnly 'maven.modrinth:modmenu:7.2.2'
 	modCompileOnly 'maven.modrinth:open-parties-and-claims:vhlyXP4C'
 	modCompileOnly 'dev.ftb.mods:ftb-quests-fabric:2001.4.22'
 	modCompileOnly 'dev.ftb.mods:ftb-library-fabric:2001.2.13'

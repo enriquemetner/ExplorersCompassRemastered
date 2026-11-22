@@ -21,6 +21,9 @@
     "main": [
       "io.github.enriquemetner.explorerscompass.ExplorersCompass"
     ],
+    "modmenu": [
+      "io.github.enriquemetner.explorerscompass.compat.modmenu.CompassModMenu"
+    ],
     "client": [
       "io.github.enriquemetner.explorerscompass.ExplorersCompassClient"
     ]
@@ -35,6 +38,7 @@
     "java": ">=17"
   },
   "suggests": {
+    "modmenu": "*",
     "naturescompass": "*",
     "ftbquests": "*",
     "openpartiesandclaims": "*"

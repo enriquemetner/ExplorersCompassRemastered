@@ -18,7 +18,6 @@ import java.util.stream.Collectors;
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.compat.jes.JesThumbnails;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
 import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
 import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
 import io.github.enriquemetner.explorerscompass.network.CurrentStructurePacket;
@@ -33,7 +32,6 @@ import io.github.enriquemetner.explorerscompass.network.TeleportPacket;
 import io.github.enriquemetner.explorerscompass.sorting.SortCriterion;
 import io.github.enriquemetner.explorerscompass.util.CompassState;
 import io.github.enriquemetner.explorerscompass.util.ItemUtils;
-import io.github.enriquemetner.explorerscompass.util.OverlaySide;
 import io.github.enriquemetner.explorerscompass.util.RenderUtils;
 import io.github.enriquemetner.explorerscompass.util.StructureUtils;
 
@@ -42,7 +40,6 @@ import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.tooltip.Tooltip;
 import net.minecraft.client.gui.tooltip.TooltipComponent;
 import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;
 import net.minecraft.client.font.TextRenderer;
@@ -58,6 +55,7 @@ import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.util.Language;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
@@ -91,25 +89,6 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP = 5;
 	private static final int SCROLLBAR_WIDTH = Scrollbar.WIDTH;
 	private static final int SIDEBAR_BUTTON_STEP = 25;
-	private static final int SETTINGS_ROW_HEIGHT = SIDEBAR_BUTTON_STEP;
-	private static final int SETTINGS_CONTROL_WIDTH = 90;
-	private static final Identifier SETTINGS_RESET_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/restore_default.png");
-	private static final int SETTINGS_RESET_ICON_SIZE = 9;
-	private static final int SETTINGS_RESET_LABEL_GAP = 4;
-	private static final String SETTINGS_RESET_ALL_LABEL = "All";
-	private static final int SETTINGS_OFFSET_ROW = 2;
-	private static final int SETTINGS_HIDE_SEARCH_COST_ROW = 7;
-	private static final int SETTINGS_CLOSE_ON_FOUND_ROW = 9;
-	private static final int SETTINGS_CLEAR_SEARCH_ROW = 10;
-	private static final int SETTINGS_CLEAR_FILTERS_ROW = 11;
-	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 12;
-	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 13;
-	private static final int SETTINGS_HIDDEN_ROW = 19;
-	private static final String HIDDEN_STRUCTURES_TITLE = "Hidden Structures";
-	private static final int SETTINGS_PAUSE_ROW = 17;
-	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 15;
-	private static final int SETTINGS_TELEPORT_ROW = 16;
-	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
 	private static String sessionSearchText = "";
 	private String lastSearchFieldText;
 	private static final int SEARCH_DIALOG_WIDTH = 245;
@@ -118,50 +97,6 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int FOUND_ACTION_BUTTON_WIDTH = 70;
 	private static final int FOUND_ACTION_BUTTON_GAP = 5;
 	private static final int NOT_FOUND_BUTTON_GAP = 5;
-	private static final String[] SETTINGS_LABELS = {
-		"HUD",
-		"HUD Side",
-		"Vertical HUD offset",
-		"Show While Chat Is Open",
-		"View",
-		"Adjust Rows to Fit View",
-		"Checked Filters On Top",
-		"Hide Search Costs",
-		"Behavior",
-		"Close UI When located",
-		"Clear Search Bar on Close",
-		"Clear Filters on Close",
-		"Flexible Search",
-		"Show Only Matching Filter Options",
-		"Creative & Singleplayer",
-		"Unlock All Structures in Creative",
-		"Show Teleport Only in Creative",
-		"Pause Game While Open",
-		"Other",
-		HIDDEN_STRUCTURES_TITLE,
-	};
-	private static final String[] SETTINGS_TOOLTIPS = {
-		null,
-		"Choose the position of the compass pointing information on the screen.",
-		"Move the compass pointing information vertically.\nHigher values move it down;\nLower values move it up.",
-		"Keep compass pointing information visible while the chat is shown.",
-		null,
-		"Adjusts the spacing of rows, showing less content but only fully visible list entries.",
-		"Show checked filter options separately above unchecked ones.",
-		"Hide all structure search costs from the list.\nReasonable when all structures have the same search cost.",
-		null,
-		"Immediately close the compass screen when the compass finds a structure.",
-		"Clear the search bar when you close the screen.",
-		"Clear selected filters when you close the compass screen.",
-		"Match every typed word fragment contained in a structure name, in any order.\nExample: \"vil pla\" can match \"Village Plains\".",
-		"Hide filter options which would produce an empty list if checked.\nExample: Checking \"The Nether\" would hide the \"Villages\" set.",
-		null,
-		"Unlock all structures while in Creative mode.\nChanging the mode back relocks the right structures.",
-		"Hide the teleport button in any game mode other than Creative.",
-		"Pauses your Singleplayer world while the compass screen is open.",
-		null,
-		"View and restore structures hidden on this client.",
-	};
 
 	private World world;
 	private PlayerEntity player;
@@ -170,31 +105,14 @@ public class ExplorersCompassScreen extends Screen {
 	private Identifier foundStructureId;
 	private ItemStack stack;
 	private ExplorersCompassItem explorersCompass;
-	private enum ButtonLayer { STRUCTURES, FILTERS, SETTINGS, HIDDEN, SORT }
+	private enum ButtonLayer { STRUCTURES, FILTERS, SORT }
 	private ButtonWidget searchButton;
 	private ButtonWidget selectionToggleButton;
 	private boolean selectedOnly;
 	private TransparentButton sortOrderButton;
 	private ButtonWidget filtersButton;
 	private ButtonWidget currentStructureButton;
-	private ButtonWidget settingsButton;
-	private ButtonWidget restoreDefaultsButton;
-	private final Map<Integer, ButtonWidget> settingResetButtons = new HashMap<>();
-	private ButtonWidget chatOverlayButton;
-	private ButtonWidget showOnlyMatchingFilterOptionsButton;
-	private ButtonWidget matchSearchWordsButton;
-	private ButtonWidget hideSearchCostButton;
-	private ButtonWidget overlaySideButton;
-	private ButtonWidget clearOnCloseButton;
-	private ButtonWidget clearSearchBarOnCloseButton;
-	private ButtonWidget pauseGameWhenOpenButton;
-	private ButtonWidget creativeUnlocksAllButton;
-	private ButtonWidget showTeleportOnlyInCreativeButton;
-	private ButtonWidget closeOnFoundButton;
-	private ButtonWidget checkedFiltersFirstButton;
-	private ButtonWidget adjustRowsToFitViewButton;
-	private ButtonWidget offsetDecreaseButton;
-	private ButtonWidget offsetIncreaseButton;
+
 	private ButtonWidget clearFiltersButton;
 	private ButtonWidget clearFiltersTopButton;
 	private ButtonWidget excludeVisitedButton;
@@ -205,7 +123,7 @@ public class ExplorersCompassScreen extends Screen {
 	private ButtonWidget cancelButton;
 	private TransparentTextField searchTextField;
 	private TransparentTextField filterSearchTextField;
-	private TransparentTextField settingsSearchTextField;
+
 	private TransparentTextField hiddenSearchTextField;
 	private final StructureSelection structureSelection = new StructureSelection();
 	private StructureSearchList selectionList;
@@ -217,12 +135,11 @@ public class ExplorersCompassScreen extends Screen {
 	private UUID currentStructureRequest;
 	private Identifier revealedStructure;
 	private final Set<Identifier> pendingHiddenStructures = new HashSet<>();
-	private String hiddenSearchText = "";
+	private final HiddenStructuresList hiddenStructures = new HiddenStructuresList();
 	private boolean filtersOpen;
-	private boolean settingsOpen;
+	private boolean openingSettings;
+
     private boolean hiddenStructuresOpen;
-    private int hiddenScroll;
-    private ButtonWidget hiddenStructuresButton;
     public void preparePartyRefresh() {
         questReturnScroll = selectionList.getScrollAmount();
         restoreQuestListAfterSync = true;
@@ -275,10 +192,9 @@ public class ExplorersCompassScreen extends Screen {
     private boolean showFoundCoordinates;
     private boolean showFoundDistance;
 	private double filterScroll;
-	private int settingsFirstRow;
-	private List<Integer> settingsRows = List.of();
+
 	private boolean lastCreativeBypass;
-	private enum ScrollPanel { FILTERS, SETTINGS, HIDDEN, FOUND, SEARCH_FAILURE }
+	private enum ScrollPanel { FILTERS, HIDDEN, FOUND, SEARCH_FAILURE }
 	private ScrollPanel draggedScrollbar;
 	private boolean draggingStructureScrollbar;
 	private double scrollbarGrabOffset;
@@ -357,7 +273,7 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void removed() {
-        if (openingRequirementAdvancement) return;
+        if (openingRequirementAdvancement || openingSettings) return;
 		currentStructureRequest = null;
 		currentStructurePopup = null;
 		clearCurrentStructureReveal();
@@ -376,7 +292,7 @@ public class ExplorersCompassScreen extends Screen {
 			sessionSearchText = ExplorersCompassConfig.clearSearchBarOnClose ? "" : searchTextField.getText();
 		}
 		pendingHiddenStructures.clear();
-		hiddenSearchText = "";
+		hiddenStructures.setQuery("");
 		super.removed();
 	}
 
@@ -399,14 +315,9 @@ public class ExplorersCompassScreen extends Screen {
         if (isSearchFailureDialog()) { scrollSearchFailure(scroll3); return true; }
         if (dialog != Dialog.NONE) return true;
         if (hiddenStructuresOpen) {
-            hiddenScroll = Scrollbar.scrollRows(hiddenScroll, scroll3, 2, hiddenMaxScroll());
+            hiddenStructures.scroll(scroll3, filterTop(), filterBottom());
             return true;
         }
-		if (settingsOpen) {
-			settingsFirstRow = Scrollbar.scrollRows(settingsFirstRow, scroll3, 1, settingsMaxFirstRow());
-			updateViewButtons();
-			return true;
-		}
 		if (filtersOpen) {
 			if (scroll1 >= filterLeft() && scroll1 < filterScrollbarRight() && scroll2 >= filterTop() && scroll2 < filterBottom()) {
 				filterScroll = Scrollbar.scrollPixels(filterScroll, scroll3, filterRowHeight(), filterMaxScroll());
@@ -451,7 +362,7 @@ public class ExplorersCompassScreen extends Screen {
 		}
 		searchTextField.tick();
 		filterSearchTextField.tick();
-		settingsSearchTextField.tick();
+
 		hiddenSearchTextField.tick();
 		if (lastCreativeBypass != creativeBypassActive()) {
 			lastCreativeBypass = creativeBypassActive();
@@ -541,9 +452,7 @@ public class ExplorersCompassScreen extends Screen {
 		if (filtersOpen) {
 			renderFilterPanel(context, mouseX, mouseY);
         } else if (hiddenStructuresOpen) {
-            renderHiddenStructures(context, mouseX, mouseY);
-		} else if (settingsOpen) {
-			renderSettingsPanel(context);
+            hiddenStructures.render(context, textRenderer, width, filterTop(), filterBottom(), mouseX, mouseY);
 		}
         SearchCosts costs = SearchCosts.remote();
         boolean showBalance = isStructureView() && costs.showsSearchCosts();
@@ -578,19 +487,13 @@ public class ExplorersCompassScreen extends Screen {
 		}
         if (newlyUnlockedButton.visible && newlyUnlockedButton.isMouseOver(mouseX, mouseY))
             drawQuestionTooltip(context, "List only structures from your most recent unlock event", mouseX, mouseY);
-		renderCloseIcon(context, cancelButton);
 		if (filtersOpen) {
 			context.drawTextWithShadow(textRenderer, Text.literal("Filters"), HEADER_TITLE_MARGIN, 15, 0xffffff);
         } else if (hiddenStructuresOpen) {
-            context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(HIDDEN_STRUCTURES_TITLE,
+            context.drawTextWithShadow(textRenderer, textRenderer.trimToWidth(HiddenStructuresList.TITLE,
                     Math.max(1, hiddenSearchTextField.getX() - 20)), 10, 15, 0xffffff);
-		} else if (settingsOpen) {
-			context.drawTextWithShadow(textRenderer, Text.literal("Settings"), HEADER_TITLE_MARGIN, 15, 0xffffff);
 		} else {
 			context.drawTextWithShadow(textRenderer, title, HEADER_TITLE_MARGIN, 15, 0xffffff);
-		}
-		if (settingsOpen) {
-			renderSettingsTooltip(context, mouseX, mouseY);
 		}
 		if (selectionToggleButton.visible && selectionToggleButton.isMouseOver(mouseX, mouseY)) {
 			drawQuestionTooltip(context, SELECTION_TOGGLE_TOOLTIP, mouseX, mouseY);
@@ -939,10 +842,7 @@ public class ExplorersCompassScreen extends Screen {
 		return switch (panel) {
 			case FILTERS -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
 					Scrollbar.pixelThumbHeight(trackHeight, filterMaxScroll(), 32, 8), filterScroll, filterMaxScroll());
-			case SETTINGS -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
-					Scrollbar.rowThumbHeight(trackHeight, settingsVisibleRows(), settingsRows.size()), settingsFirstRow, settingsMaxFirstRow());
-			case HIDDEN -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
-					Scrollbar.rowThumbHeight(trackHeight, hiddenVisibleRows(), filteredHiddenStructures().size()), hiddenScroll, hiddenMaxScroll());
+			case HIDDEN -> hiddenStructures.scrollbar(width, filterTop(), filterBottom());
 			case FOUND -> foundScrollbar();
 			case SEARCH_FAILURE -> searchFailureScrollbar();
 		};
@@ -1190,198 +1090,24 @@ public class ExplorersCompassScreen extends Screen {
 				button.getY() + (button.getHeight() - FILTER_CHECKBOX_SIZE) / 2, checked);
 	}
 
-	private void renderCloseIcon(DrawContext context, ButtonWidget button) {
-		int x = button.getX() + (button.getWidth() - CLOSE_ICON_SIZE) / 2;
-		int y = button.getY() + (button.getHeight() - CLOSE_ICON_SIZE) / 2;
-		drawIconWithShadow(context, CLOSE_ICON, x, y, CLOSE_ICON_SIZE, button.active ? 1.0f : 144 / 255.0f);
+	static ButtonWidget createCloseButton(int x, Runnable close) {
+		return new TransparentButton(x, 10, 20, 20, Text.translatable("gui.close"), button -> close.run()) {
+			@Override
+			protected void renderLabel(DrawContext context, TextRenderer renderer) {
+				int iconX = getX() + (getWidth() - CLOSE_ICON_SIZE) / 2;
+				int iconY = getY() + (getHeight() - CLOSE_ICON_SIZE) / 2;
+				drawIconWithShadow(context, CLOSE_ICON, iconX, iconY, CLOSE_ICON_SIZE, active ? 1.0f : 144 / 255.0f);
+			}
+		};
 	}
 
-	private static void drawIconWithShadow(DrawContext context, Identifier icon, int x, int y, int size, float brightness) {
+	static void drawIconWithShadow(DrawContext context, Identifier icon, int x, int y, int size, float brightness) {
 		float shadow = brightness * 0.25f;
 		context.setShaderColor(shadow, shadow, shadow, 1.0f);
 		context.drawTexture(icon, x + 1, y + 1, 0, 0, size, size, size, size);
 		context.setShaderColor(brightness, brightness, brightness, 1.0f);
 		context.drawTexture(icon, x, y, 0, 0, size, size, size, size);
 		context.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-	}
-
-	private int settingsRowY(int row) {
-		return filterTop() + (settingsRows.indexOf(row) - settingsFirstRow) * SETTINGS_ROW_HEIGHT;
-	}
-
-	private int settingsVisibleRows() {
-		return Math.max(1, (filterBottom() - filterTop()) / SETTINGS_ROW_HEIGHT);
-	}
-
-	private int settingsMaxFirstRow() {
-		return Math.max(0, settingsRows.size() - settingsVisibleRows());
-	}
-
-	private boolean isSettingsRowVisible(int row) {
-		int index = settingsRows.indexOf(row);
-		return index >= settingsFirstRow && index < settingsFirstRow + settingsVisibleRows();
-	}
-
-	private int settingsControlHeight() {
-		return 20;
-	}
-
-	private int settingsControlX() {
-		return settingsResetX() - SEARCH_BUTTON_GAP - SETTINGS_CONTROL_WIDTH;
-	}
-
-	private int settingsResetX() {
-		return filterRight() - 10 - SMALL_BUTTON_SIZE;
-	}
-
-	private boolean isSettingsDivider(int row) {
-		return SETTINGS_TOOLTIPS[row] == null;
-	}
-
-	private void renderSettingsDivider(DrawContext context, int row) {
-		String title = SETTINGS_LABELS[row];
-		int centerX = (filterLeft() + filterRight()) / 2;
-		int centerY = settingsRowY(row) + SETTINGS_ROW_HEIGHT / 2;
-		int halfTitleWidth = textRenderer.getWidth(title) / 2;
-		int gap = 8;
-		context.fill(filterLeft() + 10, centerY, centerX - halfTitleWidth - gap, centerY + 1, SETTINGS_DIVIDER_COLOR);
-		context.fill(centerX + halfTitleWidth + gap, centerY, filterRight() - 10, centerY + 1, SETTINGS_DIVIDER_COLOR);
-		context.drawText(textRenderer, title, centerX - halfTitleWidth,
-				centerY - textRenderer.fontHeight / 2, SETTINGS_DIVIDER_COLOR, false);
-	}
-
-	private void renderSettingsPanel(DrawContext context) {
-		context.fill(filterLeft(), filterTop(), filterRight(), filterBottom(),
-				RenderUtils.blackWithOpacity(RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT));
-		if (settingsRows.isEmpty()) {
-			context.drawCenteredTextWithShadow(textRenderer, "No matching settings", (filterLeft() + filterRight()) / 2,
-					filterTop() + 10, SETTINGS_DIVIDER_COLOR);
-			return;
-		}
-		int lastVisibleRow = Math.min(settingsRows.size(), settingsFirstRow + settingsVisibleRows());
-		int labelX = filterLeft() + 10;
-		int labelWidth = Math.max(1, settingsControlX() - labelX - 10);
-		for (int index = settingsFirstRow; index < lastVisibleRow; index++) {
-			int row = settingsRows.get(index);
-			if (isSettingsDivider(row)) {
-				renderSettingsDivider(context, row);
-				continue;
-			}
-			String label = SETTINGS_LABELS[row];
-			int labelY = settingsRowY(row) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight) / 2;
-			int textWidth = textRenderer.getWidth(label);
-			if (textWidth <= labelWidth) {
-				context.drawTextWithShadow(textRenderer, label, labelX, labelY, 0xffffff);
-			} else {
-				float scale = (float) labelWidth / textWidth;
-				context.getMatrices().push();
-				context.getMatrices().translate(labelX, labelY + (textRenderer.fontHeight * (1.0f - scale)) / 2.0f, 0);
-				context.getMatrices().scale(scale, scale, 1.0f);
-				context.drawTextWithShadow(textRenderer, label, 0, 0, 0xffffff);
-				context.getMatrices().pop();
-			}
-		}
-		String offset = Integer.toString(ExplorersCompassConfig.overlayLineOffset);
-		float offsetScale = Math.min(1.0f, 46.0f / Math.max(1, textRenderer.getWidth(offset)));
-		if (isSettingsRowVisible(SETTINGS_OFFSET_ROW)) {
-			context.getMatrices().push();
-			context.getMatrices().translate(settingsControlX() + SETTINGS_CONTROL_WIDTH / 2.0,
-					settingsRowY(SETTINGS_OFFSET_ROW) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight * offsetScale) / 2.0, 0);
-			context.getMatrices().scale(offsetScale, offsetScale, 1.0f);
-			context.drawCenteredTextWithShadow(textRenderer, offset, 0, 0, 0xffffff);
-			context.getMatrices().pop();
-		}
-		scrollbarFor(ScrollPanel.SETTINGS).render(context);
-	}
-
-	private void renderSettingsTooltip(DrawContext context, int mouseX, int mouseY) {
-		if (mouseY < filterTop() || mouseY >= filterBottom()) {
-			return;
-		}
-		int rowIndex = settingsFirstRow + (mouseY - filterTop()) / SETTINGS_ROW_HEIGHT;
-		if (rowIndex >= settingsRows.size() || rowIndex >= settingsFirstRow + settingsVisibleRows()) {
-			return;
-		}
-		int row = settingsRows.get(rowIndex);
-		if (isSettingsDivider(row)) return;
-		int labelX = filterLeft() + 10;
-		int labelWidth = Math.max(1, settingsControlX() - labelX - 10);
-		String label = SETTINGS_LABELS[row];
-		int textWidth = textRenderer.getWidth(label);
-		float scale = Math.min(1.0f, (float) labelWidth / Math.max(1, textWidth));
-		double textTop = settingsRowY(row) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight) / 2.0f
-				+ textRenderer.fontHeight * (1.0f - scale) / 2.0f;
-		if (mouseX < labelX || mouseX >= labelX + textWidth * scale
-				|| mouseY < textTop || mouseY >= textTop + textRenderer.fontHeight * scale) {
-			return;
-		}
-		List<Text> lines = new ArrayList<>();
-		for (OrderedText line : textRenderer.wrapLines(Text.literal(SETTINGS_TOOLTIPS[row]), Math.min(240, width - 30))) {
-			StringBuilder content = new StringBuilder();
-			line.accept((index, style, codePoint) -> {
-				content.appendCodePoint(codePoint);
-				return true;
-			});
-			lines.add(Text.literal(content.toString()));
-		}
-		context.drawTooltip(textRenderer, lines, mouseX, mouseY);
-	}
-
-	private void updateSettingsButtonLabels() {
-		chatOverlayButton.setMessage(onOff(ExplorersCompassConfig.displayWithChatOpen));
-		hideSearchCostButton.setMessage(onOff(ExplorersCompassConfig.hideSearchCost));
-		matchSearchWordsButton.setMessage(onOff(ExplorersCompassConfig.matchSearchWordsInAnyOrder));
-		showOnlyMatchingFilterOptionsButton.setMessage(onOff(ExplorersCompassConfig.showOnlyMatchingFilterOptions));
-		clearOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearFiltersOnClose));
-		clearSearchBarOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearSearchBarOnClose));
-		pauseGameWhenOpenButton.setMessage(onOff(ExplorersCompassConfig.pauseGameWhenOpen));
-		creativeUnlocksAllButton.setMessage(onOff(ExplorersCompassConfig.creativeUnlocksAll));
-		showTeleportOnlyInCreativeButton.setMessage(onOff(ExplorersCompassConfig.showTeleportOnlyInCreative));
-		checkedFiltersFirstButton.setMessage(onOff(ExplorersCompassConfig.checkedFiltersFirst));
-		closeOnFoundButton.setMessage(onOff(ExplorersCompassConfig.closeOnFound));
-		adjustRowsToFitViewButton.setMessage(onOff(ExplorersCompassConfig.adjustRowsToFitView));
-		overlaySideButton.setMessage(Text.literal(ExplorersCompassConfig.overlaySide == OverlaySide.LEFT ? "Left" : "Right"));
-	}
-
-	private void addSettingResetButton(int row, ClientSetting setting) {
-		Text label = Text.literal("Restore default for " + SETTINGS_LABELS[row]);
-		var button = new TransparentButton(settingsResetX(), settingsRowY(row), SMALL_BUTTON_SIZE,
-				settingsControlHeight(), label, ignored -> restoreSettings(setting::restoreDefault)) {
-			@Override
-			protected void renderLabel(DrawContext context, net.minecraft.client.font.TextRenderer renderer) {
-				int x = getX() + (getWidth() - SETTINGS_RESET_ICON_SIZE) / 2;
-				drawSettingsResetIcon(context, x, getY(), getHeight());
-			}
-		};
-		button.setTooltip(Tooltip.of(label));
-		settingResetButtons.put(row, addDrawableChild(button));
-	}
-
-	private static void drawSettingsResetIcon(DrawContext context, int x, int top, int height) {
-		int y = top + (height - SETTINGS_RESET_ICON_SIZE) / 2;
-		drawIconWithShadow(context, SETTINGS_RESET_ICON, x, y, SETTINGS_RESET_ICON_SIZE, 1.0f);
-	}
-
-	private void restoreSettings(Runnable reset) {
-		boolean fittedRows = ExplorersCompassConfig.adjustRowsToFitView;
-		double scroll = selectionList.getScrollAmount();
-		reset.run();
-		ExplorersCompassConfig.saveClient();
-		updateSettingsButtonLabels();
-		sortOrder.clear();
-		for (String name : ExplorersCompassConfig.sortOrder) sortOrder.add(SortCriterion.valueOf(name));
-		if (fittedRows != ExplorersCompassConfig.adjustRowsToFitView) {
-			remove(selectionList);
-			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40,
-					width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
-		}
-		processSearchTerm();
-		selectionList.setScrollAmount(scroll);
-		filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
-	}
-
-	private static Text onOff(boolean enabled) {
-		return Text.literal(enabled ? "On" : "Off");
 	}
 
 	private void renderFilterPanel(DrawContext context, int mouseX, int mouseY) {
@@ -1493,7 +1219,10 @@ public class ExplorersCompassScreen extends Screen {
 				return new ButtonPress(widget, "widget", widget::onPress);
 			}
 		}
-		if (hiddenStructuresOpen) return hiddenRemoveButtonAt(mouseX, mouseY);
+		if (hiddenStructuresOpen) {
+			return hiddenStructures.removeButtonAt(mouseX, mouseY, textRenderer, width, filterTop(), filterBottom(),
+					this::processSearchTerm);
+		}
 		return isStructureView() ? selectionList.buttonAt(mouseX, mouseY) : null;
 	}
 
@@ -1527,24 +1256,6 @@ public class ExplorersCompassScreen extends Screen {
 		return backY == Integer.MIN_VALUE ? null : ButtonPress.at(mouseX, mouseY, backX, backY, 70, 20, dialog, "back", this::dismissDialog);
 	}
 
-	private ButtonPress hiddenRemoveButtonAt(double mouseX, double mouseY) {
-		int firstY = filterTop() + 6;
-		if (mouseY < firstY || mouseY >= filterBottom()) return null;
-		int row = (int) (mouseY - firstY) / 25;
-		if (row >= hiddenVisibleRows() || !ButtonPress.contains(mouseX, mouseY, hiddenRemoveButtonX(), hiddenRemoveButtonY(firstY + row * 25),
-				hiddenRemoveButtonWidth(), StructureSearchList.ACTION_BUTTON_HEIGHT)) return null;
-		List<String> visible = filteredHiddenStructures();
-		int index = hiddenScroll + row;
-		if (index >= visible.size()) return null;
-		String id = visible.get(index);
-		return new ButtonPress(ButtonLayer.HIDDEN, id, () -> {
-			ExplorersCompassConfig.hiddenStructures.remove(id);
-			ExplorersCompassConfig.saveHiddenStructures();
-			hiddenScroll = MathHelper.clamp(hiddenScroll, 0, hiddenMaxScroll());
-			processSearchTerm();
-		});
-	}
-
 	void playClickSound() {
 		client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
 	}
@@ -1570,7 +1281,7 @@ public class ExplorersCompassScreen extends Screen {
 			selectionList.resetDoubleClick();
 		}
 		draggingStructureScrollbar = currentStructurePopup == null && entryDetails == null && button == 0 && dialog == Dialog.NONE
-				&& entryFiltersId == null && !filtersOpen && !settingsOpen && !hiddenStructuresOpen && !sortMenuOpen
+				&& entryFiltersId == null && !filtersOpen && !hiddenStructuresOpen && !sortMenuOpen
 				&& selectionList != null && selectionList.isScrollbarAt(mouseX, mouseY);
 		try {
 			return handleMouseClicked(mouseX, mouseY, button);
@@ -1628,7 +1339,6 @@ public class ExplorersCompassScreen extends Screen {
             if (button == 0 && beginScrollbarDrag(ScrollPanel.HIDDEN, mouseX, mouseY)) return true;
             return super.mouseClicked(mouseX, mouseY, button);
         }
-		if (settingsOpen && button == 0 && beginScrollbarDrag(ScrollPanel.SETTINGS, mouseX, mouseY)) return true;
 		if (filtersOpen && button == 0) {
 			if (beginScrollbarDrag(ScrollPanel.FILTERS, mouseX, mouseY)) return true;
 			int column = filterColumnAt(mouseX, mouseY);
@@ -1662,7 +1372,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private TransparentTextField searchFieldAt(double mouseX, double mouseY) {
-		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, settingsSearchTextField, hiddenSearchTextField}) {
+		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, hiddenSearchTextField}) {
 			if (field != null && field.isVisible() && mouseX >= field.getX() && mouseX < field.getX() + field.getWidth()
 					&& mouseY >= field.getY() && mouseY < field.getY() + field.getHeight()) return field;
 		}
@@ -1672,13 +1382,13 @@ public class ExplorersCompassScreen extends Screen {
 	private TransparentTextField activeSearchField() {
 		if (hiddenStructuresOpen) return hiddenSearchTextField;
 		if (filtersOpen) return filterSearchTextField;
-		return settingsOpen ? settingsSearchTextField : searchTextField;
+		return searchTextField;
 	}
 
 	private void focusActiveSearchField() {
 		if (currentStructurePopup != null || entryDetails != null) return;
 		TransparentTextField active = activeSearchField();
-		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, settingsSearchTextField, hiddenSearchTextField}) {
+		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, hiddenSearchTextField}) {
 			if (field != null && field != active) field.setFocused(false);
 		}
 		if (active == null) {
@@ -1772,6 +1482,15 @@ public class ExplorersCompassScreen extends Screen {
                 scrollSearchFailure(par1 == 264 || par1 == 267 ? -1 : 1);
             return true;
         }
+		if (par1 == GLFW.GLFW_KEY_S && par3 == GLFW.GLFW_MOD_CONTROL) {
+			openingSettings = true;
+			try {
+				client.setScreen(new CompassSettingsScreen(this));
+			} finally {
+				openingSettings = false;
+			}
+			return true;
+		}
 		if (isStructureView()) {
 			if (isSelectAll(par1)) {
 				selectionList.selectAllMatches();
@@ -1801,10 +1520,6 @@ public class ExplorersCompassScreen extends Screen {
             leaveHiddenStructures();
             return true;
         }
-		if (settingsOpen && par1 == 256) {
-			setSettingsOpen(false);
-			return true;
-		}
 		if (filtersOpen && par1 == 256) {
 			setFiltersOpen(false);
 			return true;
@@ -1825,7 +1540,7 @@ public class ExplorersCompassScreen extends Screen {
 	private boolean beginScrollbarDrag(ScrollPanel panel, double mouseX, double mouseY) {
 		Scrollbar scrollbar = scrollbarFor(panel);
 		if (!scrollbar.contains(mouseX, mouseY)) return false;
-		int padding = panel == ScrollPanel.SETTINGS ? 0 : Scrollbar.GRAB_PADDING;
+		int padding = Scrollbar.GRAB_PADDING;
 		boolean jump = scrollbar.outsideThumb(mouseY, padding);
 		scrollbarGrabOffset = scrollbar.grabOffset(mouseY, padding);
 		draggedScrollbar = panel;
@@ -1838,11 +1553,7 @@ public class ExplorersCompassScreen extends Screen {
 		double offset = scrollbarFor(draggedScrollbar).offsetForMouse(mouseY, scrollbarGrabOffset);
 		switch (draggedScrollbar) {
 			case FILTERS -> filterScroll = offset;
-			case SETTINGS -> {
-				settingsFirstRow = (int)Math.round(offset);
-				updateViewButtons();
-			}
-			case HIDDEN -> hiddenScroll = (int)Math.round(offset);
+			case HIDDEN -> hiddenStructures.setScroll(offset);
 			case FOUND -> foundScroll = offset;
 			case SEARCH_FAILURE -> searchFailureScroll = offset;
 		}
@@ -1876,33 +1587,15 @@ public class ExplorersCompassScreen extends Screen {
 		focusActiveSearchField();
 	}
 
-	private void setSettingsOpen(boolean open) {
-		if (settingsOpen == open) {
-			return;
-		}
-		if (sortMenuOpen) {
-			closeSortMenu();
-		}
-		entryFiltersId = null;
-		settingsOpen = open;
-		if (open) {
-			pendingHiddenStructures.clear();
-		}
+	void resumeFromSettings() {
+		sortOrder.clear();
+		for (String name : ExplorersCompassConfig.sortOrder) sortOrder.add(SortCriterion.valueOf(name));
 		draggedScrollbar = null;
-		searchTextField.setVisible(isStructureView());
-		searchTextField.setFocused(false);
-		if (open) {
-			remove(selectionList);
-		} else {
-			addDrawableChild(selectionList);
-			processSearchTerm();
-		}
-		updateViewButtons();
-		focusActiveSearchField();
+		clearAndInit();
 	}
 
 	private boolean isStructureView() {
-		return !filtersOpen && !settingsOpen && !hiddenStructuresOpen;
+		return !filtersOpen && !hiddenStructuresOpen;
 	}
 
     private boolean beginSearch(Identifier id) {
@@ -2756,79 +2449,12 @@ public class ExplorersCompassScreen extends Screen {
         }
     }
 
-    private int hiddenVisibleRows() { return Math.max(1, (filterBottom() - filterTop() - 12) / 25); }
-
-	private int hiddenMaxScroll() {
-		return Math.max(0, filteredHiddenStructures().size() - hiddenVisibleRows());
-	}
-
-    private int hiddenRemoveButtonWidth() { return rowActionButtonWidth("Remove"); }
-
-    private int hiddenRemoveButtonX() {
-        return filterRight() - StructureSearchList.ACTION_BUTTON_RIGHT_INSET - hiddenRemoveButtonWidth();
-    }
-
-    private int hiddenRemoveButtonY(int rowY) {
-        return rowY + (20 - StructureSearchList.ACTION_BUTTON_HEIGHT) / 2;
-    }
-
-    private void renderHiddenStructures(DrawContext context, int mouseX, int mouseY) {
-        context.fill(filterLeft(), filterTop(), filterRight(), filterBottom(),
-				RenderUtils.blackWithOpacity(RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT));
-        List<String> ids = filteredHiddenStructures();
-        hiddenScroll = MathHelper.clamp(hiddenScroll, 0, Math.max(0, ids.size() - hiddenVisibleRows()));
-        context.enableScissor(filterLeft(), filterTop(), filterRight(), filterBottom());
-        if (ids.isEmpty()) context.drawCenteredTextWithShadow(textRenderer,
-                Text.literal(ExplorersCompassConfig.hiddenStructures.isEmpty()
-                        ? "No hidden structures" : "No matching hidden structures"),
-                width / 2, filterTop() + 20, 0xffffff);
-        int buttonX = hiddenRemoveButtonX();
-        int buttonWidth = hiddenRemoveButtonWidth();
-        int buttonHeight = StructureSearchList.ACTION_BUTTON_HEIGHT;
-        int textWidth = Math.max(1, buttonX - 21);
-        for (int row = 0; row < hiddenVisibleRows() && hiddenScroll + row < ids.size(); row++) {
-            int y = filterTop() + 6 + row * 25;
-            String raw = ids.get(hiddenScroll + row);
-            Identifier id = Identifier.tryParse(raw);
-            String technicalName = textRenderer.trimToWidth(raw, textWidth);
-            if (id != null && allowedStructureIDs.contains(id)) {
-                int nameY = y + (20 - 2 * textRenderer.fontHeight) / 2;
-                String name = textRenderer.trimToWidth(StructureUtils.getStructureName(id), textWidth);
-                context.drawTextWithShadow(textRenderer, name, 16, nameY, 0xffffff);
-                context.drawTextWithShadow(textRenderer, technicalName, 16, nameY + textRenderer.fontHeight, 0xaaaaaa);
-            } else {
-                context.drawTextWithShadow(textRenderer, technicalName, 16, y + (20 - textRenderer.fontHeight) / 2, 0xffffff);
-            }
-            int buttonY = hiddenRemoveButtonY(y);
-            StructureSearchEntry.drawActionButton(context, textRenderer, "Remove", buttonX, buttonY, buttonWidth,
-                    buttonHeight, ButtonPress.contains(mouseX, mouseY, buttonX, buttonY, buttonWidth, buttonHeight));
-        }
-        context.disableScissor();
-        scrollbarFor(ScrollPanel.HIDDEN).render(context);
-    }
-
-	private List<String> filteredHiddenStructures() {
-		String query = hiddenSearchText.toLowerCase(Locale.ROOT);
-		if (query.isEmpty()) return ExplorersCompassConfig.hiddenStructures;
-		List<String> matches = new ArrayList<>();
-		for (String raw : ExplorersCompassConfig.hiddenStructures) {
-			Identifier id = Identifier.tryParse(raw);
-			String name = id == null || !allowedStructureIDs.contains(id) ? raw : StructureUtils.getStructureName(id);
-			if (raw.toLowerCase(Locale.ROOT).contains(query) || name.toLowerCase(Locale.ROOT).contains(query)) matches.add(raw);
-		}
-		return matches;
-	}
-
 	public boolean isStructureHidden(Identifier id) {
 		return ExplorersCompassConfig.hiddenStructures.contains(id.toString());
 	}
 
 	public int rowActionButtonWidth() {
-		return rowActionButtonWidth("filters");
-	}
-
-	private int rowActionButtonWidth(String label) {
-		return textRenderer.getWidth(label) + 8;
+		return textRenderer.getWidth("filters") + StructureSearchList.ACTION_BUTTON_HORIZONTAL_PADDING;
 	}
 
 	public void toggleStructureHidden(Identifier id) {
@@ -2974,119 +2600,7 @@ public class ExplorersCompassScreen extends Screen {
 		currentStructureButton = addDrawableChild(new TransparentButton(SIDEBAR_X,
 				sortOrderButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20,
 				Text.literal("Identify"), button -> requestCurrentStructure()));
-		settingsButton = addDrawableChild(new TransparentButton(SIDEBAR_X, height - 30, sidebarWidth(), 20, Text.literal("Settings"), (onPress) -> {
-			setSettingsOpen(true);
-		}));
-		int controlX = settingsControlX();
-		overlaySideButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(1), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.overlaySide = ExplorersCompassConfig.overlaySide == OverlaySide.LEFT ? OverlaySide.RIGHT : OverlaySide.LEFT;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		offsetDecreaseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_OFFSET_ROW), 20, settingsControlHeight(), Text.literal("−"), (onPress) -> {
-			if (ExplorersCompassConfig.overlayLineOffset > 0) {
-				ExplorersCompassConfig.overlayLineOffset--;
-				ExplorersCompassConfig.saveClient();
-			}
-		}));
-		offsetIncreaseButton = addDrawableChild(new TransparentButton(controlX + SETTINGS_CONTROL_WIDTH - 20, settingsRowY(SETTINGS_OFFSET_ROW), 20, settingsControlHeight(), Text.literal("+"), (onPress) -> {
-			if (ExplorersCompassConfig.overlayLineOffset < Integer.MAX_VALUE) {
-				ExplorersCompassConfig.overlayLineOffset++;
-				ExplorersCompassConfig.saveClient();
-			}
-		}));
-		chatOverlayButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(3), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.displayWithChatOpen = !ExplorersCompassConfig.displayWithChatOpen;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		clearSearchBarOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLEAR_SEARCH_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.clearSearchBarOnClose = !ExplorersCompassConfig.clearSearchBarOnClose;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		clearOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLEAR_FILTERS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.clearFiltersOnClose = !ExplorersCompassConfig.clearFiltersOnClose;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		checkedFiltersFirstButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(6), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.checkedFiltersFirst = !ExplorersCompassConfig.checkedFiltersFirst;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
-		}));
-		showOnlyMatchingFilterOptionsButton = addDrawableChild(new TransparentButton(controlX,
-				settingsRowY(SETTINGS_MATCHING_FILTER_OPTIONS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.showOnlyMatchingFilterOptions = !ExplorersCompassConfig.showOnlyMatchingFilterOptions;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
-		}));
-        hideSearchCostButton = addDrawableChild(new TransparentButton(controlX,
-                settingsRowY(SETTINGS_HIDE_SEARCH_COST_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-            ExplorersCompassConfig.hideSearchCost = !ExplorersCompassConfig.hideSearchCost;
-            ExplorersCompassConfig.saveClient();
-            updateSettingsButtonLabels();
-        }));
-		matchSearchWordsButton = addDrawableChild(new TransparentButton(controlX,
-				settingsRowY(SETTINGS_MATCH_SEARCH_WORDS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.matchSearchWordsInAnyOrder = !ExplorersCompassConfig.matchSearchWordsInAnyOrder;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-			processSearchTerm();
-		}));
-		adjustRowsToFitViewButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(5), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.adjustRowsToFitView = !ExplorersCompassConfig.adjustRowsToFitView;
-			ExplorersCompassConfig.saveClient();
-			remove(selectionList);
-			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
-			filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
-			updateSettingsButtonLabels();
-		}));
-		closeOnFoundButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLOSE_ON_FOUND_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.closeOnFound = !ExplorersCompassConfig.closeOnFound;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		pauseGameWhenOpenButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_PAUSE_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.pauseGameWhenOpen = !ExplorersCompassConfig.pauseGameWhenOpen;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		creativeUnlocksAllButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CREATIVE_UNLOCK_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.creativeUnlocksAll = !ExplorersCompassConfig.creativeUnlocksAll;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		showTeleportOnlyInCreativeButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_TELEPORT_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.showTeleportOnlyInCreative = !ExplorersCompassConfig.showTeleportOnlyInCreative;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		updateSettingsButtonLabels();
-        hiddenStructuresButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_HIDDEN_ROW),
-                SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.literal("Open"), button -> openHiddenStructures(null)));
-
-		settingResetButtons.clear();
-		addSettingResetButton(1, ClientSetting.OVERLAY_SIDE);
-		addSettingResetButton(SETTINGS_OFFSET_ROW, ClientSetting.OVERLAY_LINE_OFFSET);
-		addSettingResetButton(3, ClientSetting.DISPLAY_WITH_CHAT_OPEN);
-		addSettingResetButton(5, ClientSetting.ADJUST_ROWS_TO_FIT_VIEW);
-		addSettingResetButton(6, ClientSetting.CHECKED_FILTERS_FIRST);
-		addSettingResetButton(SETTINGS_HIDE_SEARCH_COST_ROW, ClientSetting.HIDE_SEARCH_COST);
-		addSettingResetButton(SETTINGS_CLOSE_ON_FOUND_ROW, ClientSetting.CLOSE_ON_FOUND);
-		addSettingResetButton(SETTINGS_CLEAR_SEARCH_ROW, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
-		addSettingResetButton(SETTINGS_CLEAR_FILTERS_ROW, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
-		addSettingResetButton(SETTINGS_MATCH_SEARCH_WORDS_ROW, ClientSetting.MATCH_SEARCH_WORDS_IN_ANY_ORDER);
-		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
-		addSettingResetButton(SETTINGS_CREATIVE_UNLOCK_ROW, ClientSetting.CREATIVE_UNLOCKS_ALL);
-		addSettingResetButton(SETTINGS_TELEPORT_ROW, ClientSetting.SHOW_TELEPORT_ONLY_IN_CREATIVE);
-		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
-
-		cancelButton = addDrawableChild(new TransparentButton(width - 30, 10, 20, 20, Text.literal(""), (onPress) -> {
-			client.setScreen(null);
-		}));
+		cancelButton = addDrawableChild(createCloseButton(width - 30, () -> client.setScreen(null)));
 
 		teleportButton = addDrawableChild(new TransparentButton(SIDEBAR_X, currentStructureButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20, Text.literal("Teleport"), (onPress) -> {
 			teleport();
@@ -3122,27 +2636,12 @@ public class ExplorersCompassScreen extends Screen {
         newlyButton.setRightInset(FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
         newlyUnlockedButton = newlyButton;
 		backButton = addDrawableChild(new TransparentButton(10, 10, buttonWidthForLabel("Back"), 20, Text.literal("Back"), (onPress) -> {
-            if (hiddenStructuresOpen) {
-                leaveHiddenStructures();
-            } else if (settingsOpen) {
-				setSettingsOpen(false);
+			if (hiddenStructuresOpen) {
+				leaveHiddenStructures();
 			} else {
 				setFiltersOpen(false);
 			}
 		}));
-		restoreDefaultsButton = addDrawableChild(new TransparentButton(10, 10, restoreDefaultsButtonWidth(), 20,
-				Text.literal("Restore Defaults"), ignored -> restoreSettings(ExplorersCompassConfig::restoreClientDefaults)) {
-			@Override
-			protected void renderLabel(DrawContext context, net.minecraft.client.font.TextRenderer renderer) {
-				int iconOffset = renderer.getWidth(SETTINGS_RESET_ALL_LABEL) + SETTINGS_RESET_LABEL_GAP;
-				int contentWidth = iconOffset + SETTINGS_RESET_ICON_SIZE;
-				int x = getX() + (getWidth() - contentWidth) / 2;
-				context.drawTextWithShadow(renderer, SETTINGS_RESET_ALL_LABEL, x,
-						getY() + (getHeight() - 8) / 2, 0xffffff);
-				drawSettingsResetIcon(context, x + iconOffset, getY(), getHeight());
-			}
-		});
-		restoreDefaultsButton.setTooltip(Tooltip.of(restoreDefaultsButton.getMessage()));
 		positionTopButtons();
 		updateViewButtons();
 	}
@@ -3164,53 +2663,35 @@ public class ExplorersCompassScreen extends Screen {
 		});
 		addDrawableChild(searchTextField);
 		searchTextField.setVisible(isStructureView());
+		String filterQuery = filterSearchTextField == null ? "" : filterSearchTextField.getText();
 		int filterSearchX = filterSearchX();
 		filterSearchTextField = new TransparentTextField(textRenderer, filterSearchX, 10,
 				filterSearchWidth(filterSearchX), 20, Text.literal("Search Filters"));
+		filterSearchTextField.setText(filterQuery);
 		filterSearchTextField.setChangedListener(value -> {
 			filterScroll = 0;
 		});
 		addDrawableChild(filterSearchTextField);
 		filterSearchTextField.setVisible(filtersOpen);
-		String settingsQuery = settingsSearchTextField == null ? "" : settingsSearchTextField.getText();
-		int settingsSearchX = settingsSearchX();
-		settingsSearchTextField = new TransparentTextField(textRenderer, settingsSearchX, 10,
-				settingsSearchWidth(settingsSearchX), 20, Text.literal("Search Settings"));
-		settingsSearchTextField.setMaxLength(256);
-		settingsSearchTextField.setText(settingsQuery);
-		settingsSearchTextField.setChangedListener(value -> {
-			settingsFirstRow = 0;
-			if (draggedScrollbar == ScrollPanel.SETTINGS) draggedScrollbar = null;
-			updateViewButtons();
-		});
-		addDrawableChild(settingsSearchTextField);
-		settingsSearchTextField.setVisible(settingsOpen);
 		int headerEnd = backButton.getX() - HEADER_GAP;
-		int hiddenSearchX = Math.min(10 + textRenderer.getWidth(HIDDEN_STRUCTURES_TITLE) + 10,
+		int hiddenSearchX = Math.min(10 + textRenderer.getWidth(HiddenStructuresList.TITLE) + 10,
 				Math.max(10, headerEnd - 80));
 		hiddenSearchTextField = new TransparentTextField(textRenderer, hiddenSearchX, 10,
 				Math.max(1, headerEnd - hiddenSearchX),
 				20, Text.literal("Search hidden structures"));
 		hiddenSearchTextField.setMaxLength(256);
-		hiddenSearchTextField.setText(hiddenSearchText);
-		hiddenSearchTextField.setChangedListener(value -> {
-			hiddenSearchText = value;
-			hiddenScroll = 0;
-		});
+		hiddenSearchTextField.setText(hiddenStructures.query());
+		hiddenSearchTextField.setChangedListener(hiddenStructures::setQuery);
 		addDrawableChild(hiddenSearchTextField);
 		hiddenSearchTextField.setVisible(hiddenStructuresOpen);
 	}
 
-	private boolean returnToSettingsFromHidden;
-
 	private void openHiddenStructures(Identifier target) {
-		returnToSettingsFromHidden = settingsOpen;
 		if (isStructureView()) remove(selectionList);
-		settingsOpen = false;
 		hiddenStructuresOpen = true;
 		searchTextField.setVisible(false);
 		if (target != null) hiddenSearchTextField.setText(target.toString());
-		hiddenScroll = 0;
+		hiddenStructures.setScroll(0);
 		updateViewButtons();
 		focusActiveSearchField();
 	}
@@ -3218,11 +2699,8 @@ public class ExplorersCompassScreen extends Screen {
 	private void leaveHiddenStructures() {
 		hiddenStructuresOpen = false;
 		draggedScrollbar = null;
-		settingsOpen = returnToSettingsFromHidden;
-		hiddenSearchText = "";
 		hiddenSearchTextField.setText("");
 		hiddenSearchTextField.setFocused(false);
-		hiddenScroll = 0;
 		if (isStructureView()) addDrawableChild(selectionList);
 		searchTextField.setVisible(isStructureView());
 		updateViewButtons();
@@ -3239,24 +2717,12 @@ public class ExplorersCompassScreen extends Screen {
 		return textRenderer.getWidth(label) + HEADER_BUTTON_TEXT_PADDING;
 	}
 
-	private int restoreDefaultsButtonWidth() {
-		return buttonWidthForLabel(SETTINGS_RESET_ALL_LABEL) + SETTINGS_RESET_ICON_SIZE + SETTINGS_RESET_LABEL_GAP;
-	}
-
 	private int sidebarWidth() {
 		return textRenderer.getWidth(title) + 2 * (HEADER_TITLE_MARGIN - SIDEBAR_X);
 	}
 
 	private int structureListX() {
 		return SIDEBAR_X + sidebarWidth() + HEADER_GAP;
-	}
-
-	private int settingsSearchX() {
-		return textRenderer.getWidth("Settings") + 2 * HEADER_TITLE_MARGIN;
-	}
-
-	private int settingsSearchWidth(int x) {
-		return Math.max(1, restoreDefaultsButton.getX() - HEADER_GAP - x);
 	}
 
 	private int excludeButtonWidth(String label) {
@@ -3281,16 +2747,8 @@ public class ExplorersCompassScreen extends Screen {
 
 	private void positionTopButtons() {
 		cancelButton.setX(width - 30);
-		settingsButton.setY(height - 30);
-        hiddenStructuresButton.setX(settingsControlX());
-        hiddenStructuresButton.setY(settingsRowY(SETTINGS_HIDDEN_ROW));
 		teleportButton.setY(currentStructureButton.getY() + SIDEBAR_BUTTON_STEP);
 		backButton.setX(cancelButton.getX() - backButton.getWidth() - 5);
-		int settingsSearchX = settingsSearchX();
-		int restoreRight = backButton.getX() - 5;
-		restoreDefaultsButton.setWidth(Math.max(1, Math.min(restoreDefaultsButtonWidth(), restoreRight - settingsSearchX)));
-		restoreDefaultsButton.setX(restoreRight - restoreDefaultsButton.getWidth());
-		if (settingsSearchTextField != null) settingsSearchTextField.setWidth(settingsSearchWidth(settingsSearchX));
 		clearFiltersTopButton.setX(width - 10 - clearFiltersTopButton.getWidth());
 		clearFiltersTopButton.setY(40);
 		excludeVisitedButton.setX(filterLeft());
@@ -3304,12 +2762,6 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void updateViewButtons() {
-        String query = settingsSearchTextField == null ? "" : settingsSearchTextField.getText();
-        boolean showCosts = SearchCosts.remote().showsSearchCosts();
-        settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, query,
-                row -> row != SETTINGS_HIDE_SEARCH_COST_ROW || showCosts);
-        settingsFirstRow = Math.min(settingsFirstRow, settingsMaxFirstRow());
-		settingsFirstRow = MathHelper.clamp(settingsFirstRow, 0, settingsMaxFirstRow());
 		searchButton.visible = isStructureView();
 		updateSearchButtons();
 		sortOrderButton.visible = isStructureView();
@@ -3317,19 +2769,6 @@ public class ExplorersCompassScreen extends Screen {
 		currentStructureButton.visible = isStructureView();
 		currentStructureButton.active = ClientPlayNetworking.canSend(CurrentStructurePacket.ID);
 		clearFiltersButton.visible = isStructureView();
-		settingsButton.visible = isStructureView();
-        hiddenStructuresButton.visible = settingsOpen;
-		closeOnFoundButton.visible = settingsOpen;
-		chatOverlayButton.visible = settingsOpen;
-		offsetDecreaseButton.visible = settingsOpen;
-		offsetIncreaseButton.visible = settingsOpen;
-		overlaySideButton.visible = settingsOpen;
-		clearOnCloseButton.visible = settingsOpen;
-		checkedFiltersFirstButton.visible = settingsOpen;
-		adjustRowsToFitViewButton.visible = settingsOpen;
-		pauseGameWhenOpenButton.visible = settingsOpen;
-		creativeUnlocksAllButton.visible = settingsOpen;
-		showTeleportOnlyInCreativeButton.visible = settingsOpen;
 		cancelButton.visible = true;
 		teleportButton.visible = isStructureView() && showTeleportButton();
 		clearFiltersTopButton.visible = filtersOpen;
@@ -3339,32 +2778,8 @@ public class ExplorersCompassScreen extends Screen {
 		excludeLockedButton.setX(excludeLockedX);
 		newlyUnlockedButton.setX(excludeLockedX + (excludeLockedButton.visible ? excludeLockedButton.getWidth() + 5 : 0));
         newlyUnlockedButton.visible = filtersOpen && io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers.showNewlyUnlockedFilter;
-		backButton.visible = filtersOpen || settingsOpen || hiddenStructuresOpen;
-		restoreDefaultsButton.visible = settingsOpen;
-		if (settingsSearchTextField != null) settingsSearchTextField.setVisible(settingsOpen);
+		backButton.visible = filtersOpen || hiddenStructuresOpen;
 		if (hiddenSearchTextField != null) hiddenSearchTextField.setVisible(hiddenStructuresOpen);
-		placeSetting(overlaySideButton, 1);
-		placeSetting(offsetDecreaseButton, SETTINGS_OFFSET_ROW);
-		placeSetting(offsetIncreaseButton, SETTINGS_OFFSET_ROW);
-		placeSetting(chatOverlayButton, 3);
-		placeSetting(adjustRowsToFitViewButton, 5);
-		placeSetting(checkedFiltersFirstButton, 6);
-		placeSetting(hideSearchCostButton, SETTINGS_HIDE_SEARCH_COST_ROW);
-		placeSetting(matchSearchWordsButton, SETTINGS_MATCH_SEARCH_WORDS_ROW);
-		placeSetting(showOnlyMatchingFilterOptionsButton, SETTINGS_MATCHING_FILTER_OPTIONS_ROW);
-		placeSetting(closeOnFoundButton, SETTINGS_CLOSE_ON_FOUND_ROW);
-		placeSetting(clearOnCloseButton, SETTINGS_CLEAR_FILTERS_ROW);
-		placeSetting(clearSearchBarOnCloseButton, SETTINGS_CLEAR_SEARCH_ROW);
-		placeSetting(pauseGameWhenOpenButton, SETTINGS_PAUSE_ROW);
-		placeSetting(creativeUnlocksAllButton, SETTINGS_CREATIVE_UNLOCK_ROW);
-		placeSetting(showTeleportOnlyInCreativeButton, SETTINGS_TELEPORT_ROW);
-		placeSetting(hiddenStructuresButton, SETTINGS_HIDDEN_ROW);
-		settingResetButtons.forEach((row, button) -> placeSetting(button, row));
-	}
-
-	private void placeSetting(ButtonWidget button, int row) {
-		button.setY(settingsRowY(row) + (SETTINGS_ROW_HEIGHT - settingsControlHeight()) / 2);
-		button.visible = settingsOpen && isSettingsRowVisible(row);
 	}
 
 }
