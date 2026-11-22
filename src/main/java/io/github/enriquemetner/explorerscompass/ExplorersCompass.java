@@ -18,7 +18,6 @@ import io.github.enriquemetner.explorerscompass.network.SearchListedPacket;
 import io.github.enriquemetner.explorerscompass.network.CancelSearchPacket;
 import io.github.enriquemetner.explorerscompass.network.ContinueSearchPacket;
 import io.github.enriquemetner.explorerscompass.network.ResetCompassPacket;
-import io.github.enriquemetner.explorerscompass.network.SyncPacket;
 import io.github.enriquemetner.explorerscompass.network.StructureRequirementsPacket;
 import io.github.enriquemetner.explorerscompass.network.CurrentStructurePacket;
 import io.github.enriquemetner.explorerscompass.network.ConsumeCompassItemsPacket;

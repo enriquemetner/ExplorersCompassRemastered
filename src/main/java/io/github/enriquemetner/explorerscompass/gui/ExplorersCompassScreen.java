@@ -56,7 +56,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
-import net.minecraft.util.Language;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
 

@@ -13,7 +13,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.Util;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Environment(EnvType.CLIENT)

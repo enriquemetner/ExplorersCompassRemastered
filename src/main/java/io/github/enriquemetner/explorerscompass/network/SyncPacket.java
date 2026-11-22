@@ -7,7 +7,6 @@ import java.util.Map;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 
 import io.netty.buffer.Unpooled;

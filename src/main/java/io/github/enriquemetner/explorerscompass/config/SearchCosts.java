@@ -1,6 +1,5 @@
 package io.github.enriquemetner.explorerscompass.config;
 
-import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRuleDocument;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Diagnostic;
