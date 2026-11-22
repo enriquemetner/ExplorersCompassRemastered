@@ -4,13 +4,14 @@
   "version": "${version}",
 
   "name": "Explorer's Compass: Remastered",
-  "description": "Search for and locate structures anywhere in the world.",
+  "description": "Locate structures anywhere in the world.\nThe remastered version improves basically everything from the original mod and adds a ton of features.",
   "authors": [
+    "EnrikiMufasa",
     "ChaosTheDude"
   ],
   "contact": {
     "homepage": "https://www.curseforge.com/minecraft/mc-mods/explorers-compass",
-    "sources": "https://github.com/MattCzyr/ExplorersCompass"
+    "issues": "https://github.com/enriquemetner/ExplorersCompassRemastered/issues"
   },
 
   "license": "CC BY-NC-SA 4.0",
@@ -27,6 +28,15 @@
     "client": [
       "io.github.enriquemetner.explorerscompass.ExplorersCompassClient"
     ]
+  },
+  "custom": {
+    "modmenu": {
+      "links": {
+        "explorerscompass.modmenu.video_trailer": "https://www.youtube.com/",
+        "explorerscompass.modmenu.video_showcase": "https://www.youtube.com/",
+        "explorerscompass.modmenu.wiki": "https://github.com/enriquemetner/ExplorersCompassRemastered/wiki"
+      }
+    }
   },
   "mixins": [
     "explorerscompass.mixins.json"

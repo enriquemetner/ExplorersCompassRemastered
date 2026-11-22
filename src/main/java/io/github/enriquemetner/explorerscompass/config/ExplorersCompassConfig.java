@@ -141,14 +141,14 @@ public class ExplorersCompassConfig {
 		try {
 			archiveLegacyConfig();
 			ensureServerDefaults(null);
-			loadServerSettings(directory().resolve(SERVER_SETTINGS), null);
+			loadServerSettings(configDirectory().resolve(SERVER_SETTINGS), null);
 			boolean client = FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT;
 			if (client) {
-				Path clientSettings = directory().resolve(CLIENT_SETTINGS);
+				Path clientSettings = configDirectory().resolve(CLIENT_SETTINGS);
 				restoreClientDefaults();
 				loadClient(readClientConfig(clientSettings, CLIENT_SETTINGS));
 				writeClient(clientSettings);
-				Path hiddenFile = directory().resolve(HIDDEN_STRUCTURES);
+				Path hiddenFile = configDirectory().resolve(HIDDEN_STRUCTURES);
 				hiddenStructures = strings(readClientConfig(hiddenFile, HIDDEN_STRUCTURES), "hiddenStructures", List.of());
 			}
 		} catch (IOException e) {
@@ -157,9 +157,9 @@ public class ExplorersCompassConfig {
 	}
 
 	private static void archiveLegacyConfig() throws IOException {
-		Path configDirectory = directory().getParent();
-		Path legacy = configDirectory.resolve("explorerscompass.json");
-		Path archive = configDirectory.resolve("explorerscompass-old.json");
+		Path instanceConfig = configDirectory().getParent();
+		Path legacy = instanceConfig.resolve("explorerscompass.json");
+		Path archive = instanceConfig.resolve("explorerscompass-old.json");
 		if (Files.isRegularFile(legacy) && Files.notExists(archive)) {
 			Files.move(legacy, archive);
 			ExplorersCompass.LOGGER.info("Renamed explorerscompass.json to explorerscompass-old.json");
@@ -170,7 +170,7 @@ public class ExplorersCompassConfig {
 
 	private static void ensureServerDefaults(net.minecraft.server.MinecraftServer server) {
 		for (String name : SERVER_CONFIGS) {
-			Path instance = directory().resolve(name);
+			Path instance = configDirectory().resolve(name);
 			prepareServerDefaults(instance, name, false);
 			if (server != null) {
 				Path selected = serverConfigFile(server, name);
@@ -190,7 +190,7 @@ public class ExplorersCompassConfig {
 	public static Path serverConfigFile(net.minecraft.server.MinecraftServer server, String name) {
 		Path override = server.getSavePath(net.minecraft.util.WorldSavePath.ROOT)
 				.resolve(ExplorersCompass.MODID).resolve(Path.of(name).getFileName());
-		return Files.exists(override) ? override : directory().resolve(name);
+		return Files.exists(override) ? override : configDirectory().resolve(name);
 	}
 
 	private static Section startupSettings;
@@ -199,7 +199,7 @@ public class ExplorersCompassConfig {
 	public static void loadServer(net.minecraft.server.MinecraftServer server) {
 		StartupConfigReport.clear();
 		ensureServerDefaults(server);
-		startupSettings = loadServerSettings(directory().resolve(SERVER_SETTINGS), serverConfigFile(server, SERVER_SETTINGS));
+		startupSettings = loadServerSettings(configDirectory().resolve(SERVER_SETTINGS), serverConfigFile(server, SERVER_SETTINGS));
 		startupLists = loadStructureLists(serverConfigFile(server, WHITELIST), serverConfigFile(server, BLACKLIST),
 				server.getRegistryManager().get(RegistryKeys.STRUCTURE).getIds());
 	}
@@ -354,7 +354,7 @@ public class ExplorersCompassConfig {
 		return new com.google.gson.JsonPrimitive(String.valueOf(value)).toString();
 	}
 
-	private static Path directory() {
+	public static Path configDirectory() {
 		return FabricLoader.getInstance().getConfigDir().resolve(ExplorersCompass.MODID);
 	}
 
@@ -726,7 +726,7 @@ public class ExplorersCompassConfig {
 
 	private static void saveFile(String name, java.util.function.Consumer<CommentedConfig> update) {
 		try {
-			Path path = directory().resolve(name);
+			Path path = configDirectory().resolve(name);
 			CommentedConfig config = Files.exists(path) ? parse(path) : TomlFormat.newConfig(LinkedHashMap::new);
 			update.accept(config);
 			write(path, config);
@@ -737,7 +737,7 @@ public class ExplorersCompassConfig {
 
 	public static void saveClient() {
 		try {
-			writeClient(directory().resolve(CLIENT_SETTINGS));
+			writeClient(configDirectory().resolve(CLIENT_SETTINGS));
 		} catch (IOException e) {
 			throw new RuntimeException("Could not save Explorer's Compass " + CLIENT_SETTINGS, e);
 		}

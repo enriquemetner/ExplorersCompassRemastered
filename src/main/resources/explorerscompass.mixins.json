@@ -25,7 +25,8 @@
     "JesThumbnailSizeMixin",
     "DroppedCompassRenderMixin",
     "CompassIntegrationPauseMixin",
-    "CompassGuiRenderMixin"
+    "CompassGuiRenderMixin",
+    "ModMenuLinksMixin"
   ],
   "injectors": {
     "defaultRequire": 1

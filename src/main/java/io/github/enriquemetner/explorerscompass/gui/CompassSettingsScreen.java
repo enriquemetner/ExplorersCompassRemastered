@@ -18,6 +18,7 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Util;
 import net.minecraft.util.math.MathHelper;
 
 public final class CompassSettingsScreen extends Screen {
@@ -40,6 +41,7 @@ public final class CompassSettingsScreen extends Screen {
 	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 12;
 	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 13;
 	private static final int SETTINGS_HIDDEN_ROW = 19;
+	private static final int SETTINGS_CONFIG_DIRECTORY_ROW = 20;
 	private static final int SETTINGS_PAUSE_ROW = 17;
 	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 15;
 	private static final int SETTINGS_TELEPORT_ROW = 16;
@@ -65,6 +67,7 @@ public final class CompassSettingsScreen extends Screen {
 		"Pause Game While Open",
 		"Other",
 		HiddenStructuresList.TITLE,
+		"Config Directory",
 	};
 	private static final String[] SETTINGS_TOOLTIPS = {
 		null,
@@ -87,6 +90,7 @@ public final class CompassSettingsScreen extends Screen {
 		"Pauses your Singleplayer world while the compass screen is open.",
 		null,
 		"View and restore structures hidden on this client.",
+		"Open the Explorer's Compass config folder for this Minecraft instance.",
 	};
 	private final Map<Integer, ButtonWidget> settingResetButtons = new HashMap<>();
 	private ButtonWidget chatOverlayButton;
@@ -108,6 +112,7 @@ public final class CompassSettingsScreen extends Screen {
 	private final Screen parent;
 	private TransparentTextField searchField;
 	private ButtonWidget hiddenStructuresButton;
+	private ButtonWidget configDirectoryButton;
 	private int settingsFirstRow;
 	private List<Integer> settingsRows = List.of();
 	private boolean draggingScrollbar;
@@ -217,6 +222,9 @@ public final class CompassSettingsScreen extends Screen {
 		hiddenStructuresButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_HIDDEN_ROW),
 				SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.literal("Open"),
 				button -> client.setScreen(new HiddenStructuresScreen(this))));
+		configDirectoryButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CONFIG_DIRECTORY_ROW),
+				SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.literal("Open"),
+				button -> Util.getOperatingSystem().open(ExplorersCompassConfig.configDirectory().toFile())));
 
 		settingResetButtons.clear();
 		draggingScrollbar = false;
@@ -383,6 +391,7 @@ public final class CompassSettingsScreen extends Screen {
 		placeSetting(creativeUnlocksAllButton, SETTINGS_CREATIVE_UNLOCK_ROW);
 		placeSetting(showTeleportOnlyInCreativeButton, SETTINGS_TELEPORT_ROW);
 		placeSetting(hiddenStructuresButton, SETTINGS_HIDDEN_ROW);
+		placeSetting(configDirectoryButton, SETTINGS_CONFIG_DIRECTORY_ROW);
 		settingResetButtons.forEach((row, button) -> placeSetting(button, row));
 	}
 
