@@ -3,6 +3,7 @@ package io.github.enriquemetner.explorerscompass.config;
 import net.minecraft.util.Identifier;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,6 +30,15 @@ class SearchCostsTest {
         assertEquals(2, costs.items().get(PEARL));
         assertEquals(132, SearchCosts.energyAfterConsumingItems(4, 64, costs.items().get(PEARL)));
         assertEquals(-1, SearchCosts.energyAfterConsumingItems(Integer.MAX_VALUE, 1, 2));
+    }
+
+    @Test void keepsChargingItemsInConfigOrder() {
+        var costs = SearchCosts.parse("""
+                {"type":"items","defaultCost":2,"initialEnergy":0,"items":{"minecraft:ender_pearl":8,"minecraft:diamond":1,"minecraft:amethyst_shard":8}}
+                """, key -> Set.of(), id -> true);
+
+        assertEquals(List.of(PEARL, new Identifier("minecraft:diamond"), new Identifier("minecraft:amethyst_shard")),
+                List.copyOf(costs.items().keySet()));
     }
 
     @Test void reportsOverlappingSelectorsOncePerStructure() {

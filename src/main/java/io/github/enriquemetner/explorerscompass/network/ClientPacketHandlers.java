@@ -10,6 +10,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import net.fabricmc.api.EnvType;
@@ -132,7 +133,7 @@ public final class ClientPacketHandlers {
     public static void applyCompassSettings(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         var type = buf.readEnumConstant(SearchCosts.Type.class);
         int energy = buf.readVarInt();
-        var items = buf.readMap(PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);
+        var items = buf.readMap(LinkedHashMap::new, PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);
         boolean equivalent = buf.readBoolean();
         int defaultCost = buf.readVarInt();
         var overrides = buf.readMap(PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);

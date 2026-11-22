@@ -18,6 +18,7 @@ import net.minecraft.util.Identifier;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +39,7 @@ public record SearchCosts(Type type, int defaultCost, Map<Identifier, Integer> o
 
     public SearchCosts {
         overrides = Map.copyOf(overrides);
-        items = Map.copyOf(items);
+        items = Collections.unmodifiableMap(new LinkedHashMap<>(items));
     }
 
     public static SearchCosts active() { return active; }

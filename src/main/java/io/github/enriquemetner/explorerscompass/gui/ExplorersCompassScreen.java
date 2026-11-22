@@ -607,14 +607,11 @@ public class ExplorersCompassScreen extends Screen {
         rows.add(TooltipComponent.of(Text.empty().asOrderedText()));
         rows.add(TooltipComponent.of(Text.literal("Compass Charging Rates:")
                 .formatted(net.minecraft.util.Formatting.AQUA).asOrderedText()));
-        SearchCosts.remote().items().entrySet().stream()
-                .sorted(Map.Entry.<Identifier, Integer>comparingByValue().thenComparing(Map.Entry.comparingByKey()))
-                .forEach(entry -> {
-                    Identifier id = entry.getKey();
-                    ItemStack item = Registries.ITEM.get(id).getDefaultStack();
-                    String name = item.isEmpty() ? id.toString() : item.getName().getString();
-                    rows.add(new ChargingRateRow(item, name + ": ", entry.getValue().toString(), textRenderer.fontHeight));
-                });
+        SearchCosts.remote().items().forEach((id, rate) -> {
+            ItemStack item = Registries.ITEM.get(id).getDefaultStack();
+            String name = item.isEmpty() ? id.toString() : item.getName().getString();
+            rows.add(new ChargingRateRow(item, name + ": ", rate.toString(), textRenderer.fontHeight));
+        });
         ((DrawContextAccessor) context).explorersCompass$drawTooltip(
                 textRenderer, rows, mouseX, mouseY, HoveredTooltipPositioner.INSTANCE);
     }
