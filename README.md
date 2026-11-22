@@ -1,6 +1,6 @@
-# Explorer's Compass
+# Explorer’s Compass: Remastered
 
-Explorer's Compass is a Minecraft mod that allows you to search for and locate structures anywhere in the world. It is the sister mod of [Nature's Compass](https://github.com/MattCzyr/NaturesCompass), which allows you to locate biomes.
+Explorer’s Compass: Remastered is a Minecraft mod that allows you to search for and locate structures anywhere in the world. It is the sister mod of [Nature's Compass](https://github.com/MattCzyr/NaturesCompass), which allows you to locate biomes.
 
 ## Download
 
