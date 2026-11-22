@@ -1,5 +1,9 @@
 package io.github.enriquemetner.explorerscompass.config;
 
+import static io.github.enriquemetner.explorerscompass.config.ServerToml.quotedDiagnosticValue;
+import static io.github.enriquemetner.explorerscompass.config.StructureListLoader.BLACKLIST_KEY;
+import static io.github.enriquemetner.explorerscompass.config.StructureListLoader.WHITELIST_KEY;
+
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
@@ -17,10 +21,10 @@ import java.util.Set;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Section;
+import io.github.enriquemetner.explorerscompass.config.StructureListLoader.StructureListLoad;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Diagnostic;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Severity;
 import io.github.enriquemetner.explorerscompass.util.OverlaySide;
-import io.github.enriquemetner.explorerscompass.util.StructureSelector;
 import io.github.enriquemetner.explorerscompass.util.StructureUtils;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.core.io.ParsingMode;
@@ -45,8 +49,6 @@ public class ExplorersCompassConfig {
 			""";
 	private static final String SERVER_SETTINGS = "server/settings.toml";
 	private static final String CLIENT_SETTINGS = "client/settings.toml";
-	private static final String WHITELIST_KEY = "structureWhitelist";
-	private static final String BLACKLIST_KEY = "structureBlacklist";
 	private static final String WHITELIST = "server/whitelist.toml";
 	private static final String STRUCTURE_LIST_COMMENTS =
 			" Supports the * wildcard. Omitted namespaces default to minecraft:.\n"
@@ -259,99 +261,11 @@ public class ExplorersCompassConfig {
 		}
 	}
 
-	private static Diagnostic fileFailure(Path file, Exception error) {
-		return new Diagnostic(Severity.ERROR, "Could not load " + file.getFileName() + ": " + StartupConfigReport.cause(error));
-	}
-
-	record StructureListLoad(Path file, boolean valid, Diagnostic override,
-							 List<Diagnostic> diagnostics) {
-		Section summary(int available, int loaded) {
-			String message;
-			String filename = file.getFileName().toString();
-			String loadedCount = StartupConfigReport.structureCount(loaded);
-			if (!valid) message = "Could not load " + filename + ". Loaded all " + StartupConfigReport.structureCount(available);
-			else if (filename.equals("whitelist.toml")) message = "Whitelisted and loaded " + loadedCount;
-			else message = "Blacklisted " + StartupConfigReport.structureCount(available - loaded) + " and loaded " + loadedCount;
-			return new Section(message, valid ? null : Severity.ERROR, diagnostics, file);
-		}
-	}
-
 	static StructureListLoad loadStructureLists(Path whitelistFile, Path blacklistFile, Set<Identifier> registeredIds) {
-		var whitelist = readStructureList(whitelistFile, WHITELIST_KEY, registeredIds);
-		structureWhitelist = List.of();
-		structureBlacklist = List.of();
-		if (whitelist.selectors() == null || !whitelist.selectors().isEmpty()) {
-			var result = whitelist.result();
-			if (result.valid()) structureWhitelist = whitelist.selectors();
-			if (!hasBlacklistEntries(blacklistFile)) return result;
-
-			var warning = new Diagnostic(Severity.WARNING, "whitelist.toml overrides the nonempty blacklist.toml");
-			var diagnostics = new ArrayList<>(result.diagnostics());
-			diagnostics.add(0, warning);
-			return new StructureListLoad(result.file(), result.valid(), warning, List.copyOf(diagnostics));
-		}
-		var blacklist = readStructureList(blacklistFile, BLACKLIST_KEY, registeredIds);
-		if (blacklist.selectors() != null) structureBlacklist = blacklist.selectors();
-		return blacklist.result();
-	}
-
-	private static boolean hasBlacklistEntries(Path file) {
-		try {
-			return ServerToml.read(file).config().get(BLACKLIST_KEY) instanceof List<?> entries && !entries.isEmpty();
-		} catch (IOException | IllegalArgumentException ignored) {
-			return false;
-		}
-	}
-
-	private record StructureList(List<String> selectors, StructureListLoad result) {}
-
-	private static StructureList readStructureList(Path file, String key, Set<Identifier> registeredIds) {
-		String filename = file.getFileName().toString();
-		ServerToml document;
-		try {
-			document = ServerToml.read(file);
-		} catch (IOException | IllegalArgumentException error) {
-			var failure = List.of(fileFailure(file, error));
-			return new StructureList(null, new StructureListLoad(file, false, null, failure));
-		}
-		List<Diagnostic> diagnostics = new ArrayList<>();
-		Object value = document.config().get(key);
-		List<String> selectors = new ArrayList<>();
-		var matchesById = new LinkedHashMap<Identifier, List<String>>();
-		if (value instanceof List<?> entries) {
-			for (Object entry : entries) {
-				if (!(entry instanceof String selector)) {
-					diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Expected a string selector in " + quotedDiagnosticValue(key)
-							+ document.assignmentLocation(key) + ", found " + quotedDiagnosticValue(entry)));
-					continue;
-				}
-				selectors.add(selector);
-				String detail = quotedDiagnosticValue(selector) + document.selectorLocation(selector);
-				Set<Identifier> matches;
-				try {
-					matches = new StructureSelector(selector).matchingIds(registeredIds);
-				} catch (IllegalArgumentException error) {
-					diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Invalid structure selector " + detail));
-					continue;
-				}
-				if (matches.isEmpty()) diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": No structures match selector " + detail));
-				for (Identifier match : matches) matchesById.computeIfAbsent(match, ignored -> new ArrayList<>()).add(detail);
-			}
-		} else if (value != null) {
-			diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Expected a string array for " + quotedDiagnosticValue(key)
-					+ document.assignmentLocation(key)));
-		}
-		boolean valid = diagnostics.isEmpty();
-		matchesById.forEach((id, entries) -> {
-			if (entries.size() > 1) diagnostics.add(new Diagnostic(Severity.WARNING,
-					filename + ": " + id + " is listed more than once by " + String.join(", ", entries)));
-		});
-		return new StructureList(valid ? List.copyOf(selectors) : null,
-				new StructureListLoad(file, valid, null, diagnostics));
-	}
-
-	private static String quotedDiagnosticValue(Object value) {
-		return new com.google.gson.JsonPrimitive(String.valueOf(value)).toString();
+		var result = StructureListLoader.load(whitelistFile, blacklistFile, registeredIds);
+		structureWhitelist = result.whitelist();
+		structureBlacklist = result.blacklist();
+		return result.report();
 	}
 
 	public static Path configDirectory() {

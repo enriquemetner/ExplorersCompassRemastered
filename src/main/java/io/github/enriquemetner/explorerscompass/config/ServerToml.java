@@ -39,6 +39,10 @@ record ServerToml(CommentedConfig config, List<String> lines) {
         return uniqueLocation(Pattern.compile("[\"']" + Pattern.quote(selector) + "[\"']"));
     }
 
+    static String quotedDiagnosticValue(Object value) {
+        return new com.google.gson.JsonPrimitive(String.valueOf(value)).toString();
+    }
+
     private String uniqueLocation(Pattern pattern) {
         int found = -1;
         for (int i = 0; i < lines.size(); i++) {
