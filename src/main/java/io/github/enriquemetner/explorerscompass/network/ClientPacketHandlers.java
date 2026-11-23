@@ -3,19 +3,18 @@ package io.github.enriquemetner.explorerscompass.network;
 import io.github.enriquemetner.explorerscompass.network.compass.RefreshCompassPacket;
 import io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket;
 import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
+import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.gui.ExplorersCompassScreen;
 import io.github.enriquemetner.explorerscompass.gui.FilterSelections;
 import io.github.enriquemetner.explorerscompass.gui.UnlockToast;
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ListMultimap;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
@@ -34,9 +33,9 @@ public final class ClientPacketHandlers {
     public static boolean whitelistActive;
     public static boolean showNetherEquivalent;
     public static boolean useClassicCompass;
-    public static java.util.Set<Identifier> excludedStructures = java.util.Set.of();
+    public static Set<Identifier> excludedStructures = Set.of();
     public static Map<Identifier, RequirementNode> partyRequirements = Map.of();
-    public static java.util.Set<Identifier> latestUnlockedStructures = java.util.Set.of();
+    public static Set<Identifier> latestUnlockedStructures = Set.of();
 
     public static void applyCurrentStructure(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
         var request = buf.readUuid();
@@ -53,11 +52,10 @@ public final class ClientPacketHandlers {
 
     public static void applyStructureRequirements(MinecraftClient client, ClientPlayNetworkHandler handler,
                                                   PacketByteBuf buf, PacketSender sender) {
-        int requestId = buf.readVarInt();
-        RequirementNode requirements = buf.readBoolean() ? RequirementNode.read(buf) : null;
+        var response = StructureRequirementsPacket.readResponse(buf);
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onStructureRequirements(requestId, requirements);
+                screen.onStructureRequirements(response.requestId(), response.requirements());
             }
         });
     }
@@ -149,79 +147,39 @@ public final class ClientPacketHandlers {
     }
 
     public static void applySync(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender responseSender) {
-        final boolean canTeleport = buf.readBoolean();
-        final boolean canExcludeVisited = buf.readBoolean();
-        final boolean infiniteXp = buf.readBoolean();
-        final List<Identifier> allowedStructureIDs = new ArrayList<Identifier>();
-        final ListMultimap<Identifier, Identifier> allowedStructureIDsToDimensionIDs = ArrayListMultimap.create();
-        final Map<Identifier, Identifier> structureIDsToSetIDs = new HashMap<Identifier, Identifier>();
-
-        final int numStructures = buf.readInt();
-        for (int i = 0; i < numStructures; i++) {
-            Identifier structureID = buf.readIdentifier();
-            int numDimensions = buf.readInt();
-            List<Identifier> dimensionIDs = new ArrayList<Identifier>();
-            for (int j = 0; j < numDimensions; j++) {
-                dimensionIDs.add(buf.readIdentifier());
-            }
-            Identifier setID = buf.readIdentifier();
-
-            if (structureID != null) {
-                allowedStructureIDs.add(structureID);
-                allowedStructureIDsToDimensionIDs.putAll(structureID, dimensionIDs);
-                structureIDsToSetIDs.put(structureID, setID);
-            }
-        }
-
-        boolean showLatestFilter = buf.readBoolean();
-        int latestCount = buf.readVarInt();
-        if (latestCount < 0 || latestCount > 100000) throw new IllegalArgumentException("Invalid latest unlocked count");
-        java.util.Set<Identifier> latest = new java.util.HashSet<>();
-        for (int i = 0; i < latestCount; i++) latest.add(buf.readIdentifier());
-        Identifier tracked = buf.readBoolean() ? buf.readIdentifier() : null;
-        List<RequirementNode> descriptions = new ArrayList<>();
-        int descriptionCount = buf.readInt();
-        for (int i = 0; i < descriptionCount; i++) descriptions.add(RequirementNode.read(buf));
-        Map<Identifier, RequirementNode> lockedRequirements = readRequirements(buf, descriptions, numStructures);
-        Map<Identifier, RequirementNode> shared = buf.isReadable()
-                ? readRequirements(buf, descriptions, numStructures) : Map.of();
-        java.util.Set<Identifier> excluded = new java.util.HashSet<>();
-        if (buf.isReadable()) {
-            int count = buf.readVarInt();
-            if (count < 0 || count > 100000) throw new IllegalArgumentException("Invalid excluded structure count");
-            for (int i = 0; i < count; i++) excluded.add(buf.readIdentifier());
-        }
-
-        boolean whitelist = buf.isReadable() && buf.readBoolean();
-        boolean showRequirements = buf.isReadable() ? buf.readBoolean() : showLatestFilter;
+        var sync = SyncPacket.read(buf);
         client.execute(() -> {
-            whitelistActive = whitelist;
-            ExplorersCompass.lockedRequirements = lockedRequirements;
-            if (lockedRequirements.isEmpty()) FilterSelections.clearExcludeLocked();
-            partyRequirements = shared;
-            excludedStructures = java.util.Set.copyOf(excluded);
+            whitelistActive = sync.whitelistActive();
+            ExplorersCompass.lockedRequirements = sync.lockedRequirements();
+            if (sync.lockedRequirements().isEmpty()) FilterSelections.clearExcludeLocked();
+            partyRequirements = sync.partyRequirements();
+            excludedStructures = sync.excludedStructures();
             ExplorersCompass.synced = true;
-            trackedStructureId = tracked;
-            latestUnlockedStructures = java.util.Set.copyOf(latest);
-            showNewlyUnlockedFilter = showLatestFilter;
-            showStructureRequirements = showRequirements;
-            if (!showLatestFilter && FilterSelections.newlyUnlocked()) {
+            trackedStructureId = sync.trackedStructureId();
+            latestUnlockedStructures = sync.latestUnlocked();
+            showNewlyUnlockedFilter = sync.showNewlyUnlockedFilter();
+            showStructureRequirements = sync.showStructureRequirements();
+            if (!sync.showNewlyUnlockedFilter() && FilterSelections.newlyUnlocked()) {
                 FilterSelections.clearNewlyUnlocked();
                 if (client.currentScreen instanceof ExplorersCompassScreen screen) screen.showNormalResults();
             }
-            ExplorersCompass.canTeleport = canTeleport;
-            ExplorersCompass.canExcludeVisited = canExcludeVisited;
-            ExplorersCompass.infiniteXp = infiniteXp;
-            ExplorersCompass.allowedStructureIDs = allowedStructureIDs;
-            ExplorersCompass.allowedStructureIDsToDimensionIDs = allowedStructureIDsToDimensionIDs;
-            ExplorersCompass.structureIDsToSetIDs = structureIDsToSetIDs;
+            ExplorersCompass.canTeleport = sync.canTeleport();
+            ExplorersCompass.canExcludeVisited = sync.canExcludeVisited();
+            ExplorersCompass.infiniteXp = sync.infiniteXp();
+            ExplorersCompass.allowedStructureIDs = sync.allowedStructureIDs();
+            ExplorersCompass.allowedStructureIDsToDimensionIDs = sync.dimensionIDs();
+            ExplorersCompass.structureIDsToSetIDs = sync.setIDs();
         });
     }
-    private static Map<Identifier, RequirementNode> readRequirements(PacketByteBuf buf, List<RequirementNode> descriptions, int maxEntries) {
-        int count = buf.readInt();
-        if (count < 0 || count > maxEntries) throw new IllegalArgumentException("Invalid requirements count");
-        Map<Identifier, RequirementNode> requirements = new HashMap<>();
-        for (int i = 0; i < count; i++) requirements.put(buf.readIdentifier(), descriptions.get(buf.readInt()));
-        return Map.copyOf(requirements);
+
+    public static void clearOnDisconnect() {
+        whitelistActive = false;
+        showNetherEquivalent = false;
+        useClassicCompass = false;
+        excludedStructures = Set.of();
+        partyRequirements = Map.of();
+        latestUnlockedStructures = Set.of();
+        showNewlyUnlockedFilter = false;
+        showStructureRequirements = false;
     }
 }

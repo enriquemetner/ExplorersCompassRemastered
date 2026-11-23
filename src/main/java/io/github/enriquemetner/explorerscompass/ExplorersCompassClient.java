@@ -60,14 +60,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
             io.github.enriquemetner.explorerscompass.config.SearchCosts.clearRemote();
             needle.clear();
-            ClientPacketHandlers.whitelistActive = false;
-            ClientPacketHandlers.showNetherEquivalent = false;
-            ClientPacketHandlers.useClassicCompass = false;
-            ClientPacketHandlers.excludedStructures = java.util.Set.of();
-            ClientPacketHandlers.partyRequirements = java.util.Map.of();
-            ClientPacketHandlers.latestUnlockedStructures = java.util.Set.of();
-            ClientPacketHandlers.showNewlyUnlockedFilter = false;
-            ClientPacketHandlers.showStructureRequirements = false;
+            ClientPacketHandlers.clearOnDisconnect();
             client.execute(ExplorersCompassScreen::clearWorldSearchState);
         });
 		

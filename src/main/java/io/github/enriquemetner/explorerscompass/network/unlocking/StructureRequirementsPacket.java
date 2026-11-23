@@ -17,6 +17,8 @@ import net.minecraft.util.Identifier;
 public final class StructureRequirementsPacket {
     public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "structure_requirements");
 
+    public record Response(int requestId, RequirementNode requirements) {}
+
     private StructureRequirementsPacket() {}
 
     public static PacketByteBuf request(int requestId, Identifier structureId) {
@@ -24,6 +26,20 @@ public final class StructureRequirementsPacket {
         request.writeVarInt(requestId);
         request.writeIdentifier(structureId);
         return request;
+    }
+
+    public static Response readResponse(PacketByteBuf buf) {
+        int requestId = buf.readVarInt();
+        RequirementNode requirements = buf.readBoolean() ? RequirementNode.read(buf) : null;
+        return new Response(requestId, requirements);
+    }
+
+    static PacketByteBuf writeResponse(int requestId, RequirementNode requirements) {
+        var response = PacketByteBufs.create();
+        response.writeVarInt(requestId);
+        response.writeBoolean(requirements != null);
+        if (requirements != null) requirements.write(response);
+        return response;
     }
 
     public static void apply(MinecraftServer server, ServerPlayerEntity player, ServerPlayNetworkHandler handler,
@@ -37,11 +53,7 @@ public final class StructureRequirementsPacket {
             RequirementNode requirements = structure != null && !StructureUtils.structureIdIsExcluded(id)
                     && !StructureUtils.structureIsHidden(world, structure)
                     ? UnlockingRules.get().inspectRequirements(player, id) : null;
-            var response = PacketByteBufs.create();
-            response.writeVarInt(requestId);
-            response.writeBoolean(requirements != null);
-            if (requirements != null) requirements.write(response);
-            ServerPlayNetworking.send(player, ID, response);
+            ServerPlayNetworking.send(player, ID, writeResponse(requestId, requirements));
         });
     }
 }
