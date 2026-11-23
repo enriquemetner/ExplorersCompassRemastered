@@ -1,5 +1,9 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
+
+import io.github.enriquemetner.explorerscompass.gui.widgets.HitBox;
+
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.client.RenderUtils;
 import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
@@ -70,24 +74,24 @@ final class HiddenStructuresList {
         return rowY + (20 - StructureSearchList.ACTION_BUTTON_HEIGHT) / 2;
     }
 
-    ButtonPress removeButtonAt(double x, double y, TextRenderer font, int width, int top, int bottom, Runnable onRemove) {
+    Runnable removeButtonAt(double x, double y, TextRenderer font, int width, int top, int bottom, Runnable onRemove) {
         int firstY = top + 6;
         if (y < firstY || y >= bottom) return null;
         int row = (int) (y - firstY) / ROW_HEIGHT;
         int buttonWidth = font.getWidth(REMOVE_LABEL) + StructureSearchList.ACTION_BUTTON_HORIZONTAL_PADDING;
         int buttonX = removeX(width, buttonWidth);
-        if (row >= visibleRows(top, bottom) || !ButtonPress.contains(x, y, buttonX, removeY(firstY + row * ROW_HEIGHT),
+        if (row >= visibleRows(top, bottom) || !HitBox.contains(x, y, buttonX, removeY(firstY + row * ROW_HEIGHT),
                 buttonWidth, StructureSearchList.ACTION_BUTTON_HEIGHT)) return null;
         List<String> ids = matchingIds();
         int index = scroll + row;
         if (index >= ids.size()) return null;
         String id = ids.get(index);
-        return new ButtonPress(this, id, () -> {
+        return () -> {
             ExplorersCompassConfig.hiddenStructures.remove(id);
             ExplorersCompassConfig.saveHiddenStructures();
             scroll = Math.min(scroll, maxScroll(matchingIds(), top, bottom));
             onRemove.run();
-        });
+        };
     }
 
     void render(DrawContext context, TextRenderer font, int width, int top, int bottom, int mouseX, int mouseY) {
@@ -118,7 +122,7 @@ final class HiddenStructuresList {
                 context.drawTextWithShadow(font, id, TEXT_X, nameY + font.fontHeight, 0xaaaaaa);
             }
             int buttonY = removeY(y);
-            boolean hovered = mouseY < bottom && ButtonPress.contains(mouseX, mouseY, buttonX, buttonY, buttonWidth, buttonHeight);
+            boolean hovered = mouseY < bottom && HitBox.contains(mouseX, mouseY, buttonX, buttonY, buttonWidth, buttonHeight);
             StructureSearchEntry.drawActionButton(context, font, REMOVE_LABEL, buttonX, buttonY, buttonWidth, buttonHeight, hovered);
         }
         context.disableScissor();

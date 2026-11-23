@@ -1,5 +1,9 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import io.github.enriquemetner.explorerscompass.gui.widgets.IconButton;
+
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
+
 import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentButton;
 import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentTextField;
 
@@ -29,7 +33,7 @@ final class HiddenStructuresScreen extends Screen {
         int backX = closeX - 5 - backWidth;
         int searchX = Math.min(20 + textRenderer.getWidth(title), Math.max(10, backX - 85));
         addDrawableChild(new TransparentButton(backX, 10, backWidth, 20, Text.literal("Back"), button -> close()));
-        addDrawableChild(ExplorersCompassScreen.createCloseButton(closeX, parent::closeSettingsFlow));
+        addDrawableChild(IconButton.close(closeX, parent::closeSettingsFlow));
         search = addDrawableChild(new TransparentTextField(textRenderer, searchX, 10,
                 Math.max(1, backX - 5 - searchX), 20, Text.literal("Search hidden structures")));
         search.setMaxLength(256);
@@ -67,10 +71,10 @@ final class HiddenStructuresScreen extends Screen {
                 if (bar.outsideThumb(y, Scrollbar.GRAB_PADDING)) list.setScroll(bar.offsetForMouse(y, grabOffset));
                 return true;
             }
-            ButtonPress remove = list.removeButtonAt(x, y, textRenderer, width, LIST_TOP, height - 10, () -> {});
+            Runnable remove = list.removeButtonAt(x, y, textRenderer, width, LIST_TOP, height - 10, () -> {});
             if (remove != null) {
                 client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.UI_BUTTON_CLICK, 1.0F));
-                remove.action().run();
+                remove.run();
                 return true;
             }
         }

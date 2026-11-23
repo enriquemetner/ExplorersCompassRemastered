@@ -1,17 +1,21 @@
-package io.github.enriquemetner.explorerscompass.gui;
+package io.github.enriquemetner.explorerscompass.gui.dialog;
 
 import io.github.enriquemetner.explorerscompass.client.RenderUtils;
+import io.github.enriquemetner.explorerscompass.gui.widgets.HitBox;
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
 import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
+
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
+
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 
-final class CurrentStructurePopup {
+public final class CurrentStructureDialog {
     private static final String[] EMPTY_LINES = {
             "This feature shows you which structure you're in.",
             "You need to be in a structure to get a result."
@@ -27,7 +31,7 @@ final class CurrentStructurePopup {
     private boolean dragging;
     private double grabOffset;
 
-    CurrentStructurePopup(TextRenderer font, List<Identifier> matches, int emptyHeight, Consumer<Identifier> select, Runnable close) {
+    public CurrentStructureDialog(TextRenderer font, List<Identifier> matches, int emptyHeight, Consumer<Identifier> select, Runnable close) {
         this.font = font;
         this.emptyHeight = emptyHeight;
         this.matches = matches.stream().sorted(Comparator.comparing(StructureUtils::getStructureName,
@@ -65,14 +69,10 @@ final class CurrentStructurePopup {
                 Scrollbar.pixelThumbHeight(track, maxScroll(layout), 12, 0), scroll, maxScroll(layout));
     }
 
-    void render(DrawContext context, int width, int height, int mouseX, int mouseY) {
+    public void render(DrawContext context, int width, int height, int mouseX, int mouseY) {
         Layout box = layout(width, height);
         scroll = MathHelper.clamp(scroll, 0, maxScroll(box));
-        context.getMatrices().push();
-        context.getMatrices().translate(0, 0, 400);
-        context.fill(0, 0, width, height, 0x88000000);
-        context.fill(box.x - 1, box.y - 1, box.x + box.width + 1, box.y + box.height + 1, 0xff909090);
-        context.fill(box.x, box.y, box.x + box.width, box.y + box.height, 0xff000000);
+        DialogFrame.begin(context, width, height, 400, box.x, box.y, box.width, box.height);
         context.drawCenteredTextWithShadow(font, matches.isEmpty() ? "Not Found" : "Multiple Structures Identified", width / 2, box.y + 10, matches.isEmpty() ? 0xff5555 : 0xffffff);
         if (matches.isEmpty()) {
             for (int i = 0; i < EMPTY_LINES.length; i++) {
@@ -88,8 +88,8 @@ final class CurrentStructurePopup {
                 if (y >= box.bottom()) break;
                 int x = box.x + 8;
                 boolean hovered = mouseY >= box.top() && mouseY < box.bottom()
-                        && ButtonPress.contains(mouseX, mouseY, x, y, box.rowWidth(), ROW_HEIGHT - 2);
-                drawButton(context, x, y, box.rowWidth(), ROW_HEIGHT - 2, hovered);
+                        && HitBox.contains(mouseX, mouseY, x, y, box.rowWidth(), ROW_HEIGHT - 2);
+                DialogButton.background(context, x, y, box.rowWidth(), ROW_HEIGHT - 2, hovered);
                 Identifier id = matches.get(i);
                 RenderUtils.drawTextToFit(context, font, Text.literal(StructureUtils.getStructureName(id)),
                         x + 4, y + 3, box.rowWidth() - 8, 0xffffff);
@@ -99,34 +99,28 @@ final class CurrentStructurePopup {
             context.disableScissor();
             scrollbar(box).render(context, 0xff242424, 0xff909090);
         }
-        boolean backHovered = ButtonPress.contains(mouseX, mouseY, box.backX(), box.backY(), BACK_WIDTH, 20);
-        drawButton(context, box.backX(), box.backY(), BACK_WIDTH, 20, backHovered);
-        context.drawCenteredTextWithShadow(font, "Back", width / 2, box.backY() + 6,
-                0xffffff);
+        backButton(box).render(context, font, mouseX, mouseY, width / 2);
         context.getMatrices().pop();
     }
 
-    private static void drawButton(DrawContext context, int x, int y, int w, int h, boolean hovered) {
-        context.fill(x, y, x + w, y + h, 0xff909090);
-        context.fill(x + 1, y + 1, x + w - 1, y + h - 1, hovered ? 0xff424242 : 0xff242424);
+    private DialogButton backButton(Layout box) {
+        return new DialogButton(box.backX(), box.backY(), BACK_WIDTH, "Back", close);
     }
 
-    ButtonPress buttonAt(double x, double y, int width, int height) {
+    public Runnable actionAt(double x, double y, int width, int height) {
         Layout box = layout(width, height);
-        if (ButtonPress.contains(x, y, box.backX(), box.backY(), BACK_WIDTH, 20)) {
-            return new ButtonPress(this, "back", close);
-        }
+        if (backButton(box).contains(x, y)) return close;
         if (y < box.top() || y >= box.bottom() || x < box.x + 8 || x >= box.x + 8 + box.rowWidth()) return null;
         int offset = (int) (y - box.top()) + (int) scroll;
         int row = offset / ROW_HEIGHT;
         if (row >= matches.size() || offset % ROW_HEIGHT >= ROW_HEIGHT - 2) return null;
         Identifier id = matches.get(row);
-        return new ButtonPress(this, id, () -> select.accept(id));
+        return () -> select.accept(id);
     }
 
-    boolean click(double x, double y, int button, int width, int height) {
+    public boolean click(double x, double y, int button, int width, int height) {
         Layout box = layout(width, height);
-        if (!ButtonPress.contains(x, y, box.x - 1, box.y - 1, box.width + 2, box.height + 2)) {
+        if (!HitBox.contains(x, y, box.x - 1, box.y - 1, box.width + 2, box.height + 2)) {
             close.run();
             return true;
         } else if (button == 0 && scrollbar(box).contains(x, y)) {
@@ -137,13 +131,13 @@ final class CurrentStructurePopup {
         return false;
     }
 
-    void scroll(double amount, int width, int height) {
+    public void scroll(double amount, int width, int height) {
         scroll = Scrollbar.scrollPixels(scroll, amount, ROW_HEIGHT, maxScroll(layout(width, height)));
     }
 
-    void drag(double y, int width, int height) {
+    public void drag(double y, int width, int height) {
         if (dragging) scroll = scrollbar(layout(width, height)).offsetForMouse(y, grabOffset);
     }
 
-    void release() { dragging = false; }
+    public void release() { dragging = false; }
 }

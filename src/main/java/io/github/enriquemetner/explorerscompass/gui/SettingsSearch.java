@@ -3,32 +3,31 @@ package io.github.enriquemetner.explorerscompass.gui;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.function.IntPredicate;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 final class SettingsSearch {
     private SettingsSearch() {}
 
-    static List<Integer> matchingRows(String[] labels, IntPredicate isDivider, String query) {
-        return matchingRows(labels, isDivider, query, row -> true);
-    }
-
-    static List<Integer> matchingRows(String[] labels, IntPredicate isDivider, String query, IntPredicate isAvailable) {
+    static <T> List<T> matchingRows(List<T> entries, Function<T, String> label, Predicate<T> isDivider,
+                                    String query, Predicate<T> isAvailable) {
         String[] fragments = fragments(query);
-        List<Integer> rows = new ArrayList<>();
-        int section = -1;
-        int displayedSection = -1;
+        List<T> rows = new ArrayList<>();
+        T section = null;
+        boolean sectionShown = false;
         String sectionName = "";
-        for (int row = 0; row < labels.length; row++) {
+        for (T row : entries) {
             if (isDivider.test(row)) {
                 section = row;
-                sectionName = labels[row];
+                sectionShown = false;
+                sectionName = label.apply(row);
                 continue;
             }
-            String searchable = (sectionName + " " + labels[row]).toLowerCase(Locale.ROOT);
+            String searchable = (sectionName + " " + label.apply(row)).toLowerCase(Locale.ROOT);
             if (!isAvailable.test(row) || !matches(searchable, fragments, null)) continue;
-            if (section != displayedSection) {
+            if (!sectionShown && section != null) {
                 rows.add(section);
-                displayedSection = section;
+                sectionShown = true;
             }
             rows.add(row);
         }

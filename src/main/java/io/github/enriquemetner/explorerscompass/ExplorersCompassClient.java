@@ -1,6 +1,7 @@
 package io.github.enriquemetner.explorerscompass;
 
 import io.github.enriquemetner.explorerscompass.gui.ExplorersCompassScreen;
+import io.github.enriquemetner.explorerscompass.gui.widgets.IconButton;
 import io.github.enriquemetner.explorerscompass.network.SyncPacket;
 import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
 import io.github.enriquemetner.explorerscompass.network.search.CurrentStructurePacket;
@@ -35,6 +36,7 @@ public class ExplorersCompassClient implements ClientModInitializer {
 	
 	@Override
 	public void onInitializeClient() {
+        IconButton.registerReloadListener();
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             if (!(screen instanceof HandledScreen<?> inventory)) return;
             ScreenMouseEvents.allowMouseClick(screen).register((ignored, x, y, button) ->

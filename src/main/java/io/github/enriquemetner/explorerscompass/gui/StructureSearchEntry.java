@@ -1,5 +1,9 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import io.github.enriquemetner.explorerscompass.gui.widgets.CostRendering;
+
+import io.github.enriquemetner.explorerscompass.gui.widgets.HitBox;
+
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
@@ -20,7 +24,6 @@ import net.minecraft.util.Identifier;
 @Environment(EnvType.CLIENT)
 public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<StructureSearchEntry> {
 	private static final Identifier LOCK_TEXTURE = new Identifier(ExplorersCompass.MODID, "textures/gui/lock.png");
-
 
 	private final MinecraftClient client;
 	private final ExplorersCompassScreen parentScreen;
@@ -46,7 +49,7 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
             int x = structuresList.previewX();
             int y = structuresList.previewY(top, height);
             int size = JesThumbnails.SIZE;
-            boolean previewHovered = hovered && ButtonPress.contains(mouseX, mouseY, x, y, size, size);
+            boolean previewHovered = hovered && HitBox.contains(mouseX, mouseY, x, y, size, size);
             context.fill(x, y, x + size, y + size, actionBackground(previewHovered));
             var previews = parentScreen.jesThumbnails();
             if (!previews.draw(context, structureID, x, y)) {
@@ -61,13 +64,13 @@ public class StructureSearchEntry extends AlwaysSelectedEntryListWidget.Entry<St
         int buttonY = top + (height - actionsHeight) / 2;
         int controlsX = structuresList.rowControlsX();
         int cost = SearchCosts.remote().cost(structureID);
-        int costWidth = parentScreen.costLineWidth("", cost, "");
+        int costWidth = CostRendering.width(client.textRenderer, "", cost, "");
         boolean showCost = SearchCosts.remote().showsSearchCosts() && !ExplorersCompassConfig.hideSearchCost;
         int costX = controlsX - 5 - costWidth;
         int textRight = showCost ? costX : controlsX;
         int textWidth = Math.max(1, textRight - left - 10);
         if (showCost) {
-            parentScreen.renderCostLine(context, costX + costWidth / 2,
+            CostRendering.draw(context, client.textRenderer, costX + costWidth / 2,
                     top + (height - client.textRenderer.fontHeight) / 2, "", cost, "");
         }
         String readableName = StructureUtils.getStructureName(structureID);

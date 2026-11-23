@@ -1,17 +1,41 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.adjustRowsToFitView;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.checkedFiltersFirst;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.clearFiltersOnClose;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.clearSearchBarOnClose;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.closeOnFound;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.creativeUnlocksAll;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.displayWithChatOpen;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.hideSearchCost;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.matchSearchWordsInAnyOrder;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.overlayLineOffset;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.overlaySide;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.pauseGameWhenOpen;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.saveClient;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.showOnlyMatchingFilterOptions;
+import static io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.showTeleportOnlyInCreative;
+
+import io.github.enriquemetner.explorerscompass.ExplorersCompass;
+import io.github.enriquemetner.explorerscompass.client.RenderUtils;
+import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
+import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
+import io.github.enriquemetner.explorerscompass.config.OverlaySide;
+import io.github.enriquemetner.explorerscompass.config.SearchCosts;
+import io.github.enriquemetner.explorerscompass.gui.widgets.IconButton;
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
 import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentButton;
 import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentTextField;
-import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
-import io.github.enriquemetner.explorerscompass.config.SearchCosts;
-import io.github.enriquemetner.explorerscompass.config.OverlaySide;
-import io.github.enriquemetner.explorerscompass.client.RenderUtils;
+
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -35,94 +59,111 @@ public final class CompassSettingsScreen extends Screen {
 	private static final int SETTINGS_RESET_ICON_SIZE = 9;
 	private static final int SETTINGS_RESET_LABEL_GAP = 4;
 	private static final String SETTINGS_RESET_ALL_LABEL = "All";
-	private static final int SETTINGS_OFFSET_ROW = 2;
-	private static final int SETTINGS_HIDE_SEARCH_COST_ROW = 7;
-	private static final int SETTINGS_CLOSE_ON_FOUND_ROW = 9;
-	private static final int SETTINGS_CLEAR_SEARCH_ROW = 10;
-	private static final int SETTINGS_CLEAR_FILTERS_ROW = 11;
-	private static final int SETTINGS_MATCH_SEARCH_WORDS_ROW = 12;
-	private static final int SETTINGS_MATCHING_FILTER_OPTIONS_ROW = 13;
-	private static final int SETTINGS_HIDDEN_ROW = 19;
-	private static final int SETTINGS_CONFIG_DIRECTORY_ROW = 20;
-	private static final int SETTINGS_PAUSE_ROW = 17;
-	private static final int SETTINGS_CREATIVE_UNLOCK_ROW = 15;
-	private static final int SETTINGS_TELEPORT_ROW = 16;
 	private static final int SETTINGS_DIVIDER_COLOR = 0xff909090;
-	private static final String[] SETTINGS_LABELS = {
-		"HUD",
-		"HUD Side",
-		"Vertical HUD offset",
-		"Show While Chat Is Open",
-		"View",
-		"Adjust Rows to Fit View",
-		"Checked Filters On Top",
-		"Hide Search Costs",
-		"Behavior",
-		"Close UI When located",
-		"Clear Search Bar on Close",
-		"Clear Filters on Close",
-		"Flexible Search",
-		"Show Only Matching Filter Options",
-		"Creative & Singleplayer",
-		"Unlock All Structures in Creative",
-		"Show Teleport Only in Creative",
-		"Pause Game While Open",
-		"Other",
-		HiddenStructuresList.TITLE,
-		"Config Directory",
-	};
-	private static final String[] SETTINGS_TOOLTIPS = {
-		null,
-		"Choose the position of the compass pointing information on the screen.",
-		"Move the compass pointing information vertically.\nHigher values move it down;\nLower values move it up.",
-		"Keep compass pointing information visible while the chat is shown.",
-		null,
-		"Adjusts the spacing of rows, showing less content but only fully visible list entries.",
-		"Show checked filter options separately above unchecked ones.",
-		"Hide all structure search costs from the list.\nReasonable when all structures have the same search cost.",
-		null,
-		"Immediately close the compass screen when the compass finds a structure.",
-		"Clear the search bar when you close the screen.",
-		"Clear selected filters when you close the compass screen.",
-		"Match every typed word fragment contained in a structure name, in any order.\nExample: \"vil pla\" can match \"Village Plains\".",
-		"Hide filter options which would produce an empty list if checked.\nExample: Checking \"The Nether\" would hide the \"Villages\" set.",
-		null,
-		"Unlock all structures while in Creative mode.\nChanging the mode back relocks the right structures.",
-		"Hide the teleport button in any game mode other than Creative.",
-		"Pauses your Singleplayer world while the compass screen is open.",
-		null,
-		"View and restore structures hidden on this client.",
-		"Open the Explorer's Compass config folder for this Minecraft instance.",
-	};
-	private final Map<Integer, ButtonWidget> settingResetButtons = new HashMap<>();
-	private ButtonWidget chatOverlayButton;
-	private ButtonWidget showOnlyMatchingFilterOptionsButton;
-	private ButtonWidget matchSearchWordsButton;
-	private ButtonWidget hideSearchCostButton;
-	private ButtonWidget overlaySideButton;
-	private ButtonWidget clearOnCloseButton;
-	private ButtonWidget clearSearchBarOnCloseButton;
-	private ButtonWidget pauseGameWhenOpenButton;
-	private ButtonWidget creativeUnlocksAllButton;
-	private ButtonWidget showTeleportOnlyInCreativeButton;
-	private ButtonWidget closeOnFoundButton;
-	private ButtonWidget checkedFiltersFirstButton;
-	private ButtonWidget adjustRowsToFitViewButton;
-	private ButtonWidget offsetDecreaseButton;
-	private ButtonWidget offsetIncreaseButton;
 
+	record SettingRow(String label, String tooltip, ClientSetting reset, int tabOrder,
+					  Supplier<Text> value, Runnable activate) {
+		static SettingRow section(String label) {
+			return new SettingRow(label, null, null, -1, null, null);
+		}
+
+		boolean divider() { return tooltip == null; }
+		boolean offset() { return reset == ClientSetting.OVERLAY_LINE_OFFSET; }
+		boolean available(boolean showCosts) { return reset != ClientSetting.HIDE_SEARCH_COST || showCosts; }
+	}
+
+	private final Map<SettingRow, List<ButtonWidget>> controls = new LinkedHashMap<>();
+	private final Map<SettingRow, ButtonWidget> resetButtons = new LinkedHashMap<>();
+	private final List<SettingRow> rows = createRows();
 	private final Screen parent;
 	private TransparentTextField searchField;
-	private ButtonWidget hiddenStructuresButton;
-	private ButtonWidget configDirectoryButton;
 	private int settingsFirstRow;
-	private List<Integer> settingsRows = List.of();
+	private List<SettingRow> settingsRows = List.of();
 	private boolean draggingScrollbar;
 	private double grabOffset;
 
 	public CompassSettingsScreen(Screen parent) {
 		super(Text.literal("Settings"));
 		this.parent = parent;
+	}
+
+	List<SettingRow> matchingRows(String query, boolean showCosts) {
+		return SettingsSearch.matchingRows(rows, SettingRow::label, SettingRow::divider, query, row -> row.available(showCosts));
+	}
+
+	private List<SettingRow> createRows() {
+		return List.of(
+			SettingRow.section("HUD"),
+			new SettingRow("HUD Side", "Choose the position of the compass pointing information on the screen.", ClientSetting.OVERLAY_SIDE, 0,
+					() -> Text.literal(overlaySide == OverlaySide.LEFT ? "Left" : "Right"),
+					() -> { overlaySide = overlaySide == OverlaySide.LEFT ? OverlaySide.RIGHT : OverlaySide.LEFT; saveClient(); }),
+			new SettingRow("Vertical HUD offset",
+					"Move the compass pointing information vertically.\nHigher values move it down;\nLower values move it up.", ClientSetting.OVERLAY_LINE_OFFSET, 1, null, null),
+			toggle("Show While Chat Is Open",
+					"Keep compass pointing information visible while the chat is shown.",
+					ClientSetting.DISPLAY_WITH_CHAT_OPEN, 2,
+					() -> displayWithChatOpen, value -> displayWithChatOpen = value),
+			SettingRow.section("View"),
+			toggle("Adjust Rows to Fit View",
+					"Adjusts the spacing of rows, showing less content but only fully visible list entries.",
+					ClientSetting.ADJUST_ROWS_TO_FIT_VIEW, 9,
+					() -> adjustRowsToFitView, value -> adjustRowsToFitView = value),
+			toggle("Checked Filters On Top",
+					"Show checked filter options separately above unchecked ones.",
+					ClientSetting.CHECKED_FILTERS_FIRST, 5,
+					() -> checkedFiltersFirst, value -> checkedFiltersFirst = value),
+			toggle("Hide Search Costs",
+					"Hide all structure search costs from the list.\nReasonable when all structures have the same search cost.",
+					ClientSetting.HIDE_SEARCH_COST, 7,
+					() -> hideSearchCost, value -> hideSearchCost = value),
+			SettingRow.section("Behavior"),
+			toggle("Close UI When located",
+					"Immediately close the compass screen when the compass finds a structure.",
+					ClientSetting.CLOSE_ON_FOUND, 10,
+					() -> closeOnFound, value -> closeOnFound = value),
+			toggle("Clear Search Bar on Close",
+					"Clear the search bar when you close the screen.",
+					ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE, 3,
+					() -> clearSearchBarOnClose, value -> clearSearchBarOnClose = value),
+			toggle("Clear Filters on Close",
+					"Clear selected filters when you close the compass screen.",
+					ClientSetting.CLEAR_FILTERS_ON_CLOSE, 4,
+					() -> clearFiltersOnClose, value -> clearFiltersOnClose = value),
+			toggle("Flexible Search",
+					"Match every typed word fragment contained in a structure name, in any order.\nExample: \"vil pla\" can match \"Village Plains\".",
+					ClientSetting.MATCH_SEARCH_WORDS_IN_ANY_ORDER, 8,
+					() -> matchSearchWordsInAnyOrder, value -> matchSearchWordsInAnyOrder = value),
+			toggle("Show Only Matching Filter Options",
+					"Hide filter options which would produce an empty list if checked.\nExample: Checking \"The Nether\" would hide the \"Villages\" set.",
+					ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS, 6,
+					() -> showOnlyMatchingFilterOptions, value -> showOnlyMatchingFilterOptions = value),
+			SettingRow.section("Creative & Singleplayer"),
+			toggle("Unlock All Structures in Creative",
+					"Unlock all structures while in Creative mode.\nChanging the mode back relocks the right structures.",
+					ClientSetting.CREATIVE_UNLOCKS_ALL, 12,
+					() -> creativeUnlocksAll, value -> creativeUnlocksAll = value),
+			toggle("Show Teleport Only in Creative",
+					"Hide the teleport button in any game mode other than Creative.",
+					ClientSetting.SHOW_TELEPORT_ONLY_IN_CREATIVE, 13,
+					() -> showTeleportOnlyInCreative, value -> showTeleportOnlyInCreative = value),
+			toggle("Pause Game While Open",
+					"Pauses your Singleplayer world while the compass screen is open.",
+					ClientSetting.PAUSE_GAME_WHEN_OPEN, 11,
+					() -> pauseGameWhenOpen, value -> pauseGameWhenOpen = value),
+			SettingRow.section("Other"),
+			new SettingRow(HiddenStructuresList.TITLE, "View and restore structures hidden on this client.", null, 14,
+					() -> Text.literal("Open"), () -> client.setScreen(new HiddenStructuresScreen(this))),
+			new SettingRow("Config Directory", "Open the Explorer's Compass config folder for this Minecraft instance.", null, 15,
+					() -> Text.literal("Open"), () -> Util.getOperatingSystem().open(ExplorersCompassConfig.configDirectory().toFile()))
+		);
+	}
+
+	private static SettingRow toggle(String label, String tooltip, ClientSetting reset, int tabOrder,
+									 BooleanSupplier value, Consumer<Boolean> change) {
+		return new SettingRow(label, tooltip, reset, tabOrder, () -> onOff(value.getAsBoolean()), () -> {
+			change.accept(!value.getAsBoolean());
+			saveClient();
+		});
 	}
 
 	@Override
@@ -138,112 +179,16 @@ public final class CompassSettingsScreen extends Screen {
 		int searchX = Math.min(titleEnd, Math.max(HEADER_TITLE_MARGIN, restoreX - HEADER_GAP - 48));
 
 		addDrawableChild(new TransparentButton(backX, 10, backWidth, 20, Text.literal("Back"), button -> close()));
-		addDrawableChild(ExplorersCompassScreen.createCloseButton(closeX, this::closeSettingsFlow));
-		int controlX = settingsControlX();
-		overlaySideButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(1), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.overlaySide = ExplorersCompassConfig.overlaySide == OverlaySide.LEFT ? OverlaySide.RIGHT : OverlaySide.LEFT;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		offsetDecreaseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_OFFSET_ROW), 20, settingsControlHeight(), Text.literal("−"), (onPress) -> {
-			if (ExplorersCompassConfig.overlayLineOffset > 0) {
-				ExplorersCompassConfig.overlayLineOffset--;
-				ExplorersCompassConfig.saveClient();
-			}
-		}));
-		offsetIncreaseButton = addDrawableChild(new TransparentButton(controlX + SETTINGS_CONTROL_WIDTH - 20, settingsRowY(SETTINGS_OFFSET_ROW), 20, settingsControlHeight(), Text.literal("+"), (onPress) -> {
-			if (ExplorersCompassConfig.overlayLineOffset < Integer.MAX_VALUE) {
-				ExplorersCompassConfig.overlayLineOffset++;
-				ExplorersCompassConfig.saveClient();
-			}
-		}));
-		chatOverlayButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(3), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.displayWithChatOpen = !ExplorersCompassConfig.displayWithChatOpen;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		clearSearchBarOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLEAR_SEARCH_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.clearSearchBarOnClose = !ExplorersCompassConfig.clearSearchBarOnClose;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		clearOnCloseButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLEAR_FILTERS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.clearFiltersOnClose = !ExplorersCompassConfig.clearFiltersOnClose;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		checkedFiltersFirstButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(6), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.checkedFiltersFirst = !ExplorersCompassConfig.checkedFiltersFirst;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		showOnlyMatchingFilterOptionsButton = addDrawableChild(new TransparentButton(controlX,
-				settingsRowY(SETTINGS_MATCHING_FILTER_OPTIONS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.showOnlyMatchingFilterOptions = !ExplorersCompassConfig.showOnlyMatchingFilterOptions;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		hideSearchCostButton = addDrawableChild(new TransparentButton(controlX,
-				settingsRowY(SETTINGS_HIDE_SEARCH_COST_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.hideSearchCost = !ExplorersCompassConfig.hideSearchCost;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		matchSearchWordsButton = addDrawableChild(new TransparentButton(controlX,
-				settingsRowY(SETTINGS_MATCH_SEARCH_WORDS_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.matchSearchWordsInAnyOrder = !ExplorersCompassConfig.matchSearchWordsInAnyOrder;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		adjustRowsToFitViewButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(5), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), (onPress) -> {
-			ExplorersCompassConfig.adjustRowsToFitView = !ExplorersCompassConfig.adjustRowsToFitView;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		closeOnFoundButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CLOSE_ON_FOUND_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.closeOnFound = !ExplorersCompassConfig.closeOnFound;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		pauseGameWhenOpenButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_PAUSE_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.pauseGameWhenOpen = !ExplorersCompassConfig.pauseGameWhenOpen;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		creativeUnlocksAllButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CREATIVE_UNLOCK_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.creativeUnlocksAll = !ExplorersCompassConfig.creativeUnlocksAll;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		showTeleportOnlyInCreativeButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_TELEPORT_ROW), SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.empty(), button -> {
-			ExplorersCompassConfig.showTeleportOnlyInCreative = !ExplorersCompassConfig.showTeleportOnlyInCreative;
-			ExplorersCompassConfig.saveClient();
-			updateSettingsButtonLabels();
-		}));
-		updateSettingsButtonLabels();
-		hiddenStructuresButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_HIDDEN_ROW),
-				SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.literal("Open"),
-				button -> client.setScreen(new HiddenStructuresScreen(this))));
-		configDirectoryButton = addDrawableChild(new TransparentButton(controlX, settingsRowY(SETTINGS_CONFIG_DIRECTORY_ROW),
-				SETTINGS_CONTROL_WIDTH, settingsControlHeight(), Text.literal("Open"),
-				button -> Util.getOperatingSystem().open(ExplorersCompassConfig.configDirectory().toFile())));
-
-		settingResetButtons.clear();
+		addDrawableChild(IconButton.close(closeX, this::closeSettingsFlow));
+		controls.clear();
+		resetButtons.clear();
 		draggingScrollbar = false;
-		addSettingResetButton(1, ClientSetting.OVERLAY_SIDE);
-		addSettingResetButton(SETTINGS_OFFSET_ROW, ClientSetting.OVERLAY_LINE_OFFSET);
-		addSettingResetButton(3, ClientSetting.DISPLAY_WITH_CHAT_OPEN);
-		addSettingResetButton(5, ClientSetting.ADJUST_ROWS_TO_FIT_VIEW);
-		addSettingResetButton(6, ClientSetting.CHECKED_FILTERS_FIRST);
-		addSettingResetButton(SETTINGS_HIDE_SEARCH_COST_ROW, ClientSetting.HIDE_SEARCH_COST);
-		addSettingResetButton(SETTINGS_CLOSE_ON_FOUND_ROW, ClientSetting.CLOSE_ON_FOUND);
-		addSettingResetButton(SETTINGS_CLEAR_SEARCH_ROW, ClientSetting.CLEAR_SEARCH_BAR_ON_CLOSE);
-		addSettingResetButton(SETTINGS_CLEAR_FILTERS_ROW, ClientSetting.CLEAR_FILTERS_ON_CLOSE);
-		addSettingResetButton(SETTINGS_MATCH_SEARCH_WORDS_ROW, ClientSetting.MATCH_SEARCH_WORDS_IN_ANY_ORDER);
-		addSettingResetButton(SETTINGS_MATCHING_FILTER_OPTIONS_ROW, ClientSetting.SHOW_ONLY_MATCHING_FILTER_OPTIONS);
-		addSettingResetButton(SETTINGS_CREATIVE_UNLOCK_ROW, ClientSetting.CREATIVE_UNLOCKS_ALL);
-		addSettingResetButton(SETTINGS_TELEPORT_ROW, ClientSetting.SHOW_TELEPORT_ONLY_IN_CREATIVE);
-		addSettingResetButton(SETTINGS_PAUSE_ROW, ClientSetting.PAUSE_GAME_WHEN_OPEN);
+		// Preserve the existing tab traversal independently of visual row order.
+		rows.stream().filter(row -> !row.divider()).sorted(Comparator.comparingInt(SettingRow::tabOrder))
+				.forEach(row -> controls.put(row, createControls(row)));
+		for (SettingRow row : rows) {
+			if (row.reset() != null) resetButtons.put(row, addSettingResetButton(row));
+		}
 
 		var restoreDefaultsButton = addDrawableChild(new TransparentButton(restoreX, 10, restoreWidth, 20,
 				Text.literal("Restore Defaults"), ignored -> restoreSettings(ExplorersCompassConfig::restoreClientDefaults)) {
@@ -372,37 +317,45 @@ public final class CompassSettingsScreen extends Screen {
 		updateRows();
 	}
 
-	private void updateRows() {
-		boolean showCosts = client.world == null || SearchCosts.remote().showsSearchCosts();
-		settingsRows = SettingsSearch.matchingRows(SETTINGS_LABELS, this::isSettingsDivider, searchField.getText(),
-				row -> row != SETTINGS_HIDE_SEARCH_COST_ROW || showCosts);
-		settingsFirstRow = MathHelper.clamp(settingsFirstRow, 0, settingsMaxFirstRow());
-		placeSetting(overlaySideButton, 1);
-		placeSetting(offsetDecreaseButton, SETTINGS_OFFSET_ROW);
-		placeSetting(offsetIncreaseButton, SETTINGS_OFFSET_ROW);
-		placeSetting(chatOverlayButton, 3);
-		placeSetting(adjustRowsToFitViewButton, 5);
-		placeSetting(checkedFiltersFirstButton, 6);
-		placeSetting(hideSearchCostButton, SETTINGS_HIDE_SEARCH_COST_ROW);
-		placeSetting(matchSearchWordsButton, SETTINGS_MATCH_SEARCH_WORDS_ROW);
-		placeSetting(showOnlyMatchingFilterOptionsButton, SETTINGS_MATCHING_FILTER_OPTIONS_ROW);
-		placeSetting(closeOnFoundButton, SETTINGS_CLOSE_ON_FOUND_ROW);
-		placeSetting(clearOnCloseButton, SETTINGS_CLEAR_FILTERS_ROW);
-		placeSetting(clearSearchBarOnCloseButton, SETTINGS_CLEAR_SEARCH_ROW);
-		placeSetting(pauseGameWhenOpenButton, SETTINGS_PAUSE_ROW);
-		placeSetting(creativeUnlocksAllButton, SETTINGS_CREATIVE_UNLOCK_ROW);
-		placeSetting(showTeleportOnlyInCreativeButton, SETTINGS_TELEPORT_ROW);
-		placeSetting(hiddenStructuresButton, SETTINGS_HIDDEN_ROW);
-		placeSetting(configDirectoryButton, SETTINGS_CONFIG_DIRECTORY_ROW);
-		settingResetButtons.forEach((row, button) -> placeSetting(button, row));
+	private List<ButtonWidget> createControls(SettingRow row) {
+		int x = settingsControlX(), y = settingsRowY(row);
+		if (row.offset()) {
+			var decrease = addDrawableChild(new TransparentButton(x, y, 20, settingsControlHeight(), Text.literal("−"), button -> {
+				if (overlayLineOffset > 0) {
+					overlayLineOffset--;
+					saveClient();
+				}
+			}));
+			var increase = addDrawableChild(new TransparentButton(x + SETTINGS_CONTROL_WIDTH - 20, y, 20,
+					settingsControlHeight(), Text.literal("+"), button -> {
+				if (overlayLineOffset < Integer.MAX_VALUE) {
+					overlayLineOffset++;
+					saveClient();
+				}
+			}));
+			return List.of(decrease, increase);
+		}
+		return List.of(addDrawableChild(new TransparentButton(x, y, SETTINGS_CONTROL_WIDTH, settingsControlHeight(),
+				row.value().get(), button -> {
+			row.activate().run();
+			updateSettingsButtonLabels();
+		})));
 	}
 
-	private void placeSetting(ButtonWidget button, int row) {
+	private void updateRows() {
+		boolean showCosts = client.world == null || SearchCosts.remote().showsSearchCosts();
+		settingsRows = matchingRows(searchField.getText(), showCosts);
+		settingsFirstRow = MathHelper.clamp(settingsFirstRow, 0, settingsMaxFirstRow());
+		controls.forEach((row, buttons) -> buttons.forEach(button -> placeSetting(button, row)));
+		resetButtons.forEach((row, button) -> placeSetting(button, row));
+	}
+
+	private void placeSetting(ButtonWidget button, SettingRow row) {
 		button.setY(settingsRowY(row) + (SETTINGS_ROW_HEIGHT - settingsControlHeight()) / 2);
 		button.visible = isSettingsRowVisible(row);
 	}
 
-	private int settingsRowY(int row) {
+	private int settingsRowY(SettingRow row) {
 		return filterTop() + (settingsRows.indexOf(row) - settingsFirstRow) * SETTINGS_ROW_HEIGHT;
 	}
 
@@ -414,7 +367,7 @@ public final class CompassSettingsScreen extends Screen {
 		return Math.max(0, settingsRows.size() - settingsVisibleRows());
 	}
 
-	private boolean isSettingsRowVisible(int row) {
+	private boolean isSettingsRowVisible(SettingRow row) {
 		int index = settingsRows.indexOf(row);
 		return index >= settingsFirstRow && index < settingsFirstRow + settingsVisibleRows();
 	}
@@ -431,12 +384,8 @@ public final class CompassSettingsScreen extends Screen {
 		return filterRight() - 10 - SMALL_BUTTON_SIZE;
 	}
 
-	private boolean isSettingsDivider(int row) {
-		return SETTINGS_TOOLTIPS[row] == null;
-	}
-
-	private void renderSettingsDivider(DrawContext context, int row) {
-		String title = SETTINGS_LABELS[row];
+	private void renderSettingsDivider(DrawContext context, SettingRow row) {
+		String title = row.label();
 		int centerX = (filterLeft() + filterRight()) / 2;
 		int centerY = settingsRowY(row) + SETTINGS_ROW_HEIGHT / 2;
 		int halfTitleWidth = textRenderer.getWidth(title) / 2;
@@ -459,12 +408,12 @@ public final class CompassSettingsScreen extends Screen {
 		int labelX = filterLeft() + 10;
 		int labelWidth = Math.max(1, settingsControlX() - labelX - 10);
 		for (int index = settingsFirstRow; index < lastVisibleRow; index++) {
-			int row = settingsRows.get(index);
-			if (isSettingsDivider(row)) {
+			SettingRow row = settingsRows.get(index);
+			if (row.divider()) {
 				renderSettingsDivider(context, row);
 				continue;
 			}
-			String label = SETTINGS_LABELS[row];
+			String label = row.label();
 			int labelY = settingsRowY(row) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight) / 2;
 			int textWidth = textRenderer.getWidth(label);
 			if (textWidth <= labelWidth) {
@@ -480,10 +429,11 @@ public final class CompassSettingsScreen extends Screen {
 		}
 		String offset = Integer.toString(ExplorersCompassConfig.overlayLineOffset);
 		float offsetScale = Math.min(1.0f, 46.0f / Math.max(1, textRenderer.getWidth(offset)));
-		if (isSettingsRowVisible(SETTINGS_OFFSET_ROW)) {
+		SettingRow offsetRow = rows.stream().filter(SettingRow::offset).findFirst().orElseThrow();
+		if (isSettingsRowVisible(offsetRow)) {
 			context.getMatrices().push();
 			context.getMatrices().translate(settingsControlX() + SETTINGS_CONTROL_WIDTH / 2.0,
-					settingsRowY(SETTINGS_OFFSET_ROW) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight * offsetScale) / 2.0, 0);
+					settingsRowY(offsetRow) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight * offsetScale) / 2.0, 0);
 			context.getMatrices().scale(offsetScale, offsetScale, 1.0f);
 			context.drawCenteredTextWithShadow(textRenderer, offset, 0, 0, 0xffffff);
 			context.getMatrices().pop();
@@ -499,11 +449,11 @@ public final class CompassSettingsScreen extends Screen {
 		if (rowIndex >= settingsRows.size() || rowIndex >= settingsFirstRow + settingsVisibleRows()) {
 			return;
 		}
-		int row = settingsRows.get(rowIndex);
-		if (isSettingsDivider(row)) return;
+		SettingRow row = settingsRows.get(rowIndex);
+		if (row.divider()) return;
 		int labelX = filterLeft() + 10;
 		int labelWidth = Math.max(1, settingsControlX() - labelX - 10);
-		String label = SETTINGS_LABELS[row];
+		String label = row.label();
 		int textWidth = textRenderer.getWidth(label);
 		float scale = Math.min(1.0f, (float) labelWidth / Math.max(1, textWidth));
 		double textTop = settingsRowY(row) + (SETTINGS_ROW_HEIGHT - textRenderer.fontHeight) / 2.0f
@@ -513,7 +463,7 @@ public final class CompassSettingsScreen extends Screen {
 			return;
 		}
 		List<Text> lines = new ArrayList<>();
-		for (OrderedText line : textRenderer.wrapLines(Text.literal(SETTINGS_TOOLTIPS[row]), Math.min(240, width - 30))) {
+		for (OrderedText line : textRenderer.wrapLines(Text.literal(row.tooltip()), Math.min(240, width - 30))) {
 			StringBuilder content = new StringBuilder();
 			line.accept((index, style, codePoint) -> {
 				content.appendCodePoint(codePoint);
@@ -525,25 +475,15 @@ public final class CompassSettingsScreen extends Screen {
 	}
 
 	private void updateSettingsButtonLabels() {
-		chatOverlayButton.setMessage(onOff(ExplorersCompassConfig.displayWithChatOpen));
-		hideSearchCostButton.setMessage(onOff(ExplorersCompassConfig.hideSearchCost));
-		matchSearchWordsButton.setMessage(onOff(ExplorersCompassConfig.matchSearchWordsInAnyOrder));
-		showOnlyMatchingFilterOptionsButton.setMessage(onOff(ExplorersCompassConfig.showOnlyMatchingFilterOptions));
-		clearOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearFiltersOnClose));
-		clearSearchBarOnCloseButton.setMessage(onOff(ExplorersCompassConfig.clearSearchBarOnClose));
-		pauseGameWhenOpenButton.setMessage(onOff(ExplorersCompassConfig.pauseGameWhenOpen));
-		creativeUnlocksAllButton.setMessage(onOff(ExplorersCompassConfig.creativeUnlocksAll));
-		showTeleportOnlyInCreativeButton.setMessage(onOff(ExplorersCompassConfig.showTeleportOnlyInCreative));
-		checkedFiltersFirstButton.setMessage(onOff(ExplorersCompassConfig.checkedFiltersFirst));
-		closeOnFoundButton.setMessage(onOff(ExplorersCompassConfig.closeOnFound));
-		adjustRowsToFitViewButton.setMessage(onOff(ExplorersCompassConfig.adjustRowsToFitView));
-		overlaySideButton.setMessage(Text.literal(ExplorersCompassConfig.overlaySide == OverlaySide.LEFT ? "Left" : "Right"));
+		controls.forEach((row, buttons) -> {
+			if (row.value() != null) buttons.get(0).setMessage(row.value().get());
+		});
 	}
 
-	private void addSettingResetButton(int row, ClientSetting setting) {
-		Text label = Text.literal("Restore default for " + SETTINGS_LABELS[row]);
+	private ButtonWidget addSettingResetButton(SettingRow row) {
+		Text label = Text.literal("Restore default for " + row.label());
 		var button = new TransparentButton(settingsResetX(), settingsRowY(row), SMALL_BUTTON_SIZE,
-				settingsControlHeight(), label, ignored -> restoreSettings(setting::restoreDefault)) {
+				settingsControlHeight(), label, ignored -> restoreSettings(row.reset()::restoreDefault)) {
 			@Override
 			protected void renderLabel(DrawContext context, TextRenderer renderer) {
 				int x = getX() + (getWidth() - SETTINGS_RESET_ICON_SIZE) / 2;
@@ -551,12 +491,12 @@ public final class CompassSettingsScreen extends Screen {
 			}
 		};
 		button.setTooltip(Tooltip.of(label));
-		settingResetButtons.put(row, addDrawableChild(button));
+		return addDrawableChild(button);
 	}
 
 	private static void drawSettingsResetIcon(DrawContext context, int x, int top, int height) {
 		int y = top + (height - SETTINGS_RESET_ICON_SIZE) / 2;
-		ExplorersCompassScreen.drawIconWithShadow(context, SETTINGS_RESET_ICON, x, y, SETTINGS_RESET_ICON_SIZE, 1.0f);
+		IconButton.drawWithShadow(context, SETTINGS_RESET_ICON, x, y, SETTINGS_RESET_ICON_SIZE, 1.0f);
 	}
 
 	private static Text onOff(boolean enabled) {

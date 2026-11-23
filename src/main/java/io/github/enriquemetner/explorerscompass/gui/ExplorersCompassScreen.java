@@ -1,55 +1,62 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.client.CompassTextures;
+import io.github.enriquemetner.explorerscompass.compat.jes.JesThumbnails;
+import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
+import io.github.enriquemetner.explorerscompass.config.SearchCosts;
+import io.github.enriquemetner.explorerscompass.gui.dialog.CurrentStructureDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.DisabledStructureDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.EntryDetailsDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.EntryFiltersDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.FoundStructureDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.LockedRequirementsDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.SearchFailureDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.SearchStatusDialog;
+import io.github.enriquemetner.explorerscompass.gui.dialog.SortPriorityDialog;
+import io.github.enriquemetner.explorerscompass.gui.widgets.CostRendering;
+import io.github.enriquemetner.explorerscompass.gui.widgets.IconButton;
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
 import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentButton;
 import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentTextField;
-import io.github.enriquemetner.explorerscompass.config.SearchCosts;
+import io.github.enriquemetner.explorerscompass.items.CompassState;
+import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
+import io.github.enriquemetner.explorerscompass.mixins.client.DrawContextAccessor;
+import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
+import io.github.enriquemetner.explorerscompass.network.compass.RefreshCompassPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.TeleportPacket;
+import io.github.enriquemetner.explorerscompass.network.search.CancelSearchPacket;
+import io.github.enriquemetner.explorerscompass.network.search.CurrentStructurePacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchListedPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
+import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
+import io.github.enriquemetner.explorerscompass.sorting.SortCriterion;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
+import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
+import io.github.enriquemetner.explorerscompass.util.ItemUtils;
+
 import java.text.Collator;
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
-
-import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.compat.jes.JesThumbnails;
-import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
-import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
-import io.github.enriquemetner.explorerscompass.network.search.CurrentStructurePacket;
-import io.github.enriquemetner.explorerscompass.network.search.SearchPacket;
-import io.github.enriquemetner.explorerscompass.network.search.SearchListedPacket;
-import io.github.enriquemetner.explorerscompass.network.search.CancelSearchPacket;
-import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
-import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import io.github.enriquemetner.explorerscompass.network.compass.RefreshCompassPacket;
-import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
-import io.github.enriquemetner.explorerscompass.network.compass.TeleportPacket;
-import io.github.enriquemetner.explorerscompass.sorting.SortCriterion;
-import io.github.enriquemetner.explorerscompass.items.CompassState;
-import io.github.enriquemetner.explorerscompass.util.ItemUtils;
-import io.github.enriquemetner.explorerscompass.client.RenderUtils;
-import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.tooltip.TooltipComponent;
-import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;
 import net.minecraft.client.font.TextRenderer;
-import io.github.enriquemetner.explorerscompass.mixins.client.DrawContextAccessor;
-import net.minecraft.client.sound.PositionedSoundInstance;
+import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;
+import net.minecraft.client.gui.tooltip.TooltipComponent;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -58,9 +65,9 @@ import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
-import org.lwjgl.glfw.GLFW;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.world.World;
+
+import org.lwjgl.glfw.GLFW;
 
 @Environment(EnvType.CLIENT)
 public class ExplorersCompassScreen extends Screen {
@@ -69,36 +76,20 @@ public class ExplorersCompassScreen extends Screen {
 	private static final int SEARCH_BUTTON_GAP = 5;
 	private static final String SELECTION_TOGGLE_TOOLTIP = "List all selected structures, regardless of searched or filtered results.\n"
 			+ "Editing the search bar or filters returns to normal results.";
-	private static final int SORT_ROW_HEIGHT = 20;
-	private static final int SORT_LABEL_GAP = 11;
-	private static final int SORT_HIGHLIGHT_PADDING = 4;
+
 	private static final int HEADER_GAP = 10;
-	private static final int PREFERRED_FILTER_ROW_HEIGHT = 20;
-	private static final int FILTER_HEADER_HEIGHT = 20;
-	private static final int FILTER_HEADER_GAP = 1;
-	private static final int FILTER_COLUMN_GAP = 1;
-	private static final int FILTER_SECTION_GAP = 1;
-	private static final int FILTER_CHECKBOX_SIZE = 9;
-	private static final Identifier CHECKBOX_CHECKED = new Identifier(ExplorersCompass.MODID, "textures/gui/checkbox_checked.png");
-	private static final Identifier CHECKBOX_UNCHECKED = new Identifier(ExplorersCompass.MODID, "textures/gui/checkbox_unchecked.png");
+
 	private static final int HEADER_TITLE_MARGIN = 16;
-	private static final Identifier CLOSE_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/close.png");
-	private static final int CLOSE_ICON_SIZE = 7;
+
 	private static final Identifier CLEAR_FILTERS_ICON = new Identifier(ExplorersCompass.MODID, "textures/gui/clear_filters.png");
 	private static final int CLEAR_FILTERS_ICON_SIZE = 11;
 	private static final int HEADER_BUTTON_TEXT_PADDING = 20;
 	private static final int EXCLUDE_BUTTON_CONTENT_PADDING = HEADER_BUTTON_TEXT_PADDING / 2;
 	private static final int EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP = 5;
-	private static final int SCROLLBAR_WIDTH = Scrollbar.WIDTH;
+
 	private static final int SIDEBAR_BUTTON_STEP = 25;
 	private static String sessionSearchText = "";
 	private String lastSearchFieldText;
-	private static final int SEARCH_DIALOG_WIDTH = 245;
-	private static final int SEARCH_DIALOG_HEIGHT = 119;
-	private static final int SEARCH_DIALOG_TITLE_Y = 32;
-	private static final int FOUND_ACTION_BUTTON_WIDTH = 70;
-	private static final int FOUND_ACTION_BUTTON_GAP = 5;
-	private static final int NOT_FOUND_BUTTON_GAP = 5;
 
 	private World world;
 	private PlayerEntity player;
@@ -107,7 +98,7 @@ public class ExplorersCompassScreen extends Screen {
 	private Identifier foundStructureId;
 	private ItemStack stack;
 	private ExplorersCompassItem explorersCompass;
-	private enum ButtonLayer { STRUCTURES, FILTERS, SORT }
+
 	private ButtonWidget searchButton;
 	private ButtonWidget selectionToggleButton;
 	private boolean selectedOnly;
@@ -130,83 +121,51 @@ public class ExplorersCompassScreen extends Screen {
 	private final StructureSelection structureSelection = new StructureSelection();
 	private StructureSearchList selectionList;
 	private boolean awaitingOpeningSync = true;
-	private EntryDetailsPopup entryDetails;
-	private EntryDetailsPopup requirementsReturnDetails;
+	private EntryDetailsDialog entryDetails;
+	private EntryDetailsDialog requirementsReturnDetails;
 	private int requirementsRequestId;
-	private CurrentStructurePopup currentStructurePopup;
+	private CurrentStructureDialog currentStructureDialog;
 	private UUID currentStructureRequest;
 	private Identifier revealedStructure;
 	private final Set<Identifier> pendingHiddenStructures = new HashSet<>();
 	private final HiddenStructuresList hiddenStructures = new HiddenStructuresList();
 	private boolean filtersOpen;
 	private boolean openingSettings;
+	private final SortPriorityDialog sortPriority;
+	private final FilterPanel filterPanel = new FilterPanel(this::passesStructureVisibility, this::clearCurrentStructureReveal,
+			this::refreshAfterFilterChange, this::showNormalResults);
 
     private boolean hiddenStructuresOpen;
     public void preparePartyRefresh() {
         questReturnScroll = selectionList.getScrollAmount();
         restoreQuestListAfterSync = true;
     }
-    private DisabledStructureView disabledView;
-    private int listedDisabledCount;
+    private DisabledStructureDialog disabledDialog;
+
     private Identifier navigationTarget;
     private Identifier selectionAfterSync;
     private enum Dialog { NONE, LOCKED, DISABLED, WRONG_DIMENSION, INSUFFICIENT_COST, MULTI_COST, SEARCHING, FOUND, NOT_FOUND, INVALID_SEARCH, EXCLUDED, REJECTED }
     private Dialog dialog = Dialog.NONE;
-    private LockedRequirementsView lockedRequirementsView;
+    private LockedRequirementsDialog lockedRequirementsDialog;
     private Identifier lockedRequirementsId;
     private boolean refreshAfterQuestBook;
     private boolean restoreQuestListAfterSync;
     private double questReturnScroll;
-    private int insufficientCost;
-    private int availableEnergy;
-    private long dialogStarted;
-    private long notFoundCompassUpdated;
-    private double notFoundCompassAngle;
-    private double notFoundCompassSpeed;
-    private int activeRequestId;
-    private boolean searchConfirmed;
-    private int searchRadius;
-    private boolean searchedExcludeVisited;
-    private FoundDetailsView foundDetailsView;
-    private double searchFailureScroll;
-    private SearchFailureView searchFailureView;
-    private Identifier searchedId;
-    private boolean searchedListed;
-    private int listedSelectedCount;
-    private int listedSkippedCount;
+
+    private SearchRequest searchRequest;
+    private SearchStatusDialog searchStatusDialog;
+    private FoundStructureDialog foundStructureDialog;
+    private SearchFailureDialog searchFailureDialog;
+
     private boolean successfulClose;
-	private double filterScroll;
 
 	private boolean lastCreativeBypass;
 	private enum ScrollPanel { FILTERS, HIDDEN, SEARCH_FAILURE }
 	private ScrollPanel draggedScrollbar;
 	private boolean draggingStructureScrollbar;
 	private double scrollbarGrabOffset;
-	private final List<List<FilterOption>> filterOptions = List.of(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
-	private FilterSelections.AvailableOptions availableFilterOptions;
-	private boolean showSourceColumn;
-	private final List<SortCriterion> sortOrder = new ArrayList<SortCriterion>();
-	private boolean sortMenuOpen;
-	private int draggedSortRow = -1;
-	private boolean sortOrderChangedDuringDrag;
-	private Identifier entryFiltersId;
-	private int entryFilterFirstRow;
-	private static final int ENTRY_FILTER_ROW_HEIGHT = 20;
-	private record EntryFilterRow(String category, String value, int column, FilterOption option) {}
 
-	private static class FilterOption {
-		private final String label;
-		private final String source;
-		private final Identifier id;
-		private final boolean current;
-
-		private FilterOption(String label, String source, Identifier id, boolean current) {
-			this.label = label;
-			this.source = source;
-			this.id = id;
-			this.current = current;
-		}
-	}
+	private EntryFiltersDialog entryFilters;
 
 	public ExplorersCompassScreen(World world, PlayerEntity player, ItemStack stack, ExplorersCompassItem explorersCompass, List<Identifier> allowedStructureIDs) {
 		super(Text.literal("Select Structure"));
@@ -218,10 +177,8 @@ public class ExplorersCompassScreen extends Screen {
 		FilterSelections.openedInDimension(world.getRegistryKey().getValue());
 
 		setAllowedStructureIDs(allowedStructureIDs);
-		structureIDsMatchingSearch = new ArrayList<Identifier>(allowedStructureIDs);
-		for (String name : ExplorersCompassConfig.sortOrder) {
-			sortOrder.add(SortCriterion.valueOf(name));
-		}
+		structureIDsMatchingSearch = new ArrayList<>(allowedStructureIDs);
+		sortPriority = new SortPriorityDialog(ExplorersCompassConfig.sortOrder, this::saveSortOrder, this::playClickSound);
 
 		if (explorersCompass.getState(stack) == CompassState.FOUND) {
 			foundStructureId = explorersCompass.getStructureID(stack);
@@ -259,14 +216,14 @@ public class ExplorersCompassScreen extends Screen {
 	public void removed() {
         if (openingRequirementAdvancement || openingSettings) return;
 		currentStructureRequest = null;
-		currentStructurePopup = null;
+		currentStructureDialog = null;
 		clearCurrentStructureReveal();
         if (openingJesPreview) return;
         if (jesThumbnails != null) jesThumbnails.close();
         var handler = client.getNetworkHandler();
         boolean connected = handler != null && handler.getConnection().isOpen();
         if (dialog == Dialog.SEARCHING && !successfulClose && connected) {
-            ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(activeRequestId));
+            ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(searchRequest.id));
         }
 		if (ExplorersCompassConfig.clearFiltersOnClose && !FilterSelections.isEmpty()) {
 			FilterSelections.clear();
@@ -282,30 +239,36 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseScrolled(double scroll1, double scroll2, double scroll3) {
-        if (dialog == Dialog.DISABLED) { disabledView.scroll(scroll3); return true; }
-		if (currentStructurePopup != null) { currentStructurePopup.scroll(scroll3, width, height); return true; }
-		if (entryDetails != null) { entryDetails.scroll(scroll3, width, height); return true; }
-		if (entryFiltersId != null) {
-			List<EntryFilterRow> rows = entryFilterRows();
-			entryFilterFirstRow = MathHelper.clamp(entryFilterFirstRow - (int) Math.signum(scroll3), 0,
-					Math.max(0, rows.size() - entryFilterVisibleRows(rows.size())));
-			return true;
-		}
-        if (dialog == Dialog.LOCKED) { lockedRequirementsView.scroll(scroll3); return true; }
-        if (isSearchFailureDialog()) { scrollSearchFailure(scroll3); return true; }
-        if (dialog != Dialog.NONE) return true;
+        switch (inputLayer(OverlayInput.Event.POINTER)) {
+            case DISABLED -> disabledDialog.scroll(scroll3);
+            case CURRENT_STRUCTURE -> currentStructureDialog.scroll(scroll3, width, height);
+            case DETAILS -> entryDetails.scroll(scroll3, width, height);
+            case ENTRY_FILTERS -> entryFilters.scroll(scroll3, width, height);
+            case LOCKED -> lockedRequirementsDialog.scroll(scroll3);
+            case SEARCH -> {
+                if (isSearchFailureDialog()) scrollSearchFailure(scroll3);
+            }
+            default -> {
+                return scrollPage(scroll1, scroll2, scroll3);
+            }
+        }
+        return true;
+    }
+
+    private int hiddenListTop() {
+        return filtersOpen ? 70 : 40;
+    }
+
+    private boolean scrollPage(double scroll1, double scroll2, double scroll3) {
         if (hiddenStructuresOpen) {
-            hiddenStructures.scroll(scroll3, filterTop(), filterBottom());
+            hiddenStructures.scroll(scroll3, hiddenListTop(), height - 10);
             return true;
         }
 		if (filtersOpen) {
-			if (scroll1 >= filterLeft() && scroll1 < filterScrollbarRight() && scroll2 >= filterTop() && scroll2 < filterBottom()) {
-				filterScroll = Scrollbar.scrollPixels(filterScroll, scroll3, filterRowHeight(), filterMaxScroll());
-				return true;
-			}
+			if (filterPanel.scroll(scroll1, scroll2, scroll3)) return true;
 			return super.mouseScrolled(scroll1, scroll2, scroll3);
 		}
-		if (sortMenuOpen) return true;
+		if (sortPriority.isOpen()) return true;
 		return selectionList.mouseScrolled(scroll1, scroll2, scroll3);
 	}
 
@@ -315,14 +278,16 @@ public class ExplorersCompassScreen extends Screen {
 		double scroll = firstOpen ? 0 : selectionList.getScrollAmount();
 		if (searchTextField != null) sessionSearchText = searchTextField.getText();
 		clearChildren();
+		sortPriority.init(textRenderer, width, height);
+		filterPanel.resize(textRenderer, width, height);
 		setupButtons();
-		selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
+		selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - Scrollbar.WIDTH, height - 50, 50);
 		if (isStructureView()) {
 			addDrawableChild(selectionList);
 		}
-		entryFiltersId = null;
+		entryFilters = null;
 		setupTextFields();
-		rebuildFilterOptions();
+		filterPanel.rebuild();
 		processSearchTerm();
 		if (firstOpen) selectionList.focusStructure(foundStructureId);
 		else selectionList.setScrollAmount(scroll);
@@ -336,7 +301,9 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public void tick() {
-        if ((dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_COST) && System.currentTimeMillis() - dialogStarted >= 3000) {
+        if ((dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_COST)
+                && searchStatusDialog.expired(System.currentTimeMillis())) {
+			searchStatusDialog = null;
 			dialog = Dialog.NONE;
 			focusActiveSearchField();
 		}
@@ -349,7 +316,7 @@ public class ExplorersCompassScreen extends Screen {
 			if (lastCreativeBypass && dialog == Dialog.LOCKED && requirementsReturnDetails == null
 					&& !isUnlockedThroughParty(lockedRequirementsId)) {
 				dialog = Dialog.NONE;
-				lockedRequirementsView = null;
+				lockedRequirementsDialog = null;
 				lockedRequirementsId = null;
 			}
 			processSearchTerm();
@@ -367,14 +334,14 @@ public class ExplorersCompassScreen extends Screen {
 				var partyRequirements = ClientPacketHandlers.partyRequirements.get(lockedRequirementsId);
 				var updated = partyRequirements != null ? partyRequirements : ExplorersCompass.lockedRequirements.get(lockedRequirementsId);
 				if (updated == null) {
-                    backLockedPopup();
-                } else if (!lockedRequirementsView.shows(updated)) {
-                    double popupScroll = lockedRequirementsView.scrollPosition();
-                    setLockedPopup(lockedRequirementsId, updated, null);
-                    lockedRequirementsView.restoreScroll(popupScroll);
+                    backLockedDialog();
+                } else if (!lockedRequirementsDialog.shows(updated)) {
+                    double popupScroll = lockedRequirementsDialog.scrollPosition();
+                    setLockedDialog(lockedRequirementsId, updated, null);
+                    lockedRequirementsDialog.restoreScroll(popupScroll);
                 }
 			}
-			entryFiltersId = null;
+			entryFilters = null;
 			boolean focusTrackedStructure = awaitingOpeningSync && !restoreQuestListAfterSync;
 			awaitingOpeningSync = false;
 			foundStructureId = ClientPacketHandlers.trackedStructureId;
@@ -382,8 +349,8 @@ public class ExplorersCompassScreen extends Screen {
 			remove(selectionList);
 			setAllowedStructureIDs(ExplorersCompass.allowedStructureIDs);
 			structureSelection.retain(new HashSet<>(allowedStructureIDs)::contains);
-			structureIDsMatchingSearch = new ArrayList<Identifier>(allowedStructureIDs);
-			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - StructureSearchList.SCROLLBAR_WIDTH, height - 50, 50);
+			structureIDsMatchingSearch = new ArrayList<>(allowedStructureIDs);
+			selectionList = new StructureSearchList(this, client, structureSelection, structureListX(), 40, width - structureListX() - Scrollbar.WIDTH, height - 50, 50);
 			if (isStructureView()) {
 				addDrawableChild(selectionList);
 			}
@@ -393,7 +360,7 @@ public class ExplorersCompassScreen extends Screen {
 			positionTopButtons();
 			positionFilterSearchField();
 			updateViewButtons();
-			rebuildFilterOptions();
+			filterPanel.rebuild();
 			processSearchTerm();
 			selectionList.setScrollAmount(scroll);
             if (selectionAfterSync != null) {
@@ -413,26 +380,26 @@ public class ExplorersCompassScreen extends Screen {
 	public void render(DrawContext context, int mouseX, int mouseY, float partialTicks) {
         // Covered layers still draw, but only the top layer gets the pointer.
         final int offscreen = -10000;
-        boolean dialogExposed = entryDetails == null && currentStructurePopup == null;
+        boolean dialogExposed = entryDetails == null && currentStructureDialog == null;
         boolean filtersExposed = dialogExposed && dialog == Dialog.NONE;
-        boolean sortExposed = filtersExposed && entryFiltersId == null;
-        boolean pageExposed = sortExposed && !sortMenuOpen;
+        boolean sortExposed = filtersExposed && entryFilters == null;
+        boolean pageExposed = sortExposed && !sortPriority.isOpen();
         renderPage(context, pageExposed ? mouseX : offscreen, pageExposed ? mouseY : offscreen, partialTicks);
-        if (sortMenuOpen) renderSortMenu(context, sortExposed ? mouseX : offscreen, sortExposed ? mouseY : offscreen);
-        if (entryFiltersId != null) renderEntryFilters(context, filtersExposed ? mouseX : offscreen, filtersExposed ? mouseY : offscreen);
-        if (dialog != Dialog.NONE && (dialog != Dialog.SEARCHING || searchConfirmed)) {
+        if (sortPriority.isOpen()) sortPriority.render(context, sortExposed ? mouseX : offscreen, sortExposed ? mouseY : offscreen);
+        if (entryFilters != null) entryFilters.render(context, width, height, filtersExposed ? mouseX : offscreen, filtersExposed ? mouseY : offscreen);
+        if (dialog != Dialog.NONE && (dialog != Dialog.SEARCHING || searchRequest.confirmed())) {
             renderSearchDialog(context, dialogExposed ? mouseX : offscreen, dialogExposed ? mouseY : offscreen);
         }
         if (entryDetails != null) entryDetails.render(context, width, height, mouseX, mouseY);
-        if (currentStructurePopup != null) currentStructurePopup.render(context, width, height, mouseX, mouseY);
+        if (currentStructureDialog != null) currentStructureDialog.render(context, width, height, mouseX, mouseY);
     }
 
     private void renderPage(DrawContext context, int mouseX, int mouseY, float partialTicks) {
         renderBackground(context);
 		if (filtersOpen) {
-			renderFilterPanel(context, mouseX, mouseY);
+			filterPanel.render(context, mouseX, mouseY);
         } else if (hiddenStructuresOpen) {
-            hiddenStructures.render(context, textRenderer, width, filterTop(), filterBottom(), mouseX, mouseY);
+            hiddenStructures.render(context, textRenderer, width, hiddenListTop(), height - 10, mouseX, mouseY);
 		}
         SearchCosts costs = SearchCosts.remote();
         boolean showBalance = isStructureView() && costs.showsSearchCosts();
@@ -442,7 +409,7 @@ public class ExplorersCompassScreen extends Screen {
             case XP_LEVELS -> "XP Levels: ";
         };
         int balance = showBalance ? mainViewBalance(costs) : 0;
-        int balanceWidth = showBalance ? costLineWidth(headerLabel, balance, "") : 0;
+        int balanceWidth = showBalance ? CostRendering.width(textRenderer, headerLabel, balance, "") : 0;
         int balanceX = cancelButton.getX() - HEADER_GAP - balanceWidth;
         if (isStructureView()) {
             searchTextField.setWidth(Math.max(1, balanceX - searchTextField.getX() - (showBalance ? HEADER_GAP : 0)));
@@ -450,7 +417,7 @@ public class ExplorersCompassScreen extends Screen {
 		super.render(context, mouseX, mouseY, partialTicks);
         if (showBalance) {
             int balanceY = cancelButton.getY() + (cancelButton.getHeight() - textRenderer.fontHeight) / 2;
-            renderCostLine(context, balanceX + balanceWidth / 2, balanceY, headerLabel, balance, "");
+            CostRendering.draw(context, textRenderer, balanceX + balanceWidth / 2, balanceY, headerLabel, balance, "");
             if (costs.type() == SearchCosts.Type.ITEMS && mouseX >= balanceX && mouseX < balanceX + balanceWidth
                     && mouseY >= balanceY && mouseY < balanceY + textRenderer.fontHeight) {
                 renderEnergyTooltip(context, mouseX, mouseY);
@@ -527,8 +494,8 @@ public class ExplorersCompassScreen extends Screen {
             int labelX = x + iconSize + 2;
             context.drawTextWithShadow(font, label, labelX, textY, 0xffffff);
             int rateX = labelX + font.getWidth(label);
-            drawExperienceNumber(context, font, rate, rateX, textY);
-            drawEnergyOrb(context, font, rateX + font.getWidth(rate) + 3, textY);
+            CostRendering.drawExperienceNumber(context, font, rate, rateX, textY);
+            CostRendering.drawEnergyOrb(context, font, rateX + font.getWidth(rate) + 3, textY);
         }
     }
 
@@ -560,349 +527,21 @@ public class ExplorersCompassScreen extends Screen {
 		}
 	}
 
-	private int sortMenuWidth() {
-		return Math.max(40, Math.min(LockedRequirementsView.WINDOW_WIDTH, width - 24));
-	}
-
-	private int sortMenuX() {
-		return (width - sortMenuWidth()) / 2;
-	}
-
-	private int sortMenuY() {
-		return (height - sortMenuHeight()) / 2;
-	}
-
-	private int sortMenuHeight() { return 65 + sortOrder.size() * SORT_ROW_HEIGHT; }
-	private int sortRowsY() { return sortMenuY() + 30; }
-	private int sortBackY() { return sortRowsY() + sortOrder.size() * SORT_ROW_HEIGHT + 10; }
-	private int sortLabelWidth() {
-		int width = 0;
-		for (SortCriterion criterion : sortOrder) width = Math.max(width, textRenderer.getWidth(criterion.getLabel()));
-		return width;
-	}
-	private int sortNumberRightX() { return sortMenuX() + sortMenuWidth() / 2 - sortLabelWidth() / 2 - SORT_LABEL_GAP; }
-	private int sortArrowsX() { return sortMenuX() + sortMenuWidth() / 2 + (sortLabelWidth() + 1) / 2 + SORT_LABEL_GAP; }
-	private int sortContentLeft() {
-		return sortNumberRightX() - textRenderer.getWidth(sortOrder.size() + ".") - SORT_HIGHLIGHT_PADDING;
-	}
-	private int sortContentRight() { return sortArrowsX() + 5 + SORT_HIGHLIGHT_PADDING; }
-
-	private void closeSortMenu() {
-		commitSortOrder();
-		sortMenuOpen = false;
-		draggedSortRow = -1;
-	}
-
-	private void commitSortOrder() {
-		if (sortOrderChangedDuringDrag) {
-			ExplorersCompassConfig.sortOrder = sortOrder.stream().map(Enum::name).collect(Collectors.toList());
-			ExplorersCompassConfig.saveClient();
-			selectionList.refreshList();
-			sortOrderChangedDuringDrag = false;
-		}
-	}
-
-	private int sortRowAt(double mouseX, double mouseY) {
-		int y = sortRowsY();
-		if (mouseX < sortContentLeft() || mouseX >= sortContentRight() || mouseY < y || mouseY >= y + sortOrder.size() * SORT_ROW_HEIGHT) {
-			return -1;
-		}
-		return (int) (mouseY - y) / SORT_ROW_HEIGHT;
-	}
-
-	private void renderSortMenu(DrawContext context, int mouseX, int mouseY) {
-		int x = sortMenuX();
-		int y = sortMenuY();
-		int menuWidth = sortMenuWidth();
-		context.getMatrices().push();
-		context.getMatrices().translate(0, 0, 300);
-		context.fill(0, 0, width, height, 0x88000000);
-		context.fill(x - 1, y - 1, x + menuWidth + 1, y + sortMenuHeight() + 1, 0xff909090);
-		context.fill(x, y, x + menuWidth, y + sortMenuHeight(), 0xff000000);
-		context.drawCenteredTextWithShadow(textRenderer, Text.literal("Sort Priority"), x + menuWidth / 2, y + 10, 0xffffff);
-		int hoveredRow = sortRowAt(mouseX, mouseY);
-		int centerX = x + menuWidth / 2;
-		int numberRightX = sortNumberRightX();
-		int arrowsX = sortArrowsX();
-		for (int i = 0; i < sortOrder.size(); i++) {
-			int rowY = sortRowsY() + i * SORT_ROW_HEIGHT;
-			if (i == draggedSortRow || i == hoveredRow)
-				context.fill(sortContentLeft(), rowY, sortContentRight(), rowY + SORT_ROW_HEIGHT, 0xff242424);
-			String number = (i + 1) + ".";
-			context.drawTextWithShadow(textRenderer, number, numberRightX - textRenderer.getWidth(number), rowY + 6, 0xffaaaaaa);
-			context.drawCenteredTextWithShadow(textRenderer, sortOrder.get(i).getLabel(), centerX, rowY + 6, 0xffffff);
-			renderSortArrows(context, arrowsX, rowY + 6);
-		}
-		int backX = x + (menuWidth - 70) / 2;
-		int backY = sortBackY();
-		drawDialogButton(context, "Back", backX, backY, 70, mouseX, mouseY);
-		context.getMatrices().pop();
-	}
-
-	private void renderSortArrows(DrawContext context, int x, int y) {
-		int color = 0xffaaaaaa;
-		context.fill(x + 2, y, x + 3, y + 1, color);
-		context.fill(x + 1, y + 1, x + 4, y + 2, color);
-		context.fill(x, y + 2, x + 5, y + 3, color);
-		context.fill(x, y + 4, x + 5, y + 5, color);
-		context.fill(x + 1, y + 5, x + 4, y + 6, color);
-		context.fill(x + 2, y + 6, x + 3, y + 7, color);
-	}
-
-	private int filterLeft() {
-		return SCROLLBAR_WIDTH;
-	}
-
-	private int filterRight() {
-		return width - SCROLLBAR_WIDTH;
-	}
-
-	private int filterScrollbarRight() {
-		return filterRight() + SCROLLBAR_WIDTH;
-	}
-
-	private int filterTop() {
-		return filtersOpen ? 70 : 40;
-	}
-
-	private int filterHeaderTop() {
-		return filterTop();
-	}
-
-	private int filterRowsTop() {
-		return filterHeaderTop() + FILTER_HEADER_HEIGHT + FILTER_HEADER_GAP;
-	}
-
-	private int filterBottom() {
-		return height - 10;
-	}
-
-	private int filterVisibleRows() {
-		int availableHeight = Math.max(1, filterBottom() - filterRowsTop() - FILTER_SECTION_GAP);
-		return Math.max(1, availableHeight / PREFERRED_FILTER_ROW_HEIGHT);
-	}
-
-	private int filterRowHeight() {
-		if (!ExplorersCompassConfig.adjustRowsToFitView) {
-			return PREFERRED_FILTER_ROW_HEIGHT;
-		}
-		int availableHeight = Math.max(1, filterBottom() - filterRowsTop() - FILTER_SECTION_GAP);
-		return Math.max(PREFERRED_FILTER_ROW_HEIGHT, availableHeight / filterVisibleRows());
-	}
-
-	private int filterFullRowsBottom(int sectionStart) {
-		if (!ExplorersCompassConfig.adjustRowsToFitView) {
-			return filterBottom();
-		}
-		int rowsBottom = filterRowsTop() + filterVisibleRows() * filterRowHeight();
-		if (sectionStart >= 0 && filterRowsTop() + sectionStart * filterRowHeight() - visibleFilterScroll() < rowsBottom) {
-			rowsBottom += FILTER_SECTION_GAP;
-		}
-		return Math.min(filterBottom(), rowsBottom);
-	}
-
-	private int filterColumnLeft(int column) {
-		int firstColumn = showSourceColumn ? 0 : 1;
-		int columnCount = showSourceColumn ? 3 : 2;
-		return filterLeft() + (filterRight() - filterLeft()) * (column - firstColumn) / columnCount;
-	}
-
-	private int filterColumnRight(int column) {
-		int firstColumn = showSourceColumn ? 0 : 1;
-		int columnCount = showSourceColumn ? 3 : 2;
-		int edge = filterLeft() + (filterRight() - filterLeft()) * (column - firstColumn + 1) / columnCount;
-		return column == 2 ? edge : edge - FILTER_COLUMN_GAP;
-	}
-
-	private int filterColumnAt(double mouseX, double mouseY) {
-		if (mouseX < filterLeft() || mouseX >= filterRight() || mouseY < filterHeaderTop() || mouseY >= filterBottom()) {
-			return -1;
-		}
-		for (int column = showSourceColumn ? 0 : 1; column < 3; column++) {
-			if (mouseX >= filterColumnLeft(column) && mouseX < filterColumnRight(column)) {
-				return column;
-			}
-		}
-		return -1;
-	}
-
-	private List<FilterOption> visibleFilterOptions(int column) {
-		String query = filterSearchTextField.getText().toLowerCase(Locale.ROOT);
-		List<FilterOption> visible = filterOptions.get(column);
-		if (ExplorersCompassConfig.showOnlyMatchingFilterOptions) {
-			if (availableFilterOptions == null) {
-				availableFilterOptions = FilterSelections.availableOptions(allowedStructureIDs,
-						ExplorersCompass.structureIDsToSetIDs, ExplorersCompass.allowedStructureIDsToDimensionIDs,
-						this::passesStructureVisibility);
-			}
-			visible = visible.stream().filter(option -> filterChecked(column, option) || switch (column) {
-				case 0 -> availableFilterOptions.sources().contains(option.source);
-				case 1 -> availableFilterOptions.dimensions().contains(option.id);
-				default -> availableFilterOptions.sets().contains(option.id);
-			}).toList();
-		}
-		if (!query.isEmpty()) {
-			visible = visible.stream().filter(option -> StructureSearchQuery.matchesFilter(query, option.label,
-					option.source != null ? option.source : option.id == null ? null : option.id.toString())).toList();
-		}
-		if (!ExplorersCompassConfig.checkedFiltersFirst) {
-			return visible;
-		}
-		List<FilterOption> ordered = new ArrayList<>(visible.size());
-		for (FilterOption option : visible) {
-			if (filterChecked(column, option)) {
-				ordered.add(option);
-			}
-		}
-		for (FilterOption option : visible) {
-			if (!filterChecked(column, option)) {
-				ordered.add(option);
-			}
-		}
-		return ordered;
-	}
-
-	private int filterSectionStart(int column, List<FilterOption> options) {
-		if (!ExplorersCompassConfig.checkedFiltersFirst) {
-			return -1;
-		}
-		int checkedCount = 0;
-		for (FilterOption option : options) {
-			if (filterChecked(column, option)) {
-				checkedCount++;
-			}
-		}
-		return checkedCount > 0 && checkedCount < options.size() ? checkedCount : -1;
-	}
-
-	private int filterRowY(int index, int sectionStart) {
-		return filterRowsTop() + index * filterRowHeight() - visibleFilterScroll()
-				+ (sectionStart >= 0 && index >= sectionStart ? FILTER_SECTION_GAP : 0);
-	}
-
-	private int visibleFilterScroll() {
-		return (int) Math.floor(filterScroll);
-	}
-
-	private int filterOptionIndexAt(double mouseY, List<FilterOption> options, int sectionStart) {
-		if (mouseY >= filterFullRowsBottom(sectionStart)) {
-			return -1;
-		}
-		double offset = mouseY - filterRowsTop() + visibleFilterScroll();
-		if (sectionStart >= 0) {
-			int gapStart = sectionStart * filterRowHeight();
-			if (offset >= gapStart && offset < gapStart + FILTER_SECTION_GAP) {
-				return -1;
-			}
-			if (offset >= gapStart + FILTER_SECTION_GAP) {
-				offset -= FILTER_SECTION_GAP;
-			}
-		}
-		int index = (int) Math.floor(offset / filterRowHeight());
-		return index >= 0 && index < options.size() ? index : -1;
-	}
-
-	private int filterMaxScroll() {
-		int maxScroll = 0;
-		for (int column = showSourceColumn ? 0 : 1; column < 3; column++) {
-			List<FilterOption> options = visibleFilterOptions(column);
-			if (ExplorersCompassConfig.adjustRowsToFitView) {
-				maxScroll = Math.max(maxScroll, (options.size() - filterVisibleRows()) * filterRowHeight());
-			} else {
-				int columnHeight = options.size() * filterRowHeight()
-						+ (filterSectionStart(column, options) >= 0 ? FILTER_SECTION_GAP : 0);
-				maxScroll = Math.max(maxScroll, columnHeight - (filterBottom() - filterRowsTop()));
-			}
-		}
-		return Math.max(0, maxScroll);
-	}
-
 	private Scrollbar scrollbarFor(ScrollPanel panel) {
-		int trackHeight = filterBottom() - filterTop();
 		return switch (panel) {
-			case FILTERS -> new Scrollbar(filterRight(), filterTop(), filterBottom(),
-					Scrollbar.pixelThumbHeight(trackHeight, filterMaxScroll(), 32, 8), filterScroll, filterMaxScroll());
-			case HIDDEN -> hiddenStructures.scrollbar(width, filterTop(), filterBottom());
-			case SEARCH_FAILURE -> searchFailureScrollbar();
+			case FILTERS -> filterPanel.scrollbar();
+			case HIDDEN -> hiddenStructures.scrollbar(width, hiddenListTop(), height - 10);
+			case SEARCH_FAILURE -> searchFailureDialog.scrollbar(width, height);
 		};
 	}
 
 	boolean showsStructureSource() {
-		return showSourceColumn;
+		return filterPanel.showsSource();
 	}
 
 	private void setAllowedStructureIDs(List<Identifier> ids) {
 		allowedStructureIDs = new ArrayList<>(ids);
-		showSourceColumn = ids.isEmpty() || ids.stream().anyMatch(id -> !"minecraft".equals(id.getNamespace()));
-	}
-
-	private void rebuildFilterOptions() {
-		availableFilterOptions = null;
-		for (List<FilterOption> options : filterOptions) {
-			options.clear();
-		}
-		Map<String, FilterOption> sources = new HashMap<>();
-		Set<Identifier> dimensions = new TreeSet<>();
-		Set<Identifier> sets = new TreeSet<>();
-		for (Identifier structure : allowedStructureIDs) {
-			String namespace = structure.getNamespace();
-			sources.putIfAbsent(namespace, new FilterOption(StructureUtils.getStructureSource(structure), namespace, null, false));
-			dimensions.addAll(ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structure));
-			Identifier set = ExplorersCompass.structureIDsToSetIDs.get(structure);
-			if (set != null) {
-				sets.add(set);
-			}
-		}
-		if (!showSourceColumn && !FilterSelections.sources.isEmpty()) {
-			FilterSelections.sources.clear();
-			showNormalResults();
-		}
-		dimensions.add(world.getRegistryKey().getValue());
-		filterOptions.get(0).addAll(sources.values());
-		for (Identifier dimension : dimensions) {
-			filterOptions.get(1).add(new FilterOption(StructureUtils.getDimensionName(dimension), null, dimension, false));
-		}
-		for (Identifier set : sets) {
-			filterOptions.get(2).add(new FilterOption(StructureUtils.formatIdPath(set), null, set, false));
-		}
-		Collator collator = englishCollator();
-		Comparator<FilterOption> alphabetical = Comparator.comparing((FilterOption option) -> option.label, collator)
-				.thenComparing(option -> option.source != null ? option.source : option.id.toString());
-		for (List<FilterOption> options : filterOptions) {
-			options.sort(alphabetical);
-		}
-		filterOptions.get(0).sort(Comparator.comparing((FilterOption option) -> !"minecraft".equals(option.source)).thenComparing(alphabetical));
-		filterOptions.get(1).add(0, new FilterOption(Text.literal("Current").getString(), null, world.getRegistryKey().getValue(), true));
-		filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
-	}
-
-	private boolean filterChecked(int column, FilterOption option) {
-		if (option.current) {
-			return FilterSelections.isCurrentSelected();
-		}
-		return switch (column) {
-			case 0 -> FilterSelections.sources.contains(option.source);
-			case 1 -> FilterSelections.dimensions.contains(option.id);
-			default -> FilterSelections.sets.contains(option.id);
-		};
-	}
-
-	private void toggleFilter(int column, FilterOption option) {
-		clearCurrentStructureReveal();
-		if (column == 0) {
-			toggleSet(FilterSelections.sources, option.source);
-		} else if (column == 1) {
-			if (option.current) {
-				FilterSelections.toggleCurrent();
-			} else {
-				FilterSelections.toggleDimension(option.id);
-			}
-		} else {
-			toggleSet(FilterSelections.sets, option.id);
-		}
-		showNormalResults();
-		processSearchTerm();
-		filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
+		filterPanel.setStructures(allowedStructureIDs, world.getRegistryKey().getValue());
 	}
 
 	boolean isSelectedOnly() {
@@ -913,28 +552,27 @@ public class ExplorersCompassScreen extends Screen {
 		selectedOnly = false;
 	}
 
+	private void refreshAfterFilterChange() {
+		showNormalResults();
+		processSearchTerm();
+	}
+
 	private void clearFilters() {
 		clearCurrentStructureReveal();
 		FilterSelections.clear();
 		showNormalResults();
 		processSearchTerm();
-		filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
+		filterPanel.clampScroll();
 		updateSearchButtons();
 	}
 
-	private static <T> void toggleSet(Set<T> values, T value) {
-		if (!values.add(value)) {
-			values.remove(value);
-		}
-	}
-
 	public void openEntryDetails(Identifier id) {
-		if (sortMenuOpen) closeSortMenu();
+		if (sortPriority.isOpen()) sortPriority.close();
 		draggingStructureScrollbar = false;
 		setDragging(false);
 		setFocused(null);
 		searchTextField.setFocused(false);
-		entryDetails = new EntryDetailsPopup(client, id, () -> isStructureHidden(id),
+		entryDetails = new EntryDetailsDialog(client, id, () -> isStructureHidden(id),
 				() -> toggleStructureHidden(id), () -> ClientPacketHandlers.showStructureRequirements,
 				() -> openEntryRequirements(id), this::closeEntryDetails);
 	}
@@ -946,7 +584,7 @@ public class ExplorersCompassScreen extends Screen {
 		boolean canRequest = ClientPlayNetworking.canSend(StructureRequirementsPacket.ID);
 		RequirementNode fallback = ClientPacketHandlers.partyRequirements.get(id);
 		if (fallback == null) fallback = ExplorersCompass.lockedRequirements.get(id);
-		setLockedPopup(id, canRequest ? requirementsMessage("Loading requirements…")
+		setLockedDialog(id, canRequest ? requirementsMessage("Loading requirements…")
 				: fallback != null ? fallback : requirementsMessage("Requirements are unavailable"), "Requirements");
 		if (canRequest) {
 			requirementsRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
@@ -957,7 +595,7 @@ public class ExplorersCompassScreen extends Screen {
 	public void onStructureRequirements(int requestId, RequirementNode requirements) {
 		if (requirementsReturnDetails == null || dialog != Dialog.LOCKED || requirementsRequestId != requestId) return;
 		requirementsRequestId = 0;
-		setLockedPopup(lockedRequirementsId, requirements != null ? requirements
+		setLockedDialog(lockedRequirementsId, requirements != null ? requirements
 				: requirementsMessage("Requirements are unavailable"), "Requirements");
 	}
 
@@ -972,267 +610,87 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	public void openEntryFilters(Identifier id) {
-		if (sortMenuOpen) closeSortMenu();
-		entryFiltersId = id;
-		entryFilterFirstRow = 0;
+		if (sortPriority.isOpen()) sortPriority.close();
+		entryFilters = new EntryFiltersDialog(textRenderer, () -> entryFilterRows(id), () -> entryFilters = null,
+				() -> selectionList.containsStructure(id), this::playClickSound,
+				FilterPanel::drawFilterCheckbox);
 	}
 
-	private List<EntryFilterRow> entryFilterRows() {
-		if (entryFiltersId == null) return List.of();
-		List<EntryFilterRow> rows = new ArrayList<>();
-		if (showSourceColumn) {
-			rows.add(new EntryFilterRow("Source:", StructureUtils.getStructureSource(entryFiltersId), 0,
-					new FilterOption("", entryFiltersId.getNamespace(), null, false)));
+	private List<EntryFiltersDialog.Row> entryFilterRows(Identifier id) {
+		List<EntryFiltersDialog.Row> rows = new ArrayList<>();
+		if (filterPanel.showsSource()) {
+			rows.add(entryFilterRow("Source:", StructureUtils.getStructureSource(id), 0, new FilterPanel.FilterOption("", id.getNamespace(), null, false)));
 		}
-		for (Identifier dimension : ExplorersCompass.allowedStructureIDsToDimensionIDs.get(entryFiltersId)) {
-			rows.add(new EntryFilterRow("Dimension:", StructureUtils.getDimensionName(dimension), 1,
-					new FilterOption("", null, dimension, false)));
+		for (Identifier dimension : ExplorersCompass.allowedStructureIDsToDimensionIDs.get(id)) {
+			rows.add(entryFilterRow("Dimension:", StructureUtils.getDimensionName(dimension), 1, new FilterPanel.FilterOption("", null, dimension, false)));
 		}
-		Identifier set = ExplorersCompass.structureIDsToSetIDs.get(entryFiltersId);
+		Identifier set = ExplorersCompass.structureIDsToSetIDs.get(id);
 		if (set != null) {
-			rows.add(new EntryFilterRow("Set:", StructureUtils.formatIdPath(set), 2,
-					new FilterOption("", null, set, false)));
+			rows.add(entryFilterRow("Set:", StructureUtils.formatIdPath(set), 2, new FilterPanel.FilterOption("", null, set, false)));
 		}
 		return rows;
 	}
 
-	private int entryFilterVisibleRows(int count) {
-		return Math.min(count, Math.max(1, (height - 70) / ENTRY_FILTER_ROW_HEIGHT));
-	}
-
-	private int entryFilterWidth() { return Math.max(40, Math.min(LockedRequirementsView.WINDOW_WIDTH, width - 24)); }
-	private int entryFilterX() { return (width - entryFilterWidth()) / 2; }
-	private int entryFilterHeight(int count) { return 65 + entryFilterVisibleRows(count) * ENTRY_FILTER_ROW_HEIGHT; }
-	private int entryFilterY(int count) { return (height - entryFilterHeight(count)) / 2; }
-
-	private void renderEntryFilters(DrawContext context, int mouseX, int mouseY) {
-		List<EntryFilterRow> rows = entryFilterRows();
-		int x = entryFilterX(), w = entryFilterWidth(), h = entryFilterHeight(rows.size());
-		int y = entryFilterY(rows.size()), bodyY = y + 30;
-		int visible = entryFilterVisibleRows(rows.size());
-		int backY = bodyY + visible * ENTRY_FILTER_ROW_HEIGHT + 10;
-		int checkboxX = x + w - 19;
-		int valueX = x + 12 + textRenderer.getWidth("Dimension:") + 8;
-		context.getMatrices().push();
-		context.getMatrices().translate(0, 0, 300);
-		context.fill(0, 0, width, height, 0x88000000);
-		context.fill(x - 1, y - 1, x + w + 1, y + h + 1, 0xff909090);
-		context.fill(x, y, x + w, y + h, 0xff000000);
-		context.drawCenteredTextWithShadow(textRenderer, Text.literal("Filters"), x + w / 2, y + 10, 0xffffff);
-		context.enableScissor(x + 8, bodyY, x + w - 8, bodyY + visible * ENTRY_FILTER_ROW_HEIGHT);
-		for (int i = 0; i < visible; i++) {
-			EntryFilterRow row = rows.get(entryFilterFirstRow + i);
-			int rowY = bodyY + i * ENTRY_FILTER_ROW_HEIGHT;
-			if (mouseX >= x + 8 && mouseX < x + w - 8 && mouseY >= rowY && mouseY < rowY + ENTRY_FILTER_ROW_HEIGHT)
-				context.fill(x + 8, rowY, x + w - 8, rowY + ENTRY_FILTER_ROW_HEIGHT, 0xff242424);
-			context.drawTextWithShadow(textRenderer, row.category(), x + 12, rowY + 6, 0xffffff);
-			context.drawTextWithShadow(textRenderer,
-					textRenderer.trimToWidth(row.value(), Math.max(1, checkboxX - valueX - 8)), valueX, rowY + 6, 0xffffff);
-			drawFilterCheckbox(context, checkboxX, rowY + 5, filterChecked(row.column(), row.option()));
-		}
-		context.disableScissor();
-		int buttonX = x + (w - 70) / 2;
-		drawDialogButton(context, "Back", buttonX, backY, 70, mouseX, mouseY);
-		context.getMatrices().pop();
-	}
-
-	private boolean clickEntryFilters(double mouseX, double mouseY, int button) {
-		List<EntryFilterRow> rows = entryFilterRows();
-		int x = entryFilterX(), y = entryFilterY(rows.size()), w = entryFilterWidth();
-		if (mouseX < x - 1 || mouseX >= x + w + 1 || mouseY < y - 1 || mouseY >= y + entryFilterHeight(rows.size()) + 1) {
-			playClickSound();
-			entryFiltersId = null;
-			return true;
-		}
-		if (button != 0) return true;
-		int index = (int) (mouseY - y - 30) / ENTRY_FILTER_ROW_HEIGHT;
-		if (mouseY >= y + 30 && index >= 0 && index < entryFilterVisibleRows(rows.size())) {
-			EntryFilterRow row = rows.get(entryFilterFirstRow + index);
+	private EntryFiltersDialog.Row entryFilterRow(String category, String value, int column, FilterPanel.FilterOption option) {
+		return new EntryFiltersDialog.Row(category, value, () -> FilterPanel.checked(column, option), () -> {
 			double scroll = selectionList.getScrollAmount();
-			playClickSound();
-			toggleFilter(row.column(), row.option());
+			filterPanel.toggle(column, option);
 			selectionList.setScrollAmount(scroll);
-			if (!selectionList.containsStructure(entryFiltersId)) entryFiltersId = null;
-		}
-		return true;
-	}
-
-	private void drawFilterCheckbox(DrawContext context, int x, int y, boolean checked) {
-		context.drawTexture(checked ? CHECKBOX_CHECKED : CHECKBOX_UNCHECKED, x, y, 0, 0,
-				FILTER_CHECKBOX_SIZE, FILTER_CHECKBOX_SIZE, FILTER_CHECKBOX_SIZE, FILTER_CHECKBOX_SIZE);
+		});
 	}
 
 	private void renderExcludeButton(DrawContext context, ButtonWidget button, boolean checked) {
 		if (!button.visible) return;
-		drawFilterCheckbox(context,
-				button.getX() + button.getWidth() - FILTER_CHECKBOX_SIZE - EXCLUDE_BUTTON_CONTENT_PADDING,
-				button.getY() + (button.getHeight() - FILTER_CHECKBOX_SIZE) / 2, checked);
+		FilterPanel.drawFilterCheckbox(context,
+				button.getX() + button.getWidth() - FilterPanel.FILTER_CHECKBOX_SIZE - EXCLUDE_BUTTON_CONTENT_PADDING,
+				button.getY() + (button.getHeight() - FilterPanel.FILTER_CHECKBOX_SIZE) / 2, checked);
 	}
 
-	static ButtonWidget createCloseButton(int x, Runnable close) {
-		return new TransparentButton(x, 10, 20, 20, Text.translatable("gui.close"), button -> close.run()) {
-			@Override
-			protected void renderLabel(DrawContext context, TextRenderer renderer) {
-				int iconX = getX() + (getWidth() - CLOSE_ICON_SIZE) / 2;
-				int iconY = getY() + (getHeight() - CLOSE_ICON_SIZE) / 2;
-				drawIconWithShadow(context, CLOSE_ICON, iconX, iconY, CLOSE_ICON_SIZE, active ? 1.0f : 144 / 255.0f);
-			}
-		};
-	}
+    private OverlayInput.Layer inputLayer(OverlayInput.Event event) {
+        OverlayInput.Layer search = switch (dialog) {
+            case NONE -> OverlayInput.Layer.PAGE;
+            case LOCKED -> OverlayInput.Layer.LOCKED;
+            case DISABLED -> OverlayInput.Layer.DISABLED;
+            default -> OverlayInput.Layer.SEARCH;
+        };
+        return OverlayInput.layer(event, currentStructureDialog != null, entryDetails != null,
+                entryFilters != null, sortPriority.isOpen(), search);
+    }
 
-	static void drawIconWithShadow(DrawContext context, Identifier icon, int x, int y, int size, float brightness) {
-		float shadow = brightness * 0.25f;
-		context.setShaderColor(shadow, shadow, shadow, 1.0f);
-		context.drawTexture(icon, x + 1, y + 1, 0, 0, size, size, size, size);
-		context.setShaderColor(brightness, brightness, brightness, 1.0f);
-		context.drawTexture(icon, x, y, 0, 0, size, size, size, size);
-		context.setShaderColor(1.0f, 1.0f, 1.0f, 1.0f);
-	}
+    private Runnable actionAt(double mouseX, double mouseY) {
+        switch (inputLayer(OverlayInput.Event.ACTION)) {
+            case CURRENT_STRUCTURE: return currentStructureDialog.actionAt(mouseX, mouseY, width, height);
+            case DETAILS: return entryDetails.actionAt(mouseX, mouseY, width, height);
+            case DISABLED: return disabledDialog.actionAt(mouseX, mouseY, width, height);
+            case ENTRY_FILTERS: return entryFilters.actionAt(mouseX, mouseY, width, height);
+            case SORT: return sortPriority.actionAt(mouseX, mouseY);
+            case LOCKED: return lockedRequirementsDialog.actionAt(mouseX, mouseY, width, height);
+            case SEARCH: return dialogButtonAt(mouseX, mouseY);
+            case PAGE: break;
+        }
+        for (var child : children()) {
+            if (child instanceof TransparentButton widget && widget.active && widget.visible && widget.isMouseOver(mouseX, mouseY)) {
+                return widget::onPress;
+            }
+        }
+        if (hiddenStructuresOpen) {
+            return hiddenStructures.removeButtonAt(mouseX, mouseY, textRenderer, width, hiddenListTop(), height - 10,
+                    this::processSearchTerm);
+        }
+        return isStructureView() ? selectionList.actionAt(mouseX, mouseY) : null;
+    }
 
-	private void renderFilterPanel(DrawContext context, int mouseX, int mouseY) {
-		filterScroll = MathHelper.clamp(filterScroll, 0, filterMaxScroll());
-		int right = filterRight();
-		int bottom = filterBottom();
-		int backgroundColor = RenderUtils.blackWithOpacity(RenderUtils.NORMAL_BACKGROUND_OPACITY_PERCENT);
-		for (int column = showSourceColumn ? 0 : 1; column < 3; column++) {
-			int columnLeft = filterColumnLeft(column);
-			int columnRight = filterColumnRight(column);
-			context.fill(columnLeft, filterTop(), columnRight, filterRowsTop() - FILTER_HEADER_GAP, backgroundColor);
-			List<FilterOption> options = visibleFilterOptions(column);
-			int sectionStart = filterSectionStart(column, options);
-			if (sectionStart >= 0) {
-				int gapY = filterRowsTop() + sectionStart * filterRowHeight() - visibleFilterScroll();
-				context.fill(columnLeft, filterRowsTop(), columnRight, MathHelper.clamp(gapY, filterRowsTop(), bottom), backgroundColor);
-				context.fill(columnLeft, MathHelper.clamp(gapY + FILTER_SECTION_GAP, filterRowsTop(), bottom), columnRight, bottom, backgroundColor);
-			} else {
-				context.fill(columnLeft, filterRowsTop(), columnRight, bottom, backgroundColor);
-			}
-		}
-		String[] headings = {
-			Text.literal("Source").getString(),
-			Text.literal("Dimension").getString(),
-			Text.literal("Set").getString()
-		};
-		for (int column = showSourceColumn ? 0 : 1; column < 3; column++) {
-			int columnLeft = filterColumnLeft(column);
-			int columnRight = filterColumnRight(column);
-			context.enableScissor(columnLeft + 2, filterHeaderTop() + 1, columnRight - 2, filterRowsTop() - FILTER_HEADER_GAP);
-			String heading = textRenderer.trimToWidth(headings[column], columnRight - columnLeft - 6);
-			context.drawCenteredTextWithShadow(textRenderer, heading, (columnLeft + columnRight) / 2, filterHeaderTop() + 6, 0xffffff);
-			context.disableScissor();
-			List<FilterOption> options = visibleFilterOptions(column);
-			int sectionStart = filterSectionStart(column, options);
-			int rowsBottom = filterFullRowsBottom(sectionStart);
-			int rowHeight = filterRowHeight();
-			context.enableScissor(columnLeft + 1, filterRowsTop(), columnRight - 1, rowsBottom);
-			int checkboxX = columnRight - FILTER_CHECKBOX_SIZE - 7;
-			for (int index = 0; index < options.size(); index++) {
-				int rowY = filterRowY(index, sectionStart);
-				if (rowY + rowHeight <= filterRowsTop() || rowY >= rowsBottom) {
-					continue;
-				}
-				if (mouseX >= columnLeft && mouseX < columnRight && mouseY >= rowY && mouseY < rowY + rowHeight) {
-					context.fill(columnLeft + 1, rowY, columnRight - 1, rowY + rowHeight, 0x55242424);
-				}
-				FilterOption option = options.get(index);
-				drawFilterOptionLabel(context, option, columnLeft + 5, rowY, Math.max(0, checkboxX - columnLeft - 9));
-				drawFilterCheckbox(context, checkboxX, rowY + (rowHeight - FILTER_CHECKBOX_SIZE) / 2, filterChecked(column, option));
-			}
-			context.disableScissor();
-		}
-		scrollbarFor(ScrollPanel.FILTERS).render(context);
-	}
-
-	private Text filterOptionText(FilterOption option, String label) {
-		Text text = Text.literal(label);
-		return option.current || "minecraft".equals(option.source) ? text.copy().formatted(Formatting.ITALIC) : text;
-	}
-
-	private Text currentDimensionSuffix(FilterOption option) {
-		return Text.literal(" (" + StructureUtils.getDimensionName(option.id) + ")").formatted(Formatting.GRAY);
-	}
-
-	private void drawFilterOptionLabel(DrawContext context, FilterOption option, int x, int rowY, int availableWidth) {
-		if (availableWidth <= 1) {
-			return;
-		}
-		Text label = filterOptionText(option, option.label);
-		int labelWidth = textRenderer.getWidth(label);
-		if (option.current) {
-			int y = rowY + (filterRowHeight() - textRenderer.fontHeight) / 2;
-			context.drawTextWithShadow(textRenderer, label, x, y, 0xffffff);
-			RenderUtils.drawTextToFit(context, textRenderer, currentDimensionSuffix(option),
-					x + labelWidth, y, availableWidth - labelWidth, 0xffffff);
-			return;
-		}
-		if (labelWidth <= availableWidth) {
-			context.drawTextWithShadow(textRenderer, label, x, rowY + (filterRowHeight() - textRenderer.fontHeight) / 2, 0xffffff);
-			return;
-		}
-		float scale = (availableWidth - 1.0f) / labelWidth;
-		context.getMatrices().push();
-		context.getMatrices().translate(x, rowY + (filterRowHeight() - textRenderer.fontHeight * scale) / 2.0f, 0);
-		context.getMatrices().scale(scale, scale, 1.0f);
-		context.drawTextWithShadow(textRenderer, label, 0, 0, 0xffffff);
-		context.getMatrices().pop();
-	}
-
-	private ButtonPress buttonAt(double mouseX, double mouseY) {
-		if (currentStructurePopup != null) return currentStructurePopup.buttonAt(mouseX, mouseY, width, height);
-		if (entryDetails != null) return entryDetails.buttonAt(mouseX, mouseY, width, height);
-		if (dialog == Dialog.DISABLED) return disabledView.buttonAt(mouseX, mouseY, width, height);
-		if (entryFiltersId != null) {
-			int count = entryFilterRows().size();
-			int x = entryFilterX() + (entryFilterWidth() - 70) / 2;
-			int y = entryFilterY(count) + 40 + entryFilterVisibleRows(count) * ENTRY_FILTER_ROW_HEIGHT;
-			return ButtonPress.at(mouseX, mouseY, x, y, 70, 20, entryFiltersId, "back", () -> entryFiltersId = null);
-		}
-		if (sortMenuOpen) {
-			return ButtonPress.at(mouseX, mouseY, sortMenuX() + (sortMenuWidth() - 70) / 2, sortBackY(), 70, 20,
-					ButtonLayer.SORT, "back", this::closeSortMenu);
-		}
-		if (dialog == Dialog.LOCKED) return lockedRequirementsView.buttonAt(mouseX, mouseY, width, height, this::backLockedPopup, this::dismissDialog);
-		if (dialog != Dialog.NONE) return dialogButtonAt(mouseX, mouseY);
-		for (var child : children()) {
-			if (child instanceof TransparentButton widget && widget.active && widget.visible && widget.isMouseOver(mouseX, mouseY)) {
-				return new ButtonPress(widget, "widget", widget::onPress);
-			}
-		}
-		if (hiddenStructuresOpen) {
-			return hiddenStructures.removeButtonAt(mouseX, mouseY, textRenderer, width, filterTop(), filterBottom(),
-					this::processSearchTerm);
-		}
-		return isStructureView() ? selectionList.buttonAt(mouseX, mouseY) : null;
-	}
-
-	private ButtonPress dialogButtonAt(double mouseX, double mouseY) {
-		int x = dialogX(), y = dialogY(), w = dialogWidth();
-		int backX = x + (w - 70) / 2;
-		if (dialog == Dialog.FOUND) {
-			int actionY = searchActionsY();
-			if (showTeleportButton() && ButtonPress.contains(mouseX, mouseY, foundTeleportX(), actionY, foundActionWidth(), 20)) {
-				return new ButtonPress(dialog, "teleport", this::teleport);
-			}
-			if (ButtonPress.contains(mouseX, mouseY, foundCloseX(), actionY, foundActionWidth(), 20)) {
-				return new ButtonPress(dialog, "close", () -> client.setScreen(null));
-			}
-			return ButtonPress.at(mouseX, mouseY, foundBackX(), actionY, foundActionWidth(), 20, dialog, "back", this::dismissDialog);
-		}
-		if (isSearchFailureDialog()) {
-			int actionY = searchFailureActionsY();
-			int buttonWidth = searchFailureButtonWidth();
-			if (showNotFoundHide() && ButtonPress.contains(mouseX, mouseY, searchFailureFirstButtonX(), actionY, buttonWidth, 20)) {
-				return new ButtonPress(dialog, "hide", () -> toggleStructureHidden(searchedId));
-			}
-			return ButtonPress.at(mouseX, mouseY, searchFailureBackX(), actionY, buttonWidth, 20, dialog, "back", this::dismissDialog);
-		}
-		int backY = switch (dialog) {
-			case SEARCHING -> searchConfirmed ? searchActionsY() : Integer.MIN_VALUE;
-			case REJECTED -> y + 57;
-			case MULTI_COST -> y + dialogHeight() - 26;
-			default -> Integer.MIN_VALUE;
-		};
-		return backY == Integer.MIN_VALUE ? null : ButtonPress.at(mouseX, mouseY, backX, backY, 70, 20, dialog, "back", this::dismissDialog);
+	private Runnable dialogButtonAt(double mouseX, double mouseY) {
+        if (dialog == Dialog.FOUND) {
+            return foundStructureDialog.actionAt(width, height, mouseX, mouseY,
+                    showTeleportButton() ? this::teleport : null, this::dismissDialog, () -> client.setScreen(null));
+        }
+        if (isSearchFailureDialog()) {
+            return searchFailureDialog.actionAt(width, height, mouseX, mouseY, this::dismissDialog,
+                    showNotFoundHide() ? () -> toggleStructureHidden(searchRequest.structure) : null, () -> isStructureHidden(searchRequest.structure));
+        }
+        return dialog == Dialog.SEARCHING && !searchRequest.confirmed()
+                ? null : searchStatusDialog.actionAt(width, height, mouseX, mouseY, this::dismissDialog);
 	}
 
 	void playClickSound() {
@@ -1242,25 +700,25 @@ public class ExplorersCompassScreen extends Screen {
 	@Override
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (button == 0) {
-			ButtonPress hit = buttonAt(mouseX, mouseY);
+			Runnable hit = actionAt(mouseX, mouseY);
 			if (hit != null) {
 				selectionList.resetDoubleClick();
 				playClickSound();
-				hit.action().run();
+				hit.run();
 				if (client.currentScreen == this) {
 					refreshSelectedOnlyRows();
 					updateSearchButtons();
-					if (dialog == Dialog.NONE && entryFiltersId == null && !sortMenuOpen) focusActiveSearchField();
+					if (dialog == Dialog.NONE && entryFilters == null && !sortPriority.isOpen()) focusActiveSearchField();
 				}
 				return true;
 			}
 		}
 		if (selectionList != null && (button != 0 || !isStructureView() || dialog != Dialog.NONE
-				|| entryDetails != null || entryFiltersId != null || sortMenuOpen || !selectionList.isMouseOver(mouseX, mouseY))) {
+				|| entryDetails != null || entryFilters != null || sortPriority.isOpen() || !selectionList.isMouseOver(mouseX, mouseY))) {
 			selectionList.resetDoubleClick();
 		}
-		draggingStructureScrollbar = currentStructurePopup == null && entryDetails == null && button == 0 && dialog == Dialog.NONE
-				&& entryFiltersId == null && !filtersOpen && !hiddenStructuresOpen && !sortMenuOpen
+		draggingStructureScrollbar = currentStructureDialog == null && entryDetails == null && button == 0 && dialog == Dialog.NONE
+				&& entryFilters == null && !filtersOpen && !hiddenStructuresOpen && !sortPriority.isOpen()
 				&& selectionList != null && selectionList.isScrollbarAt(mouseX, mouseY);
 		try {
 			return handleMouseClicked(mouseX, mouseY, button);
@@ -1269,35 +727,35 @@ public class ExplorersCompassScreen extends Screen {
 			updateSearchButtons();
 			// Minecraft routes drag events to the focused child. Keep the list focused
 			// after grabbing its scrollbar instead of returning focus to search.
-			if (client.currentScreen == this && entryDetails == null && dialog == Dialog.NONE && entryFiltersId == null && !sortMenuOpen && !draggingStructureScrollbar) focusActiveSearchField();
+			if (client.currentScreen == this && entryDetails == null && dialog == Dialog.NONE && entryFilters == null && !sortPriority.isOpen() && !draggingStructureScrollbar) focusActiveSearchField();
 		}
 	}
 
 	private boolean handleMouseClicked(double mouseX, double mouseY, int button) {
-		if (currentStructurePopup != null) {
-			if (currentStructurePopup.click(mouseX, mouseY, button, width, height)) playClickSound();
-			return true;
-		}
-        if (dialog == Dialog.DISABLED) {
-            if (disabledView.click(mouseX, mouseY, button, width, height)) playClickSound();
+        if (currentStructureDialog != null) {
+            if (currentStructureDialog.click(mouseX, mouseY, button, width, height)) playClickSound();
             return true;
         }
-		if (entryDetails != null) {
-			if (entryDetails.click(mouseX, mouseY, button, width, height)) playClickSound();
-			return true;
-		}
-		if (entryFiltersId != null) return clickEntryFilters(mouseX, mouseY, button);
-		if (sortMenuOpen) return clickSortMenu(mouseX, mouseY, button);
+        switch (inputLayer(OverlayInput.Event.POINTER)) {
+            case DISABLED:
+                if (disabledDialog.click(mouseX, mouseY, button, width, height)) playClickSound();
+                return true;
+            case DETAILS:
+                if (entryDetails.click(mouseX, mouseY, button, width, height)) playClickSound();
+                return true;
+            case ENTRY_FILTERS:
+                return entryFilters.click(mouseX, mouseY, button, width, height);
+            default: break;
+        }
+        if (sortPriority.isOpen()) return sortPriority.click(mouseX, mouseY, button);
         if (dialog == Dialog.LOCKED) {
-            if (lockedRequirementsView.click(mouseX, mouseY, button, width, height, this::backLockedPopup)) playClickSound();
+            if (lockedRequirementsDialog.click(mouseX, mouseY, button, width, height)) playClickSound();
             return true;
         }
-        if (dialog == Dialog.SEARCHING && !searchConfirmed) return true;
+        if (dialog == Dialog.SEARCHING && !searchRequest.confirmed()) return true;
         if (dialog != Dialog.NONE) {
             if (isSearchFailureDialog() && button == 0 && beginScrollbarDrag(ScrollPanel.SEARCH_FAILURE, mouseX, mouseY)) return true;
-            if (mouseX < dialogX() - 1 || mouseX >= dialogX() + dialogWidth() + 1
-                    || mouseY < dialogY() - 1 || mouseY >= dialogY() + dialogHeight() + 1
-                    || dialog == Dialog.WRONG_DIMENSION || dialog == Dialog.INSUFFICIENT_COST) {
+            if (outsideSearchDialog(mouseX, mouseY)) {
                 playClickSound();
                 dismissDialog();
                 return true;
@@ -1319,34 +777,9 @@ public class ExplorersCompassScreen extends Screen {
         }
 		if (filtersOpen && button == 0) {
 			if (beginScrollbarDrag(ScrollPanel.FILTERS, mouseX, mouseY)) return true;
-			int column = filterColumnAt(mouseX, mouseY);
-			if (column >= 0 && mouseY >= filterRowsTop()) {
-				List<FilterOption> options = visibleFilterOptions(column);
-				int index = filterOptionIndexAt(mouseY, options, filterSectionStart(column, options));
-				if (index >= 0) {
-					playClickSound();
-					toggleFilter(column, options.get(index));
-				}
-				return true;
-			}
+			if (filterPanel.click(mouseX, mouseY, this::playClickSound)) return true;
 		}
 		return super.mouseClicked(mouseX, mouseY, button);
-	}
-
-	private boolean clickSortMenu(double mouseX, double mouseY, int button) {
-		int x = sortMenuX(), y = sortMenuY(), w = sortMenuWidth();
-		if (mouseX < x - 1 || mouseX >= x + w + 1 || mouseY < y - 1 || mouseY >= y + sortMenuHeight() + 1) {
-			playClickSound();
-			closeSortMenu();
-			return true;
-		}
-		if (button != 0) return true;
-		int row = sortRowAt(mouseX, mouseY);
-		if (row >= 0) {
-			playClickSound();
-			draggedSortRow = row;
-		}
-		return true;
 	}
 
 	private TransparentTextField searchFieldAt(double mouseX, double mouseY) {
@@ -1364,7 +797,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void focusActiveSearchField() {
-		if (currentStructurePopup != null || entryDetails != null) return;
+		if (currentStructureDialog != null || entryDetails != null) return;
 		TransparentTextField active = activeSearchField();
 		for (TransparentTextField field : new TransparentTextField[] {searchTextField, filterSearchTextField, hiddenSearchTextField}) {
 			if (field != null && field != active) field.setFocused(false);
@@ -1379,85 +812,55 @@ public class ExplorersCompassScreen extends Screen {
 
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double deltaX, double deltaY) {
-        if (dialog == Dialog.DISABLED) { disabledView.drag(mouseY, width, height); return true; }
-		if (currentStructurePopup != null) { currentStructurePopup.drag(mouseY, width, height); return true; }
-		if (entryDetails != null) { entryDetails.drag(mouseY, width, height); return true; }
-		if (entryFiltersId != null) return true;
-        if (dialog == Dialog.LOCKED) { lockedRequirementsView.drag(mouseY); return true; }
+        OverlayInput.Layer layer = inputLayer(OverlayInput.Event.POINTER);
+        switch (layer) {
+            case DISABLED: disabledDialog.drag(mouseY, width, height); return true;
+            case CURRENT_STRUCTURE: currentStructureDialog.drag(mouseY, width, height); return true;
+            case DETAILS: entryDetails.drag(mouseY, width, height); return true;
+            case ENTRY_FILTERS: return true;
+            default: break;
+        }
+        if (layer == OverlayInput.Layer.LOCKED) { lockedRequirementsDialog.drag(mouseY); return true; }
 		if (draggedScrollbar != null && button == 0) {
 			moveScrollbar(mouseY);
 			return true;
 		}
-		if (draggedSortRow >= 0 && button == 0) {
-			if (mouseX >= sortMenuX() && mouseX < sortMenuX() + sortMenuWidth()) {
-				int targetRow = MathHelper.clamp((int) Math.floor((mouseY - sortRowsY()) / SORT_ROW_HEIGHT), 0, sortOrder.size() - 1);
-				if (targetRow != draggedSortRow) {
-					SortCriterion criterion = sortOrder.remove(draggedSortRow);
-					sortOrder.add(targetRow, criterion);
-					draggedSortRow = targetRow;
-					sortOrderChangedDuringDrag = true;
-				}
-			}
-			return true;
-		}
-		if (sortMenuOpen) return true;
+		if (sortPriority.drag(mouseX, mouseY, button)) return true;
+		if (sortPriority.isOpen()) return true;
 		return super.mouseDragged(mouseX, mouseY, button, deltaX, deltaY);
 	}
 
 	@Override
 	public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (dialog == Dialog.DISABLED) { disabledView.release(); return true; }
-		if (currentStructurePopup != null) { currentStructurePopup.release(); return true; }
-		if (entryDetails != null) { entryDetails.release(); return true; }
-		if (entryFiltersId != null) return true;
+        OverlayInput.Layer layer = inputLayer(OverlayInput.Event.POINTER);
+        switch (layer) {
+            case DISABLED: disabledDialog.release(); return true;
+            case CURRENT_STRUCTURE: currentStructureDialog.release(); return true;
+            case DETAILS: entryDetails.release(); return true;
+            case ENTRY_FILTERS: return true;
+            default: break;
+        }
         if (draggingStructureScrollbar && button == 0) {
             draggingStructureScrollbar = false;
             super.mouseReleased(mouseX, mouseY, button);
             if (client.currentScreen == this && dialog == Dialog.NONE) focusActiveSearchField();
             return true;
         }
-        if (dialog == Dialog.LOCKED) { lockedRequirementsView.release(); return true; }
+        if (layer == OverlayInput.Layer.LOCKED) { lockedRequirementsDialog.release(); return true; }
 		if (draggedScrollbar != null && button == 0) {
 			draggedScrollbar = null;
 			return true;
 		}
-		if (draggedSortRow >= 0 && button == 0) {
-			commitSortOrder();
-			draggedSortRow = -1;
-			return true;
-		}
-		if (sortMenuOpen) return true;
+		if (sortPriority.release(button)) return true;
+		if (sortPriority.isOpen()) return true;
 		return super.mouseReleased(mouseX, mouseY, button);
 	}
 
 	@Override
 	public boolean keyPressed(int par1, int par2, int par3) {
-		if (currentStructurePopup != null) {
-			if (par1 == 256) closeCurrentStructurePopup();
-			return true;
-		}
-		if (entryDetails != null) {
-			if (par1 == 256) closeEntryDetails();
-			return true;
-		}
-		if (entryFiltersId != null) {
-			if (par1 == 256) entryFiltersId = null;
-			return true;
-		}
-		if (sortMenuOpen) {
-			if (par1 == 256) closeSortMenu();
-			return true;
-		}
-        if (dialog != Dialog.NONE) {
-            if (par1 == 256) {
-                if (dialog != Dialog.LOCKED) dismissDialog();
-                else if (!lockedRequirementsView.closeQuestPopup()) backLockedPopup();
-            }
-            else if (dialog == Dialog.LOCKED) lockedRequirementsView.keyPressed(par1);
-            else if (dialog == Dialog.DISABLED && (par1 == 264 || par1 == 265 || par1 == 266 || par1 == 267))
-                disabledView.scroll(par1 == 264 || par1 == 267 ? -1 : 1);
-            else if (isSearchFailureDialog() && (par1 == 264 || par1 == 265 || par1 == 266 || par1 == 267))
-                scrollSearchFailure(par1 == 264 || par1 == 267 ? -1 : 1);
+        OverlayInput.Layer layer = inputLayer(OverlayInput.Event.KEY);
+        if (layer != OverlayInput.Layer.PAGE) {
+            handleOverlayKey(layer, par1);
             return true;
         }
 		if (par1 == GLFW.GLFW_KEY_S && par3 == GLFW.GLFW_MOD_CONTROL) {
@@ -1507,9 +910,35 @@ public class ExplorersCompassScreen extends Screen {
 		return ret;
 	}
 
+    private void handleOverlayKey(OverlayInput.Layer layer, int key) {
+        if (key == GLFW.GLFW_KEY_ESCAPE) {
+            switch (layer) {
+                case CURRENT_STRUCTURE -> closeCurrentStructureDialog();
+                case DETAILS -> closeEntryDetails();
+                case ENTRY_FILTERS -> entryFilters = null;
+                case SORT -> sortPriority.close();
+                case LOCKED -> {
+                    if (!lockedRequirementsDialog.closeQuestPopup()) backLockedDialog();
+                }
+                default -> dismissDialog();
+            }
+        } else if (layer == OverlayInput.Layer.LOCKED) {
+            lockedRequirementsDialog.keyPressed(key);
+        } else {
+            int amount = switch (key) {
+                case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_PAGE_UP -> 1;
+                case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_PAGE_DOWN -> -1;
+                default -> 0;
+            };
+            if (amount == 0) return;
+            if (layer == OverlayInput.Layer.DISABLED) disabledDialog.scroll(amount);
+            if (layer == OverlayInput.Layer.SEARCH && isSearchFailureDialog()) scrollSearchFailure(amount);
+        }
+    }
+
 	@Override
 	public boolean charTyped(char typedChar, int keyCode) {
-		if (currentStructurePopup != null || entryDetails != null || dialog != Dialog.NONE || entryFiltersId != null || sortMenuOpen) return true;
+		if (inputLayer(OverlayInput.Event.KEY) != OverlayInput.Layer.PAGE) return true;
 		boolean ret = super.charTyped(typedChar, keyCode);
 		focusActiveSearchField();
 		return ret;
@@ -1530,9 +959,9 @@ public class ExplorersCompassScreen extends Screen {
 		if (draggedScrollbar == null) return;
 		double offset = scrollbarFor(draggedScrollbar).offsetForMouse(mouseY, scrollbarGrabOffset);
 		switch (draggedScrollbar) {
-			case FILTERS -> filterScroll = offset;
+			case FILTERS -> filterPanel.setScroll(offset);
 			case HIDDEN -> hiddenStructures.setScroll(offset);
-			case SEARCH_FAILURE -> searchFailureScroll = offset;
+			case SEARCH_FAILURE -> searchFailureDialog.setScroll(offset);
 		}
 	}
 
@@ -1540,14 +969,15 @@ public class ExplorersCompassScreen extends Screen {
 		if (filtersOpen == open) {
 			return;
 		}
-		if (sortMenuOpen) {
-			closeSortMenu();
+		if (sortPriority.isOpen()) {
+			sortPriority.close();
 		}
-		entryFiltersId = null;
+		entryFilters = null;
 		filtersOpen = open;
+		filterPanel.setOpen(open);
 		if (open) {
 			pendingHiddenStructures.clear();
-			availableFilterOptions = null;
+			filterPanel.invalidate();
 		}
 		draggedScrollbar = null;
 		searchTextField.setVisible(isStructureView());
@@ -1564,9 +994,14 @@ public class ExplorersCompassScreen extends Screen {
 		focusActiveSearchField();
 	}
 
+	private void saveSortOrder(List<String> order) {
+		ExplorersCompassConfig.sortOrder = new ArrayList<>(order);
+		ExplorersCompassConfig.saveClient();
+		selectionList.refreshList();
+	}
+
 	void resumeFromSettings() {
-		sortOrder.clear();
-		for (String name : ExplorersCompassConfig.sortOrder) sortOrder.add(SortCriterion.valueOf(name));
+		sortPriority.load(ExplorersCompassConfig.sortOrder);
 		draggedScrollbar = null;
 		clearAndInit();
 	}
@@ -1575,25 +1010,31 @@ public class ExplorersCompassScreen extends Screen {
 		return !filtersOpen && !hiddenStructuresOpen;
 	}
 
-    private boolean beginSearch(Identifier id) {
-        if (dialog != Dialog.NONE || id == null) return false;
-        searchedId = id;
-        searchedListed = false;
-        searchedExcludeVisited = ExplorersCompass.canExcludeVisited && FilterSelections.excludeVisited();
-        listedDisabledCount = 0;
-        listedSkippedCount = 0;
-        activeRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
-        searchRadius = 0;
-        searchConfirmed = false;
+    private void beginSearch(Identifier id, int selectedCount) {
+        searchRequest = new SearchRequest(ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE), id,
+                selectedCount, ExplorersCompass.canExcludeVisited && FilterSelections.excludeVisited());
+        searchStatusDialog = SearchStatusDialog.searching(textRenderer, this::searchProgressLines, searchRequest::confirmedAt);
         dialog = Dialog.SEARCHING;
-        return true;
+    }
+
+    private List<String> searchProgressLines() {
+        List<String> lines = new ArrayList<>();
+        if (searchRequest.listed()) {
+            lines.add(searchRequest.selectedCount + " structures selected");
+            if (searchRequest.hasUnavailable()) lines.add(searchRequest.unavailableCounts());
+        } else {
+            lines.add(StructureUtils.getStructureName(searchRequest.structure));
+        }
+        lines.add("Distance: " + searchRequest.radius());
+        return lines;
     }
 
     public void searchForStructure(Identifier structureID) {
 		if (isHiddenFromStructureList(structureID)) return;
-        boolean started = beginSearch(structureID);
+        boolean started = dialog == Dialog.NONE && structureID != null;
+        if (started) beginSearch(structureID, 1);
 		finalizePendingHides();
-        if (started) ClientPlayNetworking.send(SearchPacket.ID, new SearchPacket(structureID, false, searchedExcludeVisited, ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
+        if (started) ClientPlayNetworking.send(SearchPacket.ID, new SearchPacket(structureID, false, searchRequest.excludeVisited, ExplorersCompassConfig.creativeUnlocksAll, searchRequest.id));
     }
 
     private void searchSelected() {
@@ -1605,30 +1046,22 @@ public class ExplorersCompassScreen extends Screen {
             searchForStructure(selected.get(0));
             return;
         }
-        searchedListed = true;
-        searchedExcludeVisited = ExplorersCompass.canExcludeVisited && FilterSelections.excludeVisited();
-        searchedId = null;
-        listedSelectedCount = selected.size();
-        listedSkippedCount = 0;
-        listedDisabledCount = 0;
-        activeRequestId = ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE);
-        searchRadius = 0;
-        searchConfirmed = false;
-        dialog = Dialog.SEARCHING;
-        ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(selected, searchedExcludeVisited, ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
+        beginSearch(null, selected.size());
+        ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(selected, searchRequest.excludeVisited, ExplorersCompassConfig.creativeUnlocksAll, searchRequest.id));
     }
 
-    public void onSearchAvailability(io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket.Response response) {
-        if (!response.appliesTo(activeRequestId,dialog == Dialog.SEARCHING)) return;
-        listedSkippedCount = response.wrongDimension();
-        listedDisabledCount = response.disabled().size();
-        if (searchedListed && response.isInvalidSelection(listedSelectedCount)) {
-            searchFailureScroll = 0;
-            searchFailureView = SearchFailureView.invalidSearch(textRenderer);
+    public void onSearchAvailability(SearchAvailabilityPacket.Response response) {
+        if (dialog != Dialog.SEARCHING || !response.appliesTo(searchRequest.id, true)) return;
+        searchRequest.updateAvailability(response.wrongDimension(), response.disabled().size());
+        if (searchRequest.listed() && response.isInvalidSelection(searchRequest.selectedCount)) {
+
+            searchFailureDialog = SearchFailureDialog.invalidSearch(textRenderer);
             dialog = Dialog.INVALID_SEARCH;
+            searchStatusDialog = null;
         } else if (response.eligible() == 0 && !response.disabled().isEmpty()) {
             dialog = Dialog.DISABLED;
-            disabledView = new DisabledStructureView(textRenderer,response.disabled(),!searchedListed,
+            searchStatusDialog = null;
+            disabledDialog = new DisabledStructureDialog(textRenderer, response.disabled(), !searchRequest.listed(),
                     this::dismissDialog,() -> toggleStructureHidden(response.disabled().get(0).structure()),
                     () -> isStructureHidden(response.disabled().get(0).structure()),this::navigateToReplacement);
         }
@@ -1644,20 +1077,20 @@ public class ExplorersCompassScreen extends Screen {
         if (!request.equals(currentStructureRequest)) return;
         currentStructureRequest = null;
         if (client.world != world || !isStructureView() || dialog != Dialog.NONE
-                || entryDetails != null || entryFiltersId != null || sortMenuOpen) return;
+                || entryDetails != null || entryFilters != null || sortPriority.isOpen()) return;
         List<Identifier> available = matches.stream().filter(allowedStructureIDs::contains).toList();
         if (available.size() == 1) selectCurrentStructure(available.get(0));
-        else currentStructurePopup = new CurrentStructurePopup(textRenderer, available, searchDialogHeight(FoundDetailsView.rowsHeight(4, textRenderer.fontHeight)),
-                this::selectCurrentStructure, this::closeCurrentStructurePopup);
+        else currentStructureDialog = new CurrentStructureDialog(textRenderer, available, currentStructureEmptyHeight(),
+                this::selectCurrentStructure, this::closeCurrentStructureDialog);
     }
 
-    private void closeCurrentStructurePopup() {
-        currentStructurePopup = null;
+    private void closeCurrentStructureDialog() {
+        currentStructureDialog = null;
         focusActiveSearchField();
     }
 
     private void selectCurrentStructure(Identifier id) {
-        closeCurrentStructurePopup();
+        closeCurrentStructureDialog();
         clearCurrentStructureReveal();
         structureSelection.clear();
         searchTextField.setText(StructureUtils.getStructureName(id));
@@ -1714,16 +1147,14 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     public void onSearchProgress(int requestId, int radius) {
-        if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
-        if (!searchConfirmed) {
-            searchConfirmed = true;
-            dialogStarted = System.currentTimeMillis();
+        if (dialog == Dialog.SEARCHING && searchRequest.accepts(requestId)) {
+            searchRequest.progress(radius, System.currentTimeMillis());
         }
-        searchRadius = Math.max(searchRadius, radius);
     }
 
     public void onSearchResult(int requestId, int result, int radius, Identifier resultId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, Set<Identifier> validBiomes, Boolean visited, RequirementNode requirements, int balance) {
-        if (dialog != Dialog.SEARCHING || activeRequestId != requestId) return;
+        if (dialog != Dialog.SEARCHING || !searchRequest.accepts(requestId)) return;
+        searchStatusDialog = null;
         if (result == SearchResultPacket.FOUND) {
             client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.ITEM_LODESTONE_COMPASS_LOCK, 1.0F));
             if (ExplorersCompassConfig.closeOnFound) {
@@ -1731,7 +1162,7 @@ public class ExplorersCompassScreen extends Screen {
                 client.setScreen(null);
             } else {
                 foundStructureId = resultId;
-                foundDetailsView = new FoundDetailsView(textRenderer, foundX, foundZ, displayCoordinates, displayDistance,
+                foundStructureDialog = new FoundStructureDialog(textRenderer, foundX, foundZ, displayCoordinates, displayDistance,
                         biomes, validBiomes, client.getLanguageManager().getLanguage(), visited);
 				double scrollAmount = selectionList.getScrollAmount();
 				selectionList.refreshList();
@@ -1739,53 +1170,53 @@ public class ExplorersCompassScreen extends Screen {
                 dialog = Dialog.FOUND;
             }
         } else if (result == SearchResultPacket.NOT_FOUND) {
-            searchFailureScroll = 0;
-            Text unavailableCounts = listedSkippedCount > 0 || listedDisabledCount > 0 ? wrongDimensionCountText() : null;
-            searchFailureView = SearchFailureView.notFound(textRenderer, radius, searchedExcludeVisited,
-                    searchedListed ? listedSelectedCount : 0, unavailableCounts);
-            notFoundCompassUpdated = System.nanoTime();
-            notFoundCompassAngle = 0.0D;
-            notFoundCompassSpeed = 0.0D;
+
+            Text unavailableCounts = searchRequest.hasUnavailable() ? Text.literal(searchRequest.unavailableCounts()) : null;
+            searchFailureDialog = SearchFailureDialog.notFound(textRenderer, radius, searchRequest.excludeVisited,
+                    searchRequest.listed() ? searchRequest.selectedCount : 0, unavailableCounts);
+
             dialog = Dialog.NOT_FOUND;
         } else if (result == SearchResultPacket.BLACKLISTED || result == SearchResultPacket.NOT_WHITELISTED) {
             showExcluded(resultId, result == SearchResultPacket.NOT_WHITELISTED);
         } else if (result == SearchResultPacket.LOCKED) {
-            showLockedRequirements(searchedId, requirements);
+            showLockedRequirements(searchRequest.structure, requirements);
         } else if (result == SearchResultPacket.WRONG_DIMENSION) {
             showWrongDimension();
         } else if (result == SearchResultPacket.INSUFFICIENT_COST || result == SearchResultPacket.MULTI_COST) {
             showInsufficientCost(radius, balance, result == SearchResultPacket.MULTI_COST);
         } else {
             dialog = Dialog.REJECTED;
+            searchStatusDialog = SearchStatusDialog.notice(textRenderer, SearchStatusDialog.Kind.REJECTED, 0, 0);
         }
     }
 
     private void showInsufficientCost(int cost, int balance, boolean multiple) {
-        insufficientCost = cost;
-        availableEnergy = balance;
         dialog = multiple ? Dialog.MULTI_COST : Dialog.INSUFFICIENT_COST;
-        dialogStarted = System.currentTimeMillis();
+        searchStatusDialog = SearchStatusDialog.notice(textRenderer, multiple ? SearchStatusDialog.Kind.MULTI_COST
+                : SearchStatusDialog.Kind.INSUFFICIENT_COST, cost, balance);
     }
 
     private void showWrongDimension() {
         dialog = Dialog.WRONG_DIMENSION;
-        dialogStarted = System.currentTimeMillis();
+        searchStatusDialog = SearchStatusDialog.notice(textRenderer, SearchStatusDialog.Kind.WRONG_DIMENSION, 0, 0);
     }
 
 	private void dismissDialog() {
         lockedHistory.clear();
         if (dialog == Dialog.DISABLED || dialog == Dialog.NOT_FOUND) {
             finalizePendingHides();
-            disabledView = null;
+            disabledDialog = null;
         }
         if (draggedScrollbar == ScrollPanel.SEARCH_FAILURE) draggedScrollbar = null;
         if (dialog == Dialog.SEARCHING && client.getNetworkHandler() != null) {
-            ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(activeRequestId));
+            ClientPlayNetworking.send(CancelSearchPacket.ID, new CancelSearchPacket(searchRequest.id));
         }
 		dialog = Dialog.NONE;
-		searchFailureView = null;
-		foundDetailsView = null;
-		lockedRequirementsView = null;
+		searchFailureDialog = null;
+		searchStatusDialog = null;
+		searchRequest = null;
+		foundStructureDialog = null;
+		lockedRequirementsDialog = null;
 		lockedRequirementsId = null;
 		if (requirementsReturnDetails != null) {
 			entryDetails = requirementsReturnDetails;
@@ -1795,28 +1226,9 @@ public class ExplorersCompassScreen extends Screen {
 		focusActiveSearchField();
     }
 
-    private int dialogWidth() {
-        if (dialog == Dialog.WRONG_DIMENSION) {
-            return Math.min(width - 20, textRenderer.getWidth(Text.literal("You're In The Wrong Dimension")) + 12);
-        }
-        if (dialog == Dialog.INSUFFICIENT_COST || dialog == Dialog.MULTI_COST) {
-            int contentWidth = Math.max(textRenderer.getWidth(costTitle()), costLineWidth(costLabel(), insufficientCost, costSuffix(insufficientCost)));
-            contentWidth = Math.max(contentWidth, costLineWidth(balanceLabel(), availableEnergy, costSuffix(availableEnergy)));
-            if (dialog == Dialog.MULTI_COST) contentWidth = Math.max(contentWidth, 205);
-            return Math.min(width - 20, contentWidth + 16);
-        }
-        if (isSearchFailureDialog()) return Math.min(width - 20, 340);
-        if (dialog == Dialog.FOUND || dialog == Dialog.SEARCHING) {
-            int locationWidth = Math.max(textRenderer.getWidth("Coordinates:"), textRenderer.getWidth("Distance: 99999"));
-            int detailsWidth = 36 + textRenderer.getWidth("Source: Repurposed Structures")
-                    + locationWidth;
-            return Math.min(width - 20, Math.max(SEARCH_DIALOG_WIDTH, detailsWidth));
-        }
-        return Math.min(width - 20, SEARCH_DIALOG_WIDTH);
-    }
     private void showExcluded(Identifier id, boolean whitelistActive) {
-        searchFailureScroll = 0;
-        searchFailureView = SearchFailureView.excluded(textRenderer, id, whitelistActive);
+
+        searchFailureDialog = SearchFailureDialog.excluded(textRenderer, id, whitelistActive);
         dialog = Dialog.EXCLUDED;
     }
 
@@ -1824,134 +1236,19 @@ public class ExplorersCompassScreen extends Screen {
         return dialog == Dialog.NOT_FOUND || dialog == Dialog.INVALID_SEARCH || dialog == Dialog.EXCLUDED;
     }
 
-    private boolean showNotFoundHide() { return dialog == Dialog.NOT_FOUND && !searchedListed && searchedId != null; }
-    private int searchFailureButtonWidth() {
-        int available = dialogWidth() - 24;
-        return Math.max(1, Math.min(70, showNotFoundHide() ? (available - NOT_FOUND_BUTTON_GAP) / 2 : available));
-    }
-    private int searchFailureFirstButtonX() {
-        int total = showNotFoundHide() ? 2 * searchFailureButtonWidth() + NOT_FOUND_BUTTON_GAP : searchFailureButtonWidth();
-        return dialogX() + (dialogWidth() - total) / 2;
-    }
-    private int searchFailureBackX() {
-        return searchFailureFirstButtonX() + (showNotFoundHide() ? searchFailureButtonWidth() + NOT_FOUND_BUTTON_GAP : 0);
-    }
-    private int searchFailureActionsY() { return dialogY() + dialogHeight() - 25; }
+    private boolean showNotFoundHide() { return dialog == Dialog.NOT_FOUND && searchRequest.structure != null; }
     private void scrollSearchFailure(double amount) {
-        int maxScroll = searchFailureView.maxScroll(height, dialogWidth(), dialogHeight());
-        searchFailureScroll = Scrollbar.scrollPixels(searchFailureScroll, amount, textRenderer.fontHeight, maxScroll);
+        searchFailureDialog.scroll(width, height, amount);
     }
 
-    private Scrollbar searchFailureScrollbar() {
-        return searchFailureView.scrollbar(dialogX(), dialogY(), dialogWidth(), height, dialogHeight(), searchFailureScroll);
+    private int currentStructureEmptyHeight() {
+        return FoundStructureDialog.dialogHeight(height, FoundStructureDialog.rowsHeight(4, textRenderer.fontHeight));
     }
 
-    private int foundActionWidth() {
-        int count = showTeleportButton() ? 3 : 2;
-        return Math.max(1, Math.min(FOUND_ACTION_BUTTON_WIDTH,
-                (dialogWidth() - 12 - FOUND_ACTION_BUTTON_GAP * (count - 1)) / count));
-    }
-
-    private int foundTeleportX() {
-        int count = showTeleportButton() ? 3 : 2;
-        return dialogX() + (dialogWidth() - foundActionWidth() * count - FOUND_ACTION_BUTTON_GAP * (count - 1)) / 2;
-    }
-
-    private int foundBackX() { return foundTeleportX() + (showTeleportButton() ? foundActionWidth() + FOUND_ACTION_BUTTON_GAP : 0); }
-    private int foundCloseX() { return foundBackX() + foundActionWidth() + FOUND_ACTION_BUTTON_GAP; }
-    private int searchActionsY() { return dialogY() + dialogHeight() - 25; }
-
-    private int searchDialogHeight(int contentHeight) {
-        return Math.min(Math.max(0, height - 10), Math.max(SEARCH_DIALOG_HEIGHT, FoundDetailsView.TOP + contentHeight + 30));
-    }
-
-    private Text wrongDimensionCountText() {
-        return Text.literal("Wrong dimension: " + listedSkippedCount + "   Disabled: " + listedDisabledCount);
-    }
-    private int dialogHeight() {
-        return switch (dialog) {
-            case NOT_FOUND, INVALID_SEARCH, EXCLUDED -> searchFailureView.dialogHeight(height, dialogWidth());
-            case WRONG_DIMENSION -> textRenderer.fontHeight + 12;
-            case INSUFFICIENT_COST -> 3 * textRenderer.fontHeight + 16;
-            case MULTI_COST -> (costExplanation().size() + 4) * textRenderer.fontHeight + 46;
-            case SEARCHING -> searchDialogHeight(FoundDetailsView.rowsHeight(4, textRenderer.fontHeight));
-            case FOUND -> searchDialogHeight(foundDetailsView.contentHeight());
-            default -> 80;
-        };
-    }
-    private int dialogX() { return (width - dialogWidth()) / 2; }
-    private int dialogY() { return (height - dialogHeight()) / 2; }
-
-    private boolean usesEnergy() {
-        return SearchCosts.remote().type() == SearchCosts.Type.ITEMS;
-    }
-
-    private String costTitle() {
-        return usesEnergy() ? "Not Enough Energy" : "Not Enough Experience";
-    }
-
-    private String costLabel() {
-        String label = switch (SearchCosts.remote().type()) {
-            case ITEMS -> "Energy cost: ";
-            case XP -> "XP cost: ";
-            case XP_LEVELS -> "Level cost: ";
-        };
-        return dialog == Dialog.MULTI_COST ? "Highest " + (SearchCosts.remote().type() == SearchCosts.Type.XP
-                ? "XP cost: " : label.toLowerCase(Locale.ROOT)) : label;
-    }
-
-    private String balanceLabel() {
-        return switch (SearchCosts.remote().type()) {
-            case ITEMS -> "Current energy: ";
-            case XP -> "Current XP: ";
-            case XP_LEVELS -> "Current XP Levels: ";
-        };
-    }
-
-    private String costSuffix(int amount) {
-        return SearchCosts.remote().type() == SearchCosts.Type.XP
-                ? SearchCosts.equivalentLevels(amount) + " Levels" : "";
-    }
-
-    private List<net.minecraft.text.OrderedText> costExplanation() {
-        return textRenderer.wrapLines(Text.literal("Your selection includes structures for which you don't have enough " + (usesEnergy() ? "energy." : "experience.")),
-                Math.max(1, dialogWidth() - 16));
-    }
-
-    int costLineWidth(String label, int amount, String suffix) {
-        return textRenderer.getWidth(label) + textRenderer.getWidth(Integer.toString(amount))
-                + 8 + textRenderer.getWidth(suffix);
-    }
-
-    void renderCostLine(DrawContext context, int centerX, int y, String label, int amount, String suffix) {
-        int x = centerX - costLineWidth(label, amount, suffix) / 2;
-        context.drawTextWithShadow(textRenderer, label, x, y, 0xffffff);
-        x += textRenderer.getWidth(label);
-        String number = Integer.toString(amount);
-        drawExperienceNumber(context, textRenderer, number, x, y);
-        x += textRenderer.getWidth(number) + 3;
-        drawEnergyOrb(context, textRenderer, x, y);
-        if (!suffix.isEmpty()) context.drawTextWithShadow(textRenderer, suffix, x + 5, y, 0xffffff);
-    }
-
-    private static void drawExperienceNumber(DrawContext context, TextRenderer font, String number, int x, int y) {
-        context.drawText(font, number, x - 1, y, 0x000000, false);
-        context.drawText(font, number, x + 1, y, 0x000000, false);
-        context.drawText(font, number, x, y - 1, 0x000000, false);
-        context.drawText(font, number, x, y + 1, 0x000000, false);
-        context.drawText(font, number, x, y, 0x80ff20, false);
-    }
-
-    private static void drawEnergyOrb(DrawContext context, TextRenderer font, int x, int y) {
-        Identifier texture = new Identifier(ExplorersCompass.MODID, "textures/gui/experience_orb.png");
-        context.drawTexture(texture, x, y + (font.fontHeight - 6) / 2, 5, 5, 0, 0, 16, 16, 16, 16);
-    }
-
-    private void drawDialogButton(DrawContext context, String label, int x, int y, int w, int mouseX, int mouseY) {
-        boolean hovered = ButtonPress.contains(mouseX, mouseY, x, y, w, 20);
-        context.fill(x, y, x + w, y + 20, 0xff909090);
-        context.fill(x + 1, y + 1, x + w - 1, y + 19, hovered ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(textRenderer, label, x + w / 2, y + 6, 0xffffff);
+    private boolean outsideSearchDialog(double mouseX, double mouseY) {
+        if (dialog == Dialog.FOUND) return foundStructureDialog.outside(width, height, mouseX, mouseY);
+        if (isSearchFailureDialog()) return searchFailureDialog.outside(width, height, mouseX, mouseY);
+        return searchStatusDialog.dismissOnClick(width, height, mouseX, mouseY);
     }
 
     private void drawQuestionTooltip(DrawContext context, String message, int mouseX, int mouseY) {
@@ -2010,30 +1307,31 @@ public class ExplorersCompassScreen extends Screen {
         questReturnScroll = selectionList.getScrollAmount();
     }
 
-    private record LockedPopup(Identifier id, LockedRequirementsView view) {}
-    private final java.util.Deque<LockedPopup> lockedHistory = new java.util.ArrayDeque<>();
+    private record LockedDialog(Identifier id, LockedRequirementsDialog view) {}
+    private final java.util.Deque<LockedDialog> lockedHistory = new java.util.ArrayDeque<>();
     private boolean openingRequirementAdvancement;
 
     private void showLockedRequirements(Identifier id, RequirementNode requirements) {
         lockedHistory.clear();
-        setLockedPopup(id, requirements, null);
+        setLockedDialog(id, requirements, null);
     }
 
-    private void setLockedPopup(Identifier id, RequirementNode requirements, String title) {
+    private void setLockedDialog(Identifier id, RequirementNode requirements, String title) {
         lockedRequirementsId = id;
-        lockedRequirementsView = new LockedRequirementsView(textRenderer, id, requirements, this::rememberQuestBookReturn,
-                id != null && isUnlockedThroughParty(id), !lockedHistory.isEmpty(), title, this::openRequirementLink, this::canOpenRequirementLink);
+        lockedRequirementsDialog = new LockedRequirementsDialog(textRenderer, id, requirements, this::rememberQuestBookReturn,
+                id != null && isUnlockedThroughParty(id), !lockedHistory.isEmpty(), title, this::openRequirementLink, this::canOpenRequirementLink,
+                this::backLockedDialog, this::dismissDialog);
         dialog = Dialog.LOCKED;
     }
 
-    private void backLockedPopup() {
+    private void backLockedDialog() {
         if (lockedHistory.isEmpty()) {
             dismissDialog();
             return;
         }
-        LockedPopup previous = lockedHistory.pop();
+        LockedDialog previous = lockedHistory.pop();
         lockedRequirementsId = previous.id();
-        lockedRequirementsView = previous.view();
+        lockedRequirementsDialog = previous.view();
     }
 
     private boolean canOpenRequirementLink(RequirementNode node) {
@@ -2047,8 +1345,8 @@ public class ExplorersCompassScreen extends Screen {
         if (structure != null && isStructureLocked(structure)) {
             RequirementNode requirements = ExplorersCompass.lockedRequirements.get(structure);
             if (requirements == null) return;
-            lockedHistory.push(new LockedPopup(lockedRequirementsId, lockedRequirementsView));
-            setLockedPopup(structure, requirements, null);
+            lockedHistory.push(new LockedDialog(lockedRequirementsId, lockedRequirementsDialog));
+            setLockedDialog(structure, requirements, null);
         } else if (node.advancementId() != null) {
             openRequirementAdvancement(node);
         }
@@ -2067,10 +1365,10 @@ public class ExplorersCompassScreen extends Screen {
                     ? "This advancement has no display in the Advancements screen."
                     : "This advancement is hidden until you progress further."
                         + (offerTab ? "\nOpen Advancement tab instead?" : "");
-            lockedHistory.push(new LockedPopup(lockedRequirementsId, lockedRequirementsView));
-            setLockedPopup(null, new RequirementNode(Text.literal(message), false, List.of()), "Advancement Unavailable");
-            if (offerTab) lockedRequirementsView.offerOpenTab(() -> {
-                backLockedPopup();
+            lockedHistory.push(new LockedDialog(lockedRequirementsId, lockedRequirementsDialog));
+            setLockedDialog(null, new RequirementNode(Text.literal(message), false, List.of()), "Advancement Unavailable");
+            if (offerTab) lockedRequirementsDialog.offerOpenTab(() -> {
+                backLockedDialog();
                 openAdvancementTab(manager, tab);
             });
             return;
@@ -2100,115 +1398,22 @@ public class ExplorersCompassScreen extends Screen {
     }
 
     private void renderSearchDialog(DrawContext context, int mouseX, int mouseY) {
-        if (dialog == Dialog.DISABLED) { disabledView.render(context,width,height,mouseX,mouseY); return; }
+        if (dialog == Dialog.DISABLED) { disabledDialog.render(context,width,height,mouseX,mouseY); return; }
         if (dialog == Dialog.LOCKED) {
-            lockedRequirementsView.render(context, width, height, mouseX, mouseY);
+            lockedRequirementsDialog.render(context, width, height, mouseX, mouseY);
             return;
         }
-        int w = dialogWidth(), x = dialogX(), y = dialogY(), h = dialogHeight();
-        context.getMatrices().push();
-        context.getMatrices().translate(0, 0, 300);
-        context.fill(0, 0, width, height, 0x88000000);
-        context.fill(x - 1, y - 1, x + w + 1, y + h + 1, 0xff909090);
-        context.fill(x, y, x + w, y + h, 0xff000000);
-        if (dialog == Dialog.SEARCHING) {
-            int frame = (int)((System.currentTimeMillis() - dialogStarted) / 31L % 32L);
-            Identifier texture = CompassTextures.frame(frame);
-            context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
-            int centerX = x + w / 2;
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Locating..."), centerX, y + SEARCH_DIALOG_TITLE_Y, 0xffffff);
-            List<String> lines = new ArrayList<>();
-            if (searchedListed) {
-                lines.add(listedSelectedCount + " structures selected");
-                if (listedSkippedCount > 0 || listedDisabledCount > 0) lines.add(wrongDimensionCountText().getString());
-            } else {
-                lines.add(StructureUtils.getStructureName(searchedId));
-            }
-            lines.add("Distance: " + searchRadius);
-            int lineSpacing = 12;
-            int textTop = y + SEARCH_DIALOG_TITLE_Y + textRenderer.fontHeight;
-            int textHeight = (lines.size() - 1) * lineSpacing + textRenderer.fontHeight;
-            int actionsY = searchActionsY();
-            int lineY = textTop + (actionsY - textTop - textHeight) / 2;
-            for (String line : lines) {
-                context.drawCenteredTextWithShadow(textRenderer, textRenderer.trimToWidth(line, w - 12), centerX, lineY, 0xffffff);
-                lineY += lineSpacing;
-            }
-            drawDialogButton(context, "Back", x + (w - FOUND_ACTION_BUTTON_WIDTH) / 2, actionsY, FOUND_ACTION_BUTTON_WIDTH, mouseX, mouseY);
-        } else if (dialog == Dialog.FOUND) {
-            double yaw = client.player == null ? 0.0D : client.player.getYaw() % 360.0D;
-            double targetAngle = client.player == null ? 0.0D : Math.atan2(foundDetailsView.targetZ() - client.player.getZ(), foundDetailsView.targetX() - client.player.getX());
-            double angle = MathHelper.floorMod((Math.PI - ((yaw - 90.0D) * (Math.PI / 180.0D) - targetAngle)) / (Math.PI * 2.0D), 1.0D);
-            int frame = (16 + (int)Math.floor(angle * 32.0D + 0.5D)) % 32;
-            Identifier texture = CompassTextures.frame(frame);
-            context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal("Structure Located"), x + w / 2, y + SEARCH_DIALOG_TITLE_Y, 0xffffff);
-            foundDetailsView.render(context, x, y, w, h, foundStructureId, client.player);
-            drawDialogButton(context, Text.literal("Back").getString(), foundBackX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
-			if (showTeleportButton()) {
-				drawDialogButton(context, Text.literal("Teleport").getString(), foundTeleportX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
-			}
-            drawDialogButton(context, Text.literal("Close").getString(), foundCloseX(), searchActionsY(), foundActionWidth(), mouseX, mouseY);
-        } else if (dialog == Dialog.INSUFFICIENT_COST || dialog == Dialog.MULTI_COST) {
-            int center = x + w / 2;
-            context.drawCenteredTextWithShadow(textRenderer, Text.literal(costTitle()), center, y + 6, 0xffff4444);
-            int lineY = y + 10 + textRenderer.fontHeight;
-            if (dialog == Dialog.MULTI_COST) {
-                for (var line : costExplanation()) {
-                    context.drawCenteredTextWithShadow(textRenderer, line, center, lineY, 0xffffff);
-                    lineY += textRenderer.fontHeight;
-                }
-                lineY += textRenderer.fontHeight;
-                drawDialogButton(context, "Back", center - 35, y + h - 26, 70, mouseX, mouseY);
-            }
-            renderCostLine(context, center, lineY, costLabel(), insufficientCost, costSuffix(insufficientCost));
-            renderCostLine(context, center, lineY + textRenderer.fontHeight, balanceLabel(), availableEnergy, costSuffix(availableEnergy));
-        } else if (isSearchFailureDialog()) {
-            renderSearchFailureDialog(context, x, y, w, h, mouseX, mouseY);
-        } else {
-            boolean wrongDimension = dialog == Dialog.WRONG_DIMENSION;
-            String message = wrongDimension ? "You're In The Wrong Dimension" : "Search could not start";
-            context.drawCenteredTextWithShadow(textRenderer, textRenderer.trimToWidth(message, w - 12), x + w / 2,
-                    wrongDimension ? y + (h - textRenderer.fontHeight) / 2 : y + 14, wrongDimension ? 0xffff4444 : 0xffffff);
-            if (dialog == Dialog.REJECTED) {
-                drawDialogButton(context, "Back", x + (w - 70) / 2, y + 57, 70, mouseX, mouseY);
-            }
+        if (dialog == Dialog.FOUND) {
+            foundStructureDialog.render(context, width, height, mouseX, mouseY, foundStructureId, client.player,
+                    showTeleportButton() ? this::teleport : null, this::dismissDialog, () -> client.setScreen(null));
+            return;
         }
-        context.getMatrices().pop();
-    }
-
-    private void renderSearchFailureDialog(DrawContext context, int x, int y, int w, int h, int mouseX, int mouseY) {
-        if (dialog == Dialog.NOT_FOUND && height >= 90) {
-            long now = System.nanoTime();
-            long elapsed = now - notFoundCompassUpdated;
-            int ticks = (int)Math.min(5L, elapsed / 50_000_000L);
-            if (ticks > 0) {
-                notFoundCompassUpdated = now - elapsed % 50_000_000L;
-            }
-            for (int tick = 0; tick < ticks; tick++) {
-                double delta = MathHelper.floorMod(Math.random() - notFoundCompassAngle + 0.5D, 1.0D) - 0.5D;
-                notFoundCompassSpeed = (notFoundCompassSpeed + delta * 0.1D) * 0.8D;
-                notFoundCompassAngle = MathHelper.floorMod(notFoundCompassAngle + notFoundCompassSpeed, 1.0D);
-            }
-            int frame = (16 + (int)Math.floor(notFoundCompassAngle * 32.0D + 0.5D)) % 32;
-            Identifier texture = CompassTextures.frame(frame);
-            context.drawTexture(texture, x + (w - 16) / 2, y + 10, 16, 16, 0, 0, 16, 16, 16, 16);
+        if (isSearchFailureDialog()) {
+            searchFailureDialog.render(context, width, height, mouseX, mouseY, this::dismissDialog,
+                    showNotFoundHide() ? () -> toggleStructureHidden(searchRequest.structure) : null, () -> isStructureHidden(searchRequest.structure));
+            return;
         }
-
-        searchFailureView.render(context, x, y, w, height, h, searchFailureScroll);
-
-        int actionY = searchFailureActionsY();
-        int buttonWidth = searchFailureButtonWidth();
-        drawDialogButton(context, "Back", searchFailureBackX(), actionY, buttonWidth, mouseX, mouseY);
-        if (showNotFoundHide()) {
-            int hideX = searchFailureFirstButtonX();
-            boolean hidden = isStructureHidden(searchedId);
-            drawDialogButton(context, hidden ? "Undo" : "Hide", hideX, actionY, buttonWidth, mouseX, mouseY);
-            if (!hidden && ButtonPress.contains(mouseX, mouseY, hideX, actionY, buttonWidth, 20)) {
-                context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(EntryDetailsPopup.HIDE_TOOLTIP),
-                        Math.max(1, Math.min(220, width - 30))), mouseX, mouseY);
-            }
-        }
+        searchStatusDialog.render(context, width, height, mouseX, mouseY, this::dismissDialog);
     }
 
 	public boolean isStructureHidden(Identifier id) {
@@ -2254,7 +1459,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private void processSearchTerm(boolean preserveUnchangedResults) {
-		availableFilterOptions = null;
+		filterPanel.invalidate();
 		structureSelection.retain(id -> !isHiddenFromStructureList(id) || pendingHiddenStructures.contains(id));
 		if (structureSelection.isEmpty()) showNormalResults();
 		if (selectedOnly) {
@@ -2287,10 +1492,11 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	public List<Identifier> sortStructures() {
-		final List<Identifier> structures = new ArrayList<Identifier>(structureIDsMatchingSearch);
+		List<Identifier> structures = new ArrayList<>(structureIDsMatchingSearch);
+		List<SortCriterion> order = sortPriority.order();
 		Collator collator = englishCollator();
 		structures.sort((first, second) -> {
-			for (SortCriterion criterion : sortOrder) {
+			for (SortCriterion criterion : order) {
 				int comparison = criterion.compare(first, second, collator);
 				if (comparison != 0) {
 					return comparison;
@@ -2318,7 +1524,7 @@ public class ExplorersCompassScreen extends Screen {
 				int iconX = getX() + (getWidth() - size) / 2;
 				int iconY = getY() + (getHeight() - size) / 2;
 				float brightness = active ? 1.0f : 144 / 255.0f;
-				drawIconWithShadow(context, CLEAR_FILTERS_ICON, iconX, iconY, size, brightness);
+				IconButton.drawWithShadow(context, CLEAR_FILTERS_ICON, iconX, iconY, size, brightness);
 			}
 		};
 	}
@@ -2348,10 +1554,10 @@ public class ExplorersCompassScreen extends Screen {
 		});
 
 		sortOrderButton = addDrawableChild(new TransparentButton(SIDEBAR_X, searchButton.getY() + 2 * SIDEBAR_BUTTON_STEP, sidebarWidth(), 20, Text.literal("Sort Priority"), (onPress) -> {
-			if (sortMenuOpen) {
-				closeSortMenu();
+			if (sortPriority.isOpen()) {
+				sortPriority.close();
 			} else {
-				sortMenuOpen = true;
+				sortPriority.open();
 			}
 		}));
 		filtersButton = addDrawableChild(new TransparentButton(SIDEBAR_X, searchButton.getY() + SIDEBAR_BUTTON_STEP,
@@ -2362,7 +1568,7 @@ public class ExplorersCompassScreen extends Screen {
 		currentStructureButton = addDrawableChild(new TransparentButton(SIDEBAR_X,
 				sortOrderButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20,
 				Text.literal("Identify"), button -> requestCurrentStructure()));
-		cancelButton = addDrawableChild(createCloseButton(width - 30, () -> client.setScreen(null)));
+		cancelButton = addDrawableChild(IconButton.close(width - 30, () -> client.setScreen(null)));
 
 		teleportButton = addDrawableChild(new TransparentButton(SIDEBAR_X, currentStructureButton.getY() + SIDEBAR_BUTTON_STEP, sidebarWidth(), 20, Text.literal("Teleport"), (onPress) -> {
 			teleport();
@@ -2377,7 +1583,7 @@ public class ExplorersCompassScreen extends Screen {
 				processSearchTerm();
 			}
 		}));
-		excludeButton.setRightInset(FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
+		excludeButton.setRightInset(FilterPanel.FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
 		excludeVisitedButton = excludeButton;
 		TransparentButton lockedButton = addDrawableChild(new TransparentButton(10, 10,
 				excludeButtonWidth("Exclude Locked"), 20, Text.literal("Exclude Locked"), button -> {
@@ -2386,7 +1592,7 @@ public class ExplorersCompassScreen extends Screen {
 			showNormalResults();
 			processSearchTerm();
 		}));
-		lockedButton.setRightInset(FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
+		lockedButton.setRightInset(FilterPanel.FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
 		excludeLockedButton = lockedButton;
         TransparentButton newlyButton = addDrawableChild(new TransparentButton(10, 40,
                 excludeButtonWidth("Newly Unlocked"), 20, Text.literal("Newly Unlocked"), button -> {
@@ -2395,7 +1601,7 @@ public class ExplorersCompassScreen extends Screen {
             showNormalResults();
             processSearchTerm();
         }));
-        newlyButton.setRightInset(FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
+        newlyButton.setRightInset(FilterPanel.FILTER_CHECKBOX_SIZE + EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP);
         newlyUnlockedButton = newlyButton;
 		backButton = addDrawableChild(new TransparentButton(10, 10, buttonWidthForLabel("Back"), 20, Text.literal("Back"), (onPress) -> {
 			if (hiddenStructuresOpen) {
@@ -2430,9 +1636,7 @@ public class ExplorersCompassScreen extends Screen {
 		filterSearchTextField = new TransparentTextField(textRenderer, filterSearchX, 10,
 				filterSearchWidth(filterSearchX), 20, Text.literal("Search Filters"));
 		filterSearchTextField.setText(filterQuery);
-		filterSearchTextField.setChangedListener(value -> {
-			filterScroll = 0;
-		});
+		filterSearchTextField.setChangedListener(filterPanel::queryChanged);
 		addDrawableChild(filterSearchTextField);
 		filterSearchTextField.setVisible(filtersOpen);
 		int headerEnd = backButton.getX() - HEADER_GAP;
@@ -2488,7 +1692,7 @@ public class ExplorersCompassScreen extends Screen {
 	}
 
 	private int excludeButtonWidth(String label) {
-		return textRenderer.getWidth(label) + FILTER_CHECKBOX_SIZE
+		return textRenderer.getWidth(label) + FilterPanel.FILTER_CHECKBOX_SIZE
 				+ EXCLUDE_BUTTON_TEXT_CHECKBOX_GAP + EXCLUDE_BUTTON_CONTENT_PADDING * 2;
 	}
 
@@ -2513,7 +1717,7 @@ public class ExplorersCompassScreen extends Screen {
 		backButton.setX(cancelButton.getX() - backButton.getWidth() - 5);
 		clearFiltersTopButton.setX(width - 10 - clearFiltersTopButton.getWidth());
 		clearFiltersTopButton.setY(40);
-		excludeVisitedButton.setX(filterLeft());
+		excludeVisitedButton.setX(Scrollbar.WIDTH);
 		excludeVisitedButton.setY(40);
 		excludeLockedButton.setY(40);
         newlyUnlockedButton.setY(40);
@@ -2536,7 +1740,7 @@ public class ExplorersCompassScreen extends Screen {
 		clearFiltersTopButton.visible = filtersOpen;
 		excludeVisitedButton.visible = filtersOpen && ExplorersCompass.canExcludeVisited;
 		excludeLockedButton.visible = filtersOpen && !ExplorersCompass.lockedRequirements.isEmpty();
-		int excludeLockedX = filterLeft() + (excludeVisitedButton.visible ? excludeVisitedButton.getWidth() + 5 : 0);
+		int excludeLockedX = Scrollbar.WIDTH + (excludeVisitedButton.visible ? excludeVisitedButton.getWidth() + 5 : 0);
 		excludeLockedButton.setX(excludeLockedX);
 		newlyUnlockedButton.setX(excludeLockedX + (excludeLockedButton.visible ? excludeLockedButton.getWidth() + 5 : 0));
         newlyUnlockedButton.visible = filtersOpen && io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers.showNewlyUnlockedFilter;

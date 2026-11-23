@@ -27,6 +27,7 @@ class SettingsSearchTest {
     }
 
     private static List<Integer> search(String query) {
-        return SettingsSearch.matchingRows(LABELS, row -> row == 0 || row == 3 || row == 6, query);
+        return SettingsSearch.matchingRows(List.of(0, 1, 2, 3, 4, 5, 6, 7), row -> LABELS[row],
+                row -> row == 0 || row == 3 || row == 6, query, row -> true);
     }
 }

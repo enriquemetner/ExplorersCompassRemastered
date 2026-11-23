@@ -1,5 +1,9 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
+
+import io.github.enriquemetner.explorerscompass.gui.widgets.HitBox;
+
 import io.github.enriquemetner.explorerscompass.compat.jes.JesThumbnails;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.client.RenderUtils;
@@ -17,7 +21,6 @@ import java.util.List;
 
 @Environment(EnvType.CLIENT)
 public class StructureSearchList extends AlwaysSelectedEntryListWidget<StructureSearchEntry> {
-	static final int SCROLLBAR_WIDTH = Scrollbar.WIDTH;
 	static final int ACTION_BUTTON_HEIGHT = 16;
 	static final int ACTION_BUTTON_RIGHT_INSET = 7;
 	static final int ACTION_BUTTON_HORIZONTAL_PADDING = 8;
@@ -86,7 +89,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	@Override
 	public boolean isMouseOver(double mouseX, double mouseY) {
 		return super.isMouseOver(mouseX, mouseY)
-				|| getMaxScroll() > 0 && mouseX >= getScrollbarPositionX() && mouseX < getScrollbarPositionX() + SCROLLBAR_WIDTH
+				|| getMaxScroll() > 0 && mouseX >= getScrollbarPositionX() && mouseX < getScrollbarPositionX() + Scrollbar.WIDTH
 						&& mouseY >= top && mouseY <= bottom;
 	}
 
@@ -99,7 +102,7 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
 	private Scrollbar scrollbar() {
 		int viewportHeight = bottom - top;
 		int thumbHeight = Scrollbar.pixelThumbHeight(viewportHeight, getMaxPosition() - viewportHeight, 32, 8);
-		return new Scrollbar(getScrollbarPositionX(), SCROLLBAR_WIDTH, top, bottom, thumbHeight, getScrollAmount(), getMaxScroll());
+		return new Scrollbar(getScrollbarPositionX(), Scrollbar.WIDTH, top, bottom, thumbHeight, getScrollAmount(), getMaxScroll());
 	}
 
 	public boolean isScrollbarAt(double mouseX, double mouseY) {
@@ -315,22 +318,22 @@ public class StructureSearchList extends AlwaysSelectedEntryListWidget<Structure
         return getEntryAtPosition(mouseX, rowY);
     }
 
-    ButtonPress buttonAt(double mouseX, double mouseY) {
+    Runnable actionAt(double mouseX, double mouseY) {
         StructureSearchEntry row = actionRowAt(mouseX, mouseY);
         if (row == null || !row.isEnabled()) return null;
         if (hasPreviews()) {
             int index = children().indexOf(row);
             int y = previewY(getRowTop(index), displayedRowBottom(index) - getRowTop(index));
             if (parentScreen.jesThumbnails().canPreview(row.getStructureID())
-                    && ButtonPress.contains(mouseX, mouseY, previewX(), y, JesThumbnails.SIZE, JesThumbnails.SIZE)) {
-                return new ButtonPress(row, "jesPreview", () -> parentScreen.openJesPreview(row.getStructureID()));
+                    && HitBox.contains(mouseX, mouseY, previewX(), y, JesThumbnails.SIZE, JesThumbnails.SIZE)) {
+                return () -> parentScreen.openJesPreview(row.getStructureID());
             }
         }
         if (isFilterButtonClick(row, mouseX, mouseY)) {
-            return new ButtonPress(row, "filters", () -> parentScreen.openEntryFilters(row.getStructureID()));
+            return () -> parentScreen.openEntryFilters(row.getStructureID());
         }
         if (isActionButtonClick(row, mouseX, mouseY)) {
-            return new ButtonPress(row, "more", () -> parentScreen.openEntryDetails(row.getStructureID()));
+            return () -> parentScreen.openEntryDetails(row.getStructureID());
         }
         return null;
     }

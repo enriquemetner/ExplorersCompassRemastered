@@ -1,11 +1,14 @@
-package io.github.enriquemetner.explorerscompass.gui;
+package io.github.enriquemetner.explorerscompass.gui.dialog;
+
+import io.github.enriquemetner.explorerscompass.ExplorersCompass;
+import io.github.enriquemetner.explorerscompass.gui.widgets.HitBox;
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
-import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
@@ -14,8 +17,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
 
 /** A modal view of one entry, independent of the list's technical-name setting. */
-final class EntryDetailsPopup {
-    private static final int ACTION_HEIGHT = 20;
+public final class EntryDetailsDialog {
+    private static final int ACTION_HEIGHT = DialogButton.HEIGHT;
     private static final int TEXT_INSET = 12;
     private static final String COPY_HINT = "Click on IDs to copy";
     static final String HIDE_TOOLTIP = "Removes the structure from the list on this client, across all worlds and servers.\nYou can undo this in Settings.";
@@ -48,7 +51,7 @@ final class EntryDetailsPopup {
         }
     }
 
-    EntryDetailsPopup(MinecraftClient client, Identifier id, BooleanSupplier hidden, Runnable toggleHidden,
+    public EntryDetailsDialog(MinecraftClient client, Identifier id, BooleanSupplier hidden, Runnable toggleHidden,
                       BooleanSupplier requirementsVisible, Runnable showRequirements, Runnable close) {
         this.client = client;
         this.textRenderer = client.textRenderer;
@@ -97,14 +100,10 @@ final class EntryDetailsPopup {
                 Scrollbar.pixelThumbHeight(track, maxScroll(layout), 12, 0), scroll, maxScroll(layout));
     }
 
-    void render(DrawContext context, int width, int height, int mouseX, int mouseY) {
+    public void render(DrawContext context, int width, int height, int mouseX, int mouseY) {
         Layout layout = layout(width, height);
         scroll = MathHelper.clamp(scroll, 0, maxScroll(layout));
-        context.getMatrices().push();
-        context.getMatrices().translate(0, 0, 400);
-        context.fill(0, 0, width, height, 0x88000000);
-        context.fill(layout.x - 1, layout.y - 1, layout.x + layout.width + 1, layout.y + layout.height + 1, 0xff909090);
-        context.fill(layout.x, layout.y, layout.x + layout.width, layout.y + layout.height, 0xff000000);
+        DialogFrame.begin(context, width, height, 400, layout.x, layout.y, layout.width, layout.height);
         int titleY = layout.y + 10;
         String title = "Details";
         int hintX = layout.x + layout.width - TEXT_INSET - textRenderer.getWidth(COPY_HINT);
@@ -124,10 +123,9 @@ final class EntryDetailsPopup {
         }
         context.disableScissor();
         scrollbar(layout).render(context, 0xff242424, 0xff909090);
-        drawButton(context, hidden.getAsBoolean() ? "Undo" : "Hide", layout, 0, mouseX, mouseY);
-        if (layout.actionCount() == 3) drawButton(context, "Requirements", layout, 1, mouseX, mouseY);
-        drawButton(context, "Close", layout, layout.actionCount() - 1, mouseX, mouseY);
-        if (!hidden.getAsBoolean() && actionHovered(layout, 0, mouseX, mouseY)) {
+        var buttons = buttons(layout);
+        for (DialogButton button : buttons) button.render(context, textRenderer, mouseX, mouseY);
+        if (!hidden.getAsBoolean() && buttons.get(0).contains(mouseX, mouseY)) {
             context.drawOrderedTooltip(textRenderer, textRenderer.wrapLines(Text.literal(HIDE_TOOLTIP), Math.min(220, width - 30)), mouseX, mouseY);
         }
         context.getMatrices().pop();
@@ -141,46 +139,41 @@ final class EntryDetailsPopup {
 
     private boolean idHovered(Detail detail, Layout layout, int y, double mouseX, double mouseY) {
         return detail.canCopy() && mouseY >= layout.top && mouseY < layout.bottom
-                && inside(mouseX, mouseY, layout.textX(), y,
+                && HitBox.contains(mouseX, mouseY, layout.textX(), y,
                         Math.min(textRenderer.getWidth("§l" + detail.technical()), layout.textWidth()), textRenderer.fontHeight);
     }
 
-    private boolean actionHovered(Layout layout, int index, double mouseX, double mouseY) {
-        return inside(mouseX, mouseY, layout.actionX(index), layout.actionsY(), layout.actionWidth(), ACTION_HEIGHT);
+    private List<DialogButton> buttons(Layout layout) {
+        var buttons = new ArrayList<DialogButton>(layout.actionCount());
+        buttons.add(button(layout, 0, hidden.getAsBoolean() ? "Undo" : "Hide", toggleHidden));
+        if (layout.actionCount() == 3) buttons.add(button(layout, 1, "Requirements", showRequirements));
+        buttons.add(button(layout, layout.actionCount() - 1, "Close", close));
+        return buttons;
     }
 
-    private void drawButton(DrawContext context, String label, Layout layout, int index, int mouseX, int mouseY) {
-        int x = layout.actionX(index);
-        int y = layout.actionsY();
-        int width = layout.actionWidth();
-        context.fill(x, y, x + width, y + ACTION_HEIGHT, 0xff909090);
-        context.fill(x + 1, y + 1, x + width - 1, y + ACTION_HEIGHT - 1,
-                actionHovered(layout, index, mouseX, mouseY) ? 0xff424242 : 0xff242424);
-        context.drawCenteredTextWithShadow(textRenderer, label, x + width / 2, y + 6, 0xffffff);
+    private DialogButton button(Layout layout, int index, String label, Runnable action) {
+        return new DialogButton(layout.actionX(index), layout.actionsY(), layout.actionWidth(), label, action);
     }
 
-    ButtonPress buttonAt(double mouseX, double mouseY, int width, int height) {
+    public Runnable actionAt(double mouseX, double mouseY, int width, int height) {
         Layout layout = layout(width, height);
-        if (actionHovered(layout, 0, mouseX, mouseY)) return new ButtonPress(this, "hide", toggleHidden);
-        if (layout.actionCount() == 3 && actionHovered(layout, 1, mouseX, mouseY)) {
-            return new ButtonPress(this, "requirements", showRequirements);
-        }
-        if (actionHovered(layout, layout.actionCount() - 1, mouseX, mouseY)) return new ButtonPress(this, "close", close);
+        Runnable button = DialogButton.actionAt(buttons(layout), mouseX, mouseY);
+        if (button != null) return button;
         if (mouseY >= layout.top && mouseY < layout.bottom) {
             for (int i = 0; i < details.size(); i++) {
                 int rowY = layout.top + i * rowHeight() - (int) scroll;
                 Detail detail = details.get(i);
                 if (idHovered(detail, layout, rowY + 4 + textRenderer.fontHeight, mouseX, mouseY)) {
-                    return new ButtonPress(this, i, () -> client.keyboard.setClipboard(detail.technical));
+                    return () -> client.keyboard.setClipboard(detail.technical);
                 }
             }
         }
         return null;
     }
 
-    boolean click(double mouseX, double mouseY, int button, int width, int height) {
+    public boolean click(double mouseX, double mouseY, int button, int width, int height) {
         Layout layout = layout(width, height);
-        if (!inside(mouseX, mouseY, layout.x - 1, layout.y - 1, layout.width + 2, layout.height + 2)) {
+        if (!HitBox.contains(mouseX, mouseY, layout.x - 1, layout.y - 1, layout.width + 2, layout.height + 2)) {
             close.run();
             return true;
         }
@@ -192,17 +185,13 @@ final class EntryDetailsPopup {
         return false;
     }
 
-    void scroll(double amount, int width, int height) {
+    public void scroll(double amount, int width, int height) {
         scroll = Scrollbar.scrollPixels(scroll, amount, rowHeight(), maxScroll(layout(width, height)));
     }
 
-    void drag(double mouseY, int width, int height) {
+    public void drag(double mouseY, int width, int height) {
         if (dragging) scroll = scrollbar(layout(width, height)).offsetForMouse(mouseY, grabOffset);
     }
 
-    void release() { dragging = false; }
-
-    private static boolean inside(double mouseX, double mouseY, int x, int y, int width, int height) {
-        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
-    }
+    public void release() { dragging = false; }
 }

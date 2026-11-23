@@ -1,11 +1,14 @@
-package io.github.enriquemetner.explorerscompass.gui;
+package io.github.enriquemetner.explorerscompass.gui.dialog;
+
+import io.github.enriquemetner.explorerscompass.compat.ftb.FtbQuestNavigation;
+import io.github.enriquemetner.explorerscompass.gui.widgets.Scrollbar;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
+import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
-import io.github.enriquemetner.explorerscompass.compat.ftb.FtbQuestNavigation;
-import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
+
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;
@@ -13,11 +16,11 @@ import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.MathHelper;
+
 import org.lwjgl.glfw.GLFW;
 
 /** Modal requirements panel using the same frame and dim backdrop as the search dialog. */
-final class LockedRequirementsView {
-    static final int WINDOW_WIDTH = 260;
+public final class LockedRequirementsDialog {
     private static final int FRAME_HEIGHT = 67; // Title, footer, and border outside the scrollable body.
     private static final int BUTTON_BACKGROUND = 0xff242424;
     private static final int BUTTON_BORDER = 0xff909090;
@@ -45,11 +48,16 @@ final class LockedRequirementsView {
     private QuestPopup questPopup;
     private Runnable openTab;
 
-    void offerOpenTab(Runnable action) { openTab = action; }
+    public void offerOpenTab(Runnable action) { openTab = action; }
     private final boolean partyUnlocked;
 
-    LockedRequirementsView(TextRenderer renderer, Identifier structureId, RequirementNode requirements, Runnable onQuestBookOpened, boolean partyUnlocked, boolean nested, String title,
-                           java.util.function.Consumer<RequirementNode> onLink, Predicate<RequirementNode> canOpenLink) {
+    private final Runnable back;
+    private final Runnable close;
+
+    public LockedRequirementsDialog(TextRenderer renderer, Identifier structureId, RequirementNode requirements, Runnable onQuestBookOpened, boolean partyUnlocked, boolean nested, String title,
+                           java.util.function.Consumer<RequirementNode> onLink, Predicate<RequirementNode> canOpenLink, Runnable back, Runnable close) {
+        this.back = back;
+        this.close = close;
         this.renderer = renderer;
         this.nested = nested;
         this.title = title;
@@ -66,7 +74,7 @@ final class LockedRequirementsView {
         if (this.screenWidth == screenWidth && this.screenHeight == screenHeight) return;
         this.screenWidth = screenWidth;
         this.screenHeight = screenHeight;
-        width = Math.max(40, Math.min(WINDOW_WIDTH, screenWidth - 24));
+        width = DialogFrame.standardWidth(screenWidth);
         lineHeight = renderer.fontHeight + 3;
         lines = new ArrayList<>();
         if (structureId != null) {
@@ -125,13 +133,9 @@ final class LockedRequirementsView {
                 Scrollbar.pixelThumbHeight(bodyHeight, maxScroll(), 12, 0), scroll, maxScroll());
     }
 
-    void render(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY) {
+    public void render(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY) {
         layout(screenWidth, screenHeight);
-        context.getMatrices().push();
-        context.getMatrices().translate(0, 0, 300);
-        context.fill(0, 0, screenWidth, screenHeight, 0x88000000);
-        context.fill(x - 1, y - 1, x + width + 1, backTop() + 26, 0xff909090);
-        context.fill(x, y, x + width, backTop() + 25, 0xff000000);
+        DialogFrame.begin(context, screenWidth, screenHeight, 300, x, y, width, backTop() + 25 - y);
         context.drawCenteredTextWithShadow(renderer, Text.literal(title != null ? title : partyUnlocked ? "Personal Requirements" : "Locked"),
                 x + width / 2, y + 10, title != null || partyUnlocked ? 0xffffffff : 0xffff5555);
         context.enableScissor(x + 10, bodyTop(), x + width - 18, bodyTop() + bodyHeight);
@@ -163,10 +167,7 @@ final class LockedRequirementsView {
         context.disableScissor();
         // The thumb's transparent grip dots reveal the track color.
         scrollbar().render(context, BUTTON_BORDER, BUTTON_BACKGROUND);
-        int buttonX = backX();
-        renderPopupButton(context, buttonX, backTop(), buttonWidth(), Text.literal("Back"), mouseX, mouseY);
-        if (openTab != null) renderPopupButton(context, openX(), backTop(), buttonWidth(), Text.literal("Open"), mouseX, mouseY);
-        if (nested) renderPopupButton(context, closeX(), backTop(), buttonWidth(), Text.literal("Close"), mouseX, mouseY);
+        for (DialogButton button : mainButtons()) button.render(context, renderer, mouseX, mouseY);
         context.getMatrices().pop();
         if (questPopup != null) {
             renderQuestPopup(context, screenWidth, screenHeight, mouseX, mouseY);
@@ -180,7 +181,6 @@ final class LockedRequirementsView {
         }
     }
 
-
     private int buttonCount() { return openTab != null ? 3 : nested ? 2 : 1; }
     private int buttonWidth() { return Math.min(70, (width - buttonCount() * 8) / buttonCount()); }
     private int firstButtonX() { return x + (width - buttonCount() * buttonWidth() - (buttonCount() - 1) * 8) / 2; }
@@ -188,34 +188,40 @@ final class LockedRequirementsView {
     private int backX() { return firstButtonX() + (openTab != null ? buttonWidth() + 8 : 0); }
     private int closeX() { return backX() + buttonWidth() + 8; }
 
-    boolean shows(RequirementNode node) { return requirements.equals(node); }
-    double scrollPosition() { return scroll; }
-    void restoreScroll(double position) { scroll = position; }
+    public boolean shows(RequirementNode node) { return requirements.equals(node); }
+    public double scrollPosition() { return scroll; }
+    public void restoreScroll(double position) { scroll = position; }
 
-    ButtonPress buttonAt(double mouseX, double mouseY, int screenWidth, int screenHeight, Runnable back, Runnable close) {
-        layout(screenWidth, screenHeight);
-        if (questPopup == null) {
-            if (openTab != null && ButtonPress.contains(mouseX, mouseY, openX(), backTop(), buttonWidth(), 20))
-                return new ButtonPress(this, "open_tab", openTab);
-            if (nested && ButtonPress.contains(mouseX, mouseY, closeX(), backTop(), buttonWidth(), 20))
-                return new ButtonPress(this, "close", close);
-            return ButtonPress.at(mouseX, mouseY, backX(), backTop(), buttonWidth(), 20, this, "back", back);
-        }
-        PopupLayout p = popupLayout(screenWidth, screenHeight);
-        if (!questPopup.missing && ButtonPress.contains(mouseX, mouseY, p.openX, p.buttonY, p.buttonWidth, 20)) {
-            return new ButtonPress(questPopup, "open", () -> {
+    private List<DialogButton> mainButtons() {
+        var buttons = new ArrayList<DialogButton>(buttonCount());
+        buttons.add(new DialogButton(backX(), backTop(), buttonWidth(), "Back", back));
+        if (openTab != null) buttons.add(new DialogButton(openX(), backTop(), buttonWidth(), "Open", openTab));
+        if (nested) buttons.add(new DialogButton(closeX(), backTop(), buttonWidth(), "Close", close));
+        return buttons;
+    }
+
+    private List<DialogButton> questButtons(PopupLayout p) {
+        var buttons = new ArrayList<DialogButton>(3);
+        if (!questPopup.missing) {
+            buttons.add(new DialogButton(p.openX, p.buttonY, p.buttonWidth, Text.translatable("gui.explorerscompass.open"), () -> {
                 long questId = questPopup.questId;
                 closeQuestPopup();
                 if (FtbQuestNavigation.openChapter(questId)) onQuestBookOpened.run();
                 else questPopup = new QuestPopup(questId, false, true);
-            });
+            }));
         }
-        if (ButtonPress.contains(mouseX, mouseY, p.closeX(), p.buttonY, p.buttonWidth, 20))
-            return new ButtonPress(questPopup, "close", close);
-        return ButtonPress.at(mouseX, mouseY, p.backX(), p.buttonY, p.buttonWidth, 20, questPopup, "back", this::closeQuestPopup);
+        buttons.add(new DialogButton(p.backX(), p.buttonY, p.buttonWidth, "Back", this::closeQuestPopup));
+        buttons.add(new DialogButton(p.closeX(), p.buttonY, p.buttonWidth, "Close", close));
+        return buttons;
     }
 
-    boolean click(double mouseX, double mouseY, int button, int width, int height, Runnable back) {
+    public Runnable actionAt(double mouseX, double mouseY, int screenWidth, int screenHeight) {
+        layout(screenWidth, screenHeight);
+        return DialogButton.actionAt(questPopup == null ? mainButtons()
+                : questButtons(popupLayout(screenWidth, screenHeight)), mouseX, mouseY);
+    }
+
+    public boolean click(double mouseX, double mouseY, int button, int width, int height) {
         layout(width, height);
         if (questPopup != null) {
             return clickQuestPopup(mouseX, mouseY, width, height);
@@ -253,12 +259,12 @@ final class LockedRequirementsView {
         return false;
     }
 
-    void scroll(double amount) {
+    public void scroll(double amount) {
         if (questPopup == null) scroll = Scrollbar.scrollPixels(scroll, amount, lineHeight * 3, maxScroll());
     }
-    void drag(double mouseY) { if (questPopup == null && dragging) scroll = scrollbar().offsetForMouse(mouseY, grabOffset); }
-    void release() { dragging = false; }
-    boolean closeQuestPopup() {
+    public void drag(double mouseY) { if (questPopup == null && dragging) scroll = scrollbar().offsetForMouse(mouseY, grabOffset); }
+    public void release() { dragging = false; }
+    public boolean closeQuestPopup() {
         if (questPopup == null) return false;
         questPopup = null;
         return true;
@@ -281,7 +287,7 @@ final class LockedRequirementsView {
     }
 
     private PopupLayout popupLayout(int screenWidth, int screenHeight) {
-        int popupWidth = Math.max(40, Math.min(WINDOW_WIDTH, screenWidth - 24));
+        int popupWidth = DialogFrame.standardWidth(screenWidth);
         int textWidth = Math.max(1, popupWidth - 24);
         List<OrderedText> title = renderer.wrapLines(Text.literal("Quest Unavailable"), textWidth);
         Text first = Text.translatable(questPopup.missing
@@ -306,11 +312,7 @@ final class LockedRequirementsView {
 
     private void renderQuestPopup(DrawContext context, int screenWidth, int screenHeight, int mouseX, int mouseY) {
         PopupLayout p = popupLayout(screenWidth, screenHeight);
-        context.getMatrices().push();
-        context.getMatrices().translate(0, 0, 400);
-        context.fill(0, 0, screenWidth, screenHeight, 0x88000000);
-        context.fill(p.x - 1, p.y - 1, p.x + p.width + 1, p.y + p.height + 1, BUTTON_BORDER);
-        context.fill(p.x, p.y, p.x + p.width, p.y + p.height, 0xff000000);
+        DialogFrame.begin(context, screenWidth, screenHeight, 400, p.x, p.y, p.width, p.height);
         int rowY = p.y + 12;
         for (OrderedText line : p.title) {
             context.drawCenteredTextWithShadow(renderer, line, p.x + p.width / 2, rowY, 0xff5555);
@@ -321,19 +323,8 @@ final class LockedRequirementsView {
             context.drawText(renderer, line, p.x + 12, rowY, 0xffffff, true);
             rowY += lineHeight;
         }
-        if (!questPopup.missing) {
-            renderPopupButton(context, p.openX, p.buttonY, p.buttonWidth, Text.translatable("gui.explorerscompass.open"), mouseX, mouseY);
-        }
-        renderPopupButton(context, p.backX(), p.buttonY, p.buttonWidth, Text.literal("Back"), mouseX, mouseY);
-        renderPopupButton(context, p.closeX(), p.buttonY, p.buttonWidth, Text.literal("Close"), mouseX, mouseY);
+        for (DialogButton button : questButtons(p)) button.render(context, renderer, mouseX, mouseY);
         context.getMatrices().pop();
-    }
-
-    private void renderPopupButton(DrawContext context, int buttonX, int buttonY, int buttonWidth, Text label, int mouseX, int mouseY) {
-        boolean hovered = ButtonPress.contains(mouseX, mouseY, buttonX, buttonY, buttonWidth, 20);
-        context.fill(buttonX, buttonY, buttonX + buttonWidth, buttonY + 20, BUTTON_BORDER);
-        context.fill(buttonX + 1, buttonY + 1, buttonX + buttonWidth - 1, buttonY + 19, hovered ? 0xff424242 : BUTTON_BACKGROUND);
-        context.drawCenteredTextWithShadow(renderer, label, buttonX + buttonWidth / 2, buttonY + 6, 0xffffff);
     }
 
     private boolean clickQuestPopup(double mouseX, double mouseY, int screenWidth, int screenHeight) {
@@ -344,7 +335,7 @@ final class LockedRequirementsView {
         return false;
     }
 
-    void keyPressed(int key) {
+    public void keyPressed(int key) {
         switch (key) {
             case GLFW.GLFW_KEY_UP -> scroll(1);
             case GLFW.GLFW_KEY_DOWN -> scroll(-1);
