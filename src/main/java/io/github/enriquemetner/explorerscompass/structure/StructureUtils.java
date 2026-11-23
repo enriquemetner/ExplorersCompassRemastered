@@ -35,11 +35,22 @@ import net.minecraft.world.gen.chunk.ChunkGenerator;
 import net.minecraft.world.gen.structure.Structure;
 
 public class StructureUtils {
+	private static final Identifier NO_STRUCTURE_SET = new Identifier(ExplorersCompass.MODID, "none");
 
 	public static Map<Identifier, Identifier> getStructureIDsToSetIDs(ServerWorld world) {
-		Map<Identifier, Identifier> structureIDsToSetIDs = new HashMap<Identifier, Identifier>();
-		for (Structure structure : getStructureRegistry(world)) {
-			structureIDsToSetIDs.put(getIDForStructure(world, structure), getSetForStructure(world, structure));
+		Registry<StructureSet> sets = getStructureSetRegistry(world);
+		Map<Structure, Identifier> firstSets = new HashMap<>();
+		for (StructureSet set : sets) {
+			Identifier setId = sets.getId(set);
+			for (WeightedEntry entry : set.structures()) {
+				firstSets.putIfAbsent(entry.structure().value(), setId);
+			}
+		}
+
+		Registry<Structure> structures = getStructureRegistry(world);
+		Map<Identifier, Identifier> structureIDsToSetIDs = new HashMap<>();
+		for (Structure structure : structures) {
+			structureIDsToSetIDs.put(structures.getId(structure), firstSets.getOrDefault(structure, NO_STRUCTURE_SET));
 		}
 		return structureIDsToSetIDs;
 	}
@@ -53,7 +64,7 @@ public class StructureUtils {
 				}
 			}
 		}
-		return new Identifier(ExplorersCompass.MODID, "none");
+		return NO_STRUCTURE_SET;
 	}
 
 	public static List<Identifier> getStructuresForSet(ServerWorld world, Identifier setId) {
