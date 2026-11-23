@@ -1,6 +1,5 @@
 package io.github.enriquemetner.explorerscompass.config;
 
-import static io.github.enriquemetner.explorerscompass.config.ServerToml.quotedDiagnosticValue;
 import static io.github.enriquemetner.explorerscompass.config.StructureListLoader.BLACKLIST_KEY;
 import static io.github.enriquemetner.explorerscompass.config.StructureListLoader.WHITELIST_KEY;
 
@@ -22,8 +21,6 @@ import java.util.Set;
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Section;
 import io.github.enriquemetner.explorerscompass.config.StructureListLoader.StructureListLoad;
-import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Diagnostic;
-import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Severity;
 import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.core.io.ParsingMode;
@@ -55,14 +52,9 @@ public class ExplorersCompassConfig {
 	private static final String BLACKLIST = "server/blacklist.toml";
 	private static final String HIDDEN_STRUCTURES = "client/hidden_structures.toml";
 	private static final String HIDDEN_STRUCTURES_COMMENT = " Structures hidden from this client's compass list.";
-	private static final String SEARCH_SAVED_STRUCTURES = "search.findOldStructures";
-	private static final String SEARCH_RADIUS = "search.maxSearchRadius";
-	private static final int DEFAULT_SEARCH_RADIUS = 30_000;
-	private static final int MAX_SEARCH_RADIUS = 50_000;
-
 	public static boolean findOldStructures = false;
 	public static boolean allowExcludeVisited = true;
-	public static int maxSearchRadius = DEFAULT_SEARCH_RADIUS;
+	public static int maxSearchRadius = ServerSettingsFile.DEFAULT_SEARCH_RADIUS;
 	public static boolean relockOnReload = false;
 	public static boolean compassSharing = false;
 	public static boolean visitsSharing = false;
@@ -212,52 +204,7 @@ public class ExplorersCompassConfig {
 	}
 
 	static Section loadServerSettings(Path instanceFile, Path worldFile) {
-		List<Diagnostic> failures = new ArrayList<>();
-		Path selectedFile = worldFile == null ? instanceFile : worldFile;
-		ServerToml document = tryReadServerSettings(selectedFile, !selectedFile.equals(instanceFile), failures);
-		if (document == null && !selectedFile.equals(instanceFile)) {
-			selectedFile = instanceFile;
-			document = tryReadServerSettings(selectedFile, false, failures);
-		}
-		if (document == null) {
-			loadCommon(new ServerToml(TomlFormat.newConfig(LinkedHashMap::new), List.of()), "settings.toml");
-			return new Section("Could not load settings.toml. All settings fell back to built-in defaults",
-					Severity.ERROR, failures);
-		}
-		CommentedConfig common = document.config();
-		var settings = loadCommon(document, selectedFile.getFileName().toString());
-		List<Diagnostic> diagnostics = new ArrayList<>(failures);
-		diagnostics.addAll(settings.diagnostics);
-		String count = settings.loaded + "/" + settings.total;
-		String summary = settings.valid ? "Successfully loaded " + count + " settings"
-				: count + " settings loaded. Some settings were rejected";
-		if (!failures.isEmpty()) summary = "Could not load world settings.toml. Using instance settings. " + summary;
-		Severity level = !failures.isEmpty() ? Severity.ERROR : diagnostics.isEmpty() ? null : Severity.WARNING;
-		var result = new Section(summary, level, diagnostics, selectedFile);
-		if (!settings.valid) return result;
-
-		TomlWriter writer = new TomlWriter();
-		String before = writer.writeToString(common);
-		writeCommon(common);
-		if (!before.equals(writer.writeToString(common))) {
-			try {
-				write(selectedFile, common);
-			} catch (IOException ignored) {
-				// Settings are already loaded even if the file cannot be updated.
-			}
-		}
-		return result;
-	}
-
-	private static ServerToml tryReadServerSettings(Path path, boolean world, List<Diagnostic> failures) {
-		try {
-			return ServerToml.read(path);
-		} catch (IOException | IllegalArgumentException error) {
-			String scope = world ? "world" : "instance";
-			failures.add(new Diagnostic(Severity.ERROR,
-					"Could not load " + scope + " " + path.getFileName() + ": " + StartupConfigReport.cause(error)));
-			return null;
-		}
+		return ServerSettingsFile.load(instanceFile, worldFile);
 	}
 
 	static StructureListLoad loadStructureLists(Path whitelistFile, Path blacklistFile, Set<Identifier> registeredIds) {
@@ -283,6 +230,7 @@ public class ExplorersCompassConfig {
 			case UNLOCKING_RULES -> DEFAULT_UNLOCKING_RULES;
 			case SEARCH_COSTS -> SearchCosts.DEFAULT_JSON;
 			case CLIENT_SETTINGS -> serializeClientSettings();
+			case SERVER_SETTINGS -> ServerSettingsFile.defaultContents();
 			default -> defaultToml(name);
 		};
 		Files.createDirectories(path.toAbsolutePath().getParent());
@@ -294,10 +242,6 @@ public class ExplorersCompassConfig {
 	private static String defaultToml(String name) {
 		CommentedConfig config = TomlFormat.newConfig(LinkedHashMap::new);
 		switch (name) {
-			case SERVER_SETTINGS -> {
-				loadCommon(new ServerToml(config, List.of()), "settings.toml");
-				writeCommon(config);
-			}
 			case WHITELIST -> writeCommonWhitelist(config);
 			case BLACKLIST -> writeCommonBlacklist(config);
 			case HIDDEN_STRUCTURES -> put(config, "hiddenStructures", List.of(), HIDDEN_STRUCTURES_COMMENT);
@@ -326,7 +270,7 @@ public class ExplorersCompassConfig {
 		}
 	}
 
-	private static void write(Path path, CommentedConfig config) throws IOException {
+	static void writeToml(Path path, CommentedConfig config) throws IOException {
 		Files.createDirectories(path.getParent());
 		try (Writer writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
 			new TomlWriter().write(config, writer);
@@ -340,8 +284,7 @@ public class ExplorersCompassConfig {
 		throw bad(key, "boolean");
 	}
 
-	private static int number(CommentedConfig config, String key, int fallback, int minimum) {
-		Object value = config.get(key);
+	static int readInteger(Object value, String key, int fallback, int minimum) {
 		if (value == null) return fallback;
 		if (!(value instanceof Number number) || !Double.isFinite(number.doubleValue())
 				|| number.doubleValue() != number.longValue()
@@ -361,111 +304,14 @@ public class ExplorersCompassConfig {
 		return result;
 	}
 
-	private static IllegalArgumentException bad(String key, String expected) {
+	static IllegalArgumentException bad(String key, String expected) {
 		return new IllegalArgumentException("Invalid Explorer's Compass setting '" + key + "'; expected " + expected);
-	}
-
-	private static ServerSettingsReader loadCommon(ServerToml document, String filename) {
-		var settings = new ServerSettingsReader(document, filename);
-		maxSearchRadius = settings.searchRadius();
-		findOldStructures = settings.bool(SEARCH_SAVED_STRUCTURES, false);
-		compassSharing = settings.progressionBool("compassSharing", false);
-		visitsSharing = settings.progressionBool("visitsSharing", false);
-		opacPartySharing = settings.progressionBool("opacPartySharing", true);
-		allowExcludeVisited = settings.bool("search.allowExcludeVisited", true);
-		relockOnReload = settings.progressionBool("relockOnReload", false);
-		displayCoordinates = settings.bool("compass.displayCoordinates", true);
-		displayDistance = settings.bool("compass.displayDistance", true);
-		showNetherEquivalent = settings.bool("compass.showNetherEquivalent", false);
-		useClassicCompass = settings.bool("compass.useClassicCompass", false);
-		return settings;
-	}
-
-	private static final class ServerSettingsReader {
-		private final ServerToml document;
-		private final String filename;
-		private final List<Diagnostic> diagnostics = new ArrayList<>();
-		private boolean valid = true;
-		private int loaded, total;
-
-		private ServerSettingsReader(ServerToml document, String filename) {
-			this.document = document;
-			this.filename = filename;
-			Object permissions = document.config().get("permissions");
-			if (permissions != null && !(permissions instanceof CommentedConfig)) {
-				invalid("permissions", "a table");
-			}
-		}
-
-		private Object value(String key) {
-			String section = key.substring(0, key.indexOf('.'));
-			Object parent = document.config().get(section);
-			if (parent != null && !(parent instanceof CommentedConfig)) {
-				throw bad(section, "a table");
-			}
-			return document.config().get(key);
-		}
-
-		private void invalid(String key, String expected) {
-			valid = false;
-			String location = document.assignmentLocation(key);
-			Object received;
-			try {
-				received = document.config().get(key);
-			} catch (ClassCastException ignored) {
-				received = null;
-			}
-			if (location.isEmpty() && key.contains(".")) {
-				location = document.assignmentLocation(key.substring(0, key.indexOf('.')));
-			}
-			diagnostics.add(new Diagnostic(Severity.ERROR, filename + ": Invalid setting " + quotedDiagnosticValue(key) + location
-					+ ". Expected " + expected + (received == null ? "" : ", found " + quotedDiagnosticValue(received))));
-		}
-
-		private boolean progressionBool(String key, boolean fallback) {
-			Object progression = document.config().get("progression");
-			if (progression == null || progression instanceof CommentedConfig section && !section.contains(key)) {
-				return bool("unlocking." + key, fallback);
-			}
-			return bool("progression." + key, fallback);
-		}
-
-		private boolean bool(String key, boolean fallback) {
-			total++;
-			try {
-				Object value = value(key);
-				if (value == null || value instanceof Boolean) {
-					loaded++;
-					return value instanceof Boolean result ? result : fallback;
-				}
-			} catch (IllegalArgumentException ignored) {
-				// The setting's containing table is invalid.
-			}
-			invalid(key, "a boolean in its settings table");
-			return fallback;
-		}
-
-		private int searchRadius() {
-			total++;
-			try {
-				value(SEARCH_RADIUS);
-				int radius = number(document.config(), SEARCH_RADIUS, DEFAULT_SEARCH_RADIUS, 1);
-				if (radius <= MAX_SEARCH_RADIUS) {
-					loaded++;
-					return radius;
-				}
-			} catch (IllegalArgumentException ignored) {
-				// The setting or its containing table is invalid.
-			}
-			invalid(SEARCH_RADIUS, "an integer between 1 and " + MAX_SEARCH_RADIUS);
-			return DEFAULT_SEARCH_RADIUS;
-		}
 	}
 
 	static boolean loadClient(CommentedConfig config) {
 		displayWithChatOpen = bool(config, clientPath(config, "hud.displayWithChatOpen", "overlay.displayWithChatOpen"), displayWithChatOpen);
 		String offsetPath = clientPath(config, "hud.verticalOffset", "overlay.overlayLineOffset");
-		overlayLineOffset = Math.max(0, number(config, offsetPath, overlayLineOffset, Integer.MIN_VALUE));
+		overlayLineOffset = Math.max(0, readInteger(config.get(offsetPath), offsetPath, overlayLineOffset, Integer.MIN_VALUE));
 		String sidePath = clientPath(config, "hud.hudSide", "overlay.overlaySide");
 		Object side = config.get(sidePath);
 		if (side != null) {
@@ -503,86 +349,6 @@ public class ExplorersCompassConfig {
 	private static void put(CommentedConfig config, String key, Object value, String comment) {
 		config.set(key, value);
 		if (config.getComment(key) == null) config.setComment(key, comment);
-	}
-
-	private static boolean isAtPosition(CommentedConfig config, String key, int index) {
-		return config != null && config.valueMap().keySet().stream().skip(index).findFirst().filter(key::equals).isPresent();
-	}
-
-	private static void moveToPosition(CommentedConfig config, String key, int index) {
-		if (isAtPosition(config, key, index)) return;
-		var values = config.valueMap();
-		Object value = values.remove(key);
-		var laterKeys = values.keySet().stream().skip(index).toList();
-		var laterValues = new LinkedHashMap<String, Object>();
-		for (String laterKey : laterKeys) laterValues.put(laterKey, values.remove(laterKey));
-		values.put(key, value);
-		values.putAll(laterValues);
-	}
-
-	private static void writeCommon(CommentedConfig config) {
-		config.remove("permissions.allowTeleport");
-		config.remove("compass.compassDurability");
-		config.remove("search.defaultXpCost");
-		config.remove("search.allowSearchWithoutEnoughXp");
-		config.remove("search.maxSamples");
-
-		if (config.get("unlocking") instanceof CommentedConfig legacy) {
-			for (String key : List.of("relockOnReload", "compassSharing", "opacPartySharing", "visitsSharing")) {
-				legacy.remove(key);
-			}
-			if (legacy.isEmpty()) config.remove("unlocking");
-		}
-
-		CommentedConfig compass = config.get("compass");
-		if (compass == null) {
-			compass = config.createSubConfig();
-			config.set("compass", compass);
-		}
-		moveToPosition(config, "compass", 0);
-		writeCommonSetting(compass, "displayCoordinates", displayCoordinates, 0,
-				"Show the coordinates of located structures.");
-		writeCommonSetting(compass, "displayDistance", displayDistance, 1,
-				"Show the distance to located structures.");
-		writeCommonSetting(compass, "showNetherEquivalent", showNetherEquivalent, 2,
-				"Point to equivalent coordinates when tracking a structure across the Overworld and Nether.");
-		writeCommonSetting(compass, "useClassicCompass", useClassicCompass, 3,
-				"Use the original Explorer’s Compass texture and crafting recipe.");
-
-		CommentedConfig search = config.get("search");
-		if (search == null) {
-			search = config.createSubConfig();
-			config.set("search", search);
-		}
-		moveToPosition(config, "search", 1);
-		writeCommonSetting(search, "allowExcludeVisited", allowExcludeVisited, 0,
-				"Allow players to exclude visited structure instances from searches. Visits are always recorded.");
-		writeCommonSetting(search, "findOldStructures", findOldStructures, 1,
-				"Find existing structures saved under older world generation rules. This has highly variable impact on search duration in explored areas." + "\n"
-				+ "Usually only needed if world or structure generation changed significantly through mods or datapacks AFTER those chunks were generated.");
-		writeCommonSetting(search, "maxSearchRadius", maxSearchRadius, 2,
-				"Maximum search radius in blocks (Max. 50000).");
-
-		CommentedConfig progression = config.get("progression");
-		if (progression == null) {
-			progression = config.createSubConfig();
-			config.set("progression", progression);
-		}
-		moveToPosition(config, "progression", 2);
-		writeCommonSetting(progression, "relockOnReload", relockOnReload, 0,
-				"Relock structures at world startup when their unlock requirements change or a prerequisite is no longer met.");
-		writeCommonSetting(progression, "compassSharing", compassSharing, 1,
-				"Unlock structures which a previous compass holder had unlocked after getting a hold of their compass.");
-		writeCommonSetting(progression, "opacPartySharing", opacPartySharing, 2,
-				"Share structure unlocks among OPAC party members (not permanent). Requires Open Parties and Claims mod.");
-		writeCommonSetting(progression, "visitsSharing", visitsSharing, 3,
-				"Include visit history when sharing is enabled for OPAC parties or compass transfers");
-	}
-
-	private static void writeCommonSetting(CommentedConfig section, String key, Object value, int index, String comment) {
-		section.set(key, value);
-		section.setComment(key, comment);
-		moveToPosition(section, key, index);
 	}
 
 	static String serializeClientSettings() {
@@ -642,7 +408,7 @@ public class ExplorersCompassConfig {
 			Path path = configDirectory().resolve(name);
 			CommentedConfig config = Files.exists(path) ? parse(path) : TomlFormat.newConfig(LinkedHashMap::new);
 			update.accept(config);
-			write(path, config);
+			writeToml(path, config);
 		} catch (IOException e) {
 			throw new RuntimeException("Could not save Explorer's Compass " + name, e);
 		}
