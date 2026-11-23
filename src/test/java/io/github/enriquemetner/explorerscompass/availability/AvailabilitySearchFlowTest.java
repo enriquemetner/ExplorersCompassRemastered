@@ -21,7 +21,7 @@ class AvailabilitySearchFlowTest {
         var search = method(node, "startValidatedSearch");
         assertCallsInOrder(search, "classify", "isEmpty", "sendLocked",
                 "rejectIfUnaffordable", "beginSearch", "create", "hasWork", "start");
-        assertCallsInOrder(method(node, "succeed"), "rejectIfUnaffordable", "pay", "finishSearch");
+        assertCallsInOrder(method(node, "succeed"), "rejectIfUnaffordable", "pay", "commitFound", "detach", "logFound");
     }
 
     @Test void absentAndExhaustedWorkersUseTheSameSavedSearchFallback() throws Exception {
@@ -34,7 +34,7 @@ class AvailabilitySearchFlowTest {
         assertCallsInOrder(method(worker, "fail"), "clear", "fail");
 
         var fail = method(item, "fail");
-        assertCallsInOrder(fail, "restore", "disabled", "canSend", "send", "wrongDimension", "finishSearch");
+        assertCallsInOrder(fail, "restore", "disabled", "canSend", "detach", "send", "wrongDimension", "finishFailure");
         assertEquals(-1, callIndex(fail, "start"), "Exhaustion must end the current search");
     }
 

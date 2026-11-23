@@ -1,10 +1,7 @@
 package io.github.enriquemetner.explorerscompass.items;
 
 import java.util.List;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.HashMap;
-import java.util.UUID;
 import java.util.Map;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockedStructures;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockNotifications;
@@ -17,6 +14,7 @@ import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules;
 import io.github.enriquemetner.explorerscompass.unlocking.PartySharing;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.gui.GuiWrapper;
+import io.github.enriquemetner.explorerscompass.items.CompassSearchSessions.Session;
 import io.github.enriquemetner.explorerscompass.network.SyncPacket;
 import io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket;
 import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
@@ -36,6 +34,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.text.Text;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Hand;
@@ -54,6 +53,11 @@ import net.minecraft.world.World;
 import net.minecraft.world.gen.structure.Structure;
 
 public class ExplorersCompassItem extends Item {
+    public static final String NAME = "explorerscompass";
+
+    private final CompassSearchSessions sessions = new CompassSearchSessions();
+
+
     private Identifier getTrackedStructure(ServerPlayerEntity player) {
         ItemStack held = ItemUtils.getHeldItem(player, this);
         return !held.isEmpty() && getState(held) == CompassState.FOUND ? getStructureID(held) : null;
@@ -62,29 +66,18 @@ public class ExplorersCompassItem extends Item {
         if (stack.getItem() != this) return;
         ensureHolder(player, stack);
         if (getState(stack) != CompassState.FOUND) return;
-        Identifier id = Identifier.tryParse(stack.getOrCreateNbt().getString("StructureID"));
+        Identifier id = Identifier.tryParse(stack.getOrCreateNbt().getString(CompassSearchData.STRUCTURE_ID));
         if (id == null || !player.getServer().getRegistryManager().get(net.minecraft.registry.RegistryKeys.STRUCTURE).containsId(id)
                 || StructureUtils.structureIdIsExcluded(id)
                 || (!UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), id)
                     && !stack.getOrCreateNbt().getBoolean(CompassTransfer.INHERITED)
-					&& !(stack.getNbt() != null && stack.getNbt().getBoolean("CreativeBypass")
+					&& !(stack.getNbt() != null && stack.getNbt().getBoolean(CompassSearchData.CREATIVE_BYPASS)
 							&& player.getAbilities().creativeMode))) clearCompassTarget(stack);
     }
     public void ensureHolder(ServerPlayerEntity player, ItemStack stack) {
         if (stack.getItem() != this) return;
         NbtCompound data = stack.getOrCreateNbt();
-        if (data.containsUuid(CompassSearchData.TOKEN)) {
-            UUID token = data.getUuid(CompassSearchData.TOKEN);
-            SearchSession active = searches.get(player.getUuid());
-            if (active == null || active.stack != stack || !active.token.equals(token)) {
-                // Stop the old owner's search before importing any unlocks or recording a new holder.
-                for (UUID owner : List.copyOf(searches.keySet())) {
-                    SearchSession old = searches.get(owner);
-                    if (old.token.equals(token)) stopDetachedSearch(owner, old);
-                }
-                CompassSearchData.restore(data, token);
-            }
-        }
+        sessions.recoverTransferredSearch(player, stack, data);
         UnlockedStructures state = UnlockedStructures.get(player.getServer());
         CompassTransfer.Result transfer = CompassTransfer.acquire(data, player.getUuid(),
                 ExplorersCompassConfig.compassSharing, getState(stack) == CompassState.FOUND,
@@ -112,29 +105,19 @@ public class ExplorersCompassItem extends Item {
                 && io.github.enriquemetner.explorerscompass.unlocking.UnlockReloads.ready(player.getUuid())) validateTarget(player, stack);
     }
 
-    private boolean holdsSession(PlayerEntity player, SearchSession session) {
-        for (int i = 0; i < player.getInventory().size(); i++)
-            if (player.getInventory().getStack(i) == session.stack && !session.stack.isEmpty()) return true;
-        return false;
-    }
-
     public void stopAllSearches() {
-        for (UUID owner : List.copyOf(searches.keySet())) stopSearch(owner, searches.get(owner));
+        sessions.stopAll();
     }
 
-    public void tickSearchOwnership(net.minecraft.server.MinecraftServer server) {
-        for (UUID owner : List.copyOf(searches.keySet())) {
-            SearchSession session = searches.get(owner);
-            ServerPlayerEntity player = server.getPlayerManager().getPlayer(owner);
-            if (player == null || !holdsSession(player, session)) stopDetachedSearch(owner, session);
-        }
+    public void tickSearchOwnership(MinecraftServer server) {
+        sessions.tickOwnership(server);
     }
 
     public void revalidateAccess(ServerPlayerEntity player) {
-        SearchSession session = searches.get(player.getUuid());
+        Session session = sessions.get(player);
         if (session != null && !(session.creativeBypass && player.getAbilities().creativeMode)
                 && session.eligibleIds.stream().noneMatch(id -> UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), id))) {
-            stopDetachedSearch(player.getUuid(), session);
+            sessions.rejectDetached(session);
         }
         for (int slot = 0; slot < player.getInventory().size(); slot++) {
             validateTarget(player, player.getInventory().getStack(slot));
@@ -142,141 +125,32 @@ public class ExplorersCompassItem extends Item {
     }
 
     public void abortFailedSearch(PlayerEntity player, SearchWorker worker, RuntimeException error) {
-        UUID owner = player.getUuid();
-        SearchSession session = searches.get(owner);
-        if (worker != null && session != null && session.worker == worker) {
-            failSearch(owner, session, error);
-        }
+        sessions.abort(player, worker, error);
     }
 
-    private void failSearch(UUID owner, SearchSession session, RuntimeException error) {
-        int radius = session.currentRadius();
-        if (removeSearch(owner, session)) {
-            ExplorersCompass.LOGGER.error("Search {} error at radius {} blocks after {} ms",
-                    session.logId, radius, session.elapsedMillis(), error);
-            sendSearchRejected(owner, session);
-        }
-    }
-
-    private void stopDetachedSearch(UUID owner, SearchSession session) {
-        if (stopSearch(owner, session)) sendSearchRejected(owner, session);
-    }
-
-    private void sendSearchRejected(UUID owner, SearchSession session) {
-        ServerPlayerEntity player = session.world.getServer().getPlayerManager().getPlayer(owner);
-        if (player != null) SearchResultPacket.send(player, session.requestId, SearchResultPacket.REJECTED, 0);
-    }
-
-    private boolean stopSearch(UUID owner, SearchSession session) {
-        int radius = session.currentRadius();
-        if (!removeSearch(owner, session)) return false;
-        ExplorersCompass.LOGGER.info("Search {} cancelled at radius {} blocks after {} ms",
-                session.logId, radius, session.elapsedMillis());
-        return true;
-    }
-
-    private boolean removeSearch(UUID owner, SearchSession session) {
-        if (!searches.remove(owner, session)) return false;
-        session.stopWorker();
-        if (session.stack.hasNbt()) CompassSearchData.restore(session.stack.getNbt(), session.token);
-        return true;
-    }
-
-
-	public static final String NAME = "explorerscompass";
-
-    private static final AtomicLong SEARCH_IDS = new AtomicLong();
-	private final Map<UUID, SearchSession> searches = new HashMap<>();
-
-    private static class SearchSession {
-        final long logId = SEARCH_IDS.updateAndGet(id -> id == 9999 ? 1 : id + 1);
-        final long startedNanos = System.nanoTime();
-        SearchWorker worker;
-        final ItemStack stack;
-        final NbtCompound previousNbt;
-        final UUID token = UUID.randomUUID();
-        final int requestId;
-        final ServerWorld world;
-        final List<Identifier> eligibleIds;
-		final boolean creativeBypass;
-        AvailabilitySelection availability;
-        boolean reachedRadiusLimit;
-        final int radiusLimit = ExplorersCompassConfig.maxSearchRadius;
-        SearchSession(ServerWorld world, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass) {
-            this.world = world;
-            this.stack = stack;
-            this.previousNbt = CompassSearchData.snapshot(stack.getOrCreateNbt());
-            this.requestId = requestId;
-            this.eligibleIds = List.copyOf(eligibleIds);
-			this.creativeBypass = creativeBypass;
-        }
-
-        long elapsedMillis() {
-            return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
-        }
-
-        int currentRadius() {
-            return worker == null ? 0 : worker.getRadius();
-        }
-
-        void stopWorker() {
-            if (worker != null) {
-                worker.stop();
-                worker = null;
-            }
-        }
-
-        void logNotFound() {
-            if (reachedRadiusLimit) {
-                ExplorersCompass.LOGGER.info("Search {} not found within {} blocks after {} ms",
-                        logId, radiusLimit, elapsedMillis());
-            } else {
-                ExplorersCompass.LOGGER.info("Search {} not found after {} ms", logId, elapsedMillis());
-            }
-        }
-    }
-
-    private SearchSession beginSearch(ServerWorld world, PlayerEntity player, ItemStack stack, int requestId, List<Identifier> eligibleIds, boolean creativeBypass, String target) {
+    private Session beginSearch(ServerWorld world, ServerPlayerEntity player, ItemStack stack, int requestId,
+            List<Identifier> eligibleIds, boolean creativeBypass, String target) {
         cancelSearch(player, -1);
-        ensureHolder((ServerPlayerEntity) player, stack);
-        SearchSession session = new SearchSession(world, stack, requestId, eligibleIds, creativeBypass);
-        CompassSearchData.begin(stack.getOrCreateNbt(), session.token, session.previousNbt);
-        searches.put(player.getUuid(), session);
-        ExplorersCompass.LOGGER.info("Search {} started for {}", session.logId, target);
-        return session;
+        ensureHolder(player, stack);
+        return sessions.begin(player.getUuid(), world, stack, requestId, eligibleIds, creativeBypass, target);
     }
 
     public void cancelSearch(PlayerEntity player, int requestId) {
-        SearchSession session = searches.get(player.getUuid());
-        if (session != null && (requestId == -1 || session.requestId == requestId)) {
-            stopSearch(player.getUuid(), session);
-        }
+        sessions.cancel(player, requestId);
     }
 
 	public void clearCompassTarget(ItemStack stack) {
 		clearSearchData(stack);
 	}
 
-    private void finishSearch(PlayerEntity player, int result, int radius) {
-        finishSearch(player, result, radius, null, 0, 0, false, false, List.of(), 0, null);
-    }
-
-    private void finishSearch(PlayerEntity player, int result, int radius, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, int validBiomeMask, Boolean visited) {
-        SearchSession session = searches.remove(player.getUuid());
-        if (session != null) {
-            session.stopWorker();
-            if (result == SearchResultPacket.FOUND) {
-                ExplorersCompass.LOGGER.info("Search {} located {} at radius {} blocks in {} ms",
-                        session.logId, foundId, radius, session.elapsedMillis());
-            } else {
-                session.logNotFound();
-            }
+    private void finishFailure(PlayerEntity player, Session session, int result, int radius) {
+        if (sessions.detach(session)) {
+            session.logNotFound();
             if (player instanceof ServerPlayerEntity serverPlayer) {
-                SearchResultPacket.send(serverPlayer, session.requestId, result, result == SearchResultPacket.FOUND ? 0 : radius, foundId, foundX, foundZ, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
+                SearchResultPacket.send(serverPlayer, session.requestId, result, radius);
             }
         }
     }
-
 
     private boolean rejectIfUnaffordable(ServerPlayerEntity player, ItemStack stack, int requestId, int cost, boolean multiple) {
         SearchCosts costs = SearchCosts.active();
@@ -458,7 +332,7 @@ public class ExplorersCompassItem extends Item {
         List<Structure> generation = selection.eligible().stream().map(id -> StructureUtils.getStructureForID(world, id)).toList();
         Identifier firstId = searchable.get(0);
         String target = listed ? searchable.size() + " listed structures" : firstId.toString();
-        SearchSession session = beginSearch(world, player, stack, requestId, searchable, creativeBypass, target);
+        Session session = beginSearch(world, player, stack, requestId, searchable, creativeBypass, target);
         try {
             session.availability = includeSaved ? selection : null;
             setSearching(stack, firstId);
@@ -473,8 +347,8 @@ public class ExplorersCompassItem extends Item {
                 SearchProgressPacket.send(player, requestId, 0);
             }
         } catch (RuntimeException error) {
-            if (searches.get(player.getUuid()) != session) throw error;
-            failSearch(player.getUuid(), session, error);
+            if (!sessions.isActive(session)) throw error;
+            sessions.abort(session, error);
         }
     }
 
@@ -487,10 +361,10 @@ public class ExplorersCompassItem extends Item {
 
 	public void succeed(PlayerEntity player, ItemStack stack, Identifier structureID, ChunkPos startChunk, int x, int z, BlockBox bounds, int radius, int samples, boolean displayCoordinates, boolean displayDistance) {
         PartySharing.synchronize(player.getServer());
-		SearchSession session = searches.get(player.getUuid());
-		if (session == null || session.stack != stack) return;
+		Session session = sessions.forStack(player, stack);
+		if (session == null) return;
         if (structureID == null) throw new IllegalStateException("Located structure has no registered ID");
-        if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }
+        if (!session.isHeldBy(player)) { sessions.rejectDetached(session); return; }
 		if (!(session.creativeBypass && player.getAbilities().creativeMode)
 				&& !UnlockingRules.isUnlocked(player.getServer(), player.getUuid(), structureID)) {
 			cancelSearch(player, session.requestId);
@@ -522,18 +396,9 @@ public class ExplorersCompassItem extends Item {
                 : null;
         if (!ItemUtils.verifyNBT(stack)) throw new IllegalStateException("Compass unavailable while saving search result");
         costs.pay(serverPlayer, stack, cost);
-        NbtCompound data = stack.getNbt();
-        CompassSearchData.clear(data);
-        data.putString("StructureID", structureID.toString());
-        if (session.creativeBypass) data.putBoolean("CreativeBypass", true);
-        data.putInt("State", CompassState.FOUND.getID());
-        data.putInt("FoundX", x);
-        data.putInt("FoundZ", z);
-        data.putString("FoundDimension", player.getWorld().getRegistryKey().getValue().toString());
-        data.putLong(CompassSearchData.FOUND_START_CHUNK, startChunk.toLong());
-        data.putInt("Samples", samples);
-        data.putBoolean("DisplayCoordinates", displayCoordinates);
-        data.putBoolean("DisplayDistance", displayDistance);
+        CompassSearchData.commitFound(stack.getNbt(), structureID, x, z, samples,
+                player.getWorld().getRegistryKey().getValue(), startChunk.toLong(),
+                session.creativeBypass, displayCoordinates, displayDistance);
         if (costs.type() == SearchCosts.Type.ITEMS) {
             serverPlayer.currentScreenHandler.sendContentUpdates();
         }
@@ -542,104 +407,86 @@ public class ExplorersCompassItem extends Item {
         } else if (player.getOffHandStack() == stack) {
             player.swingHand(Hand.OFF_HAND, true);
         }
-		finishSearch(player, SearchResultPacket.FOUND, radius, structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
+        if (sessions.detach(session)) {
+            session.logFound(structureID, radius);
+            SearchResultPacket.send(serverPlayer, session.requestId, SearchResultPacket.FOUND, 0,
+                    structureID, x, z, displayCoordinates, displayDistance, biomes, validBiomeMask, visited);
+        }
 	}
 
 	public void fail(PlayerEntity player, ItemStack stack, boolean reachedRadiusLimit) {
-        SearchSession session = searches.get(player.getUuid());
+        Session session = sessions.forStack(player, stack);
         if (session == null) return;
-        if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }
+        if (!session.isHeldBy(player)) { sessions.rejectDetached(session); return; }
         session.reachedRadiusLimit |= reachedRadiusLimit;
         CompassSearchData.restore(stack.getOrCreateNbt(), session.previousNbt);
         if (session.availability != null && session.availability.eligible().isEmpty()) {
             var selection = session.availability;
             if (!selection.disabled().isEmpty() && player instanceof ServerPlayerEntity serverPlayer
                     && ServerPlayNetworking.canSend(serverPlayer, SearchAvailabilityPacket.ID)) {
-                if (removeSearch(player.getUuid(), session)) session.logNotFound();
+                if (sessions.detach(session)) session.logNotFound();
                 SearchAvailabilityPacket.send(serverPlayer, session.requestId, selection);
                 return;
             }
             if (selection.wrongDimension() > 0) {
-                finishSearch(player, SearchResultPacket.WRONG_DIMENSION, 0);
+                finishFailure(player, session, SearchResultPacket.WRONG_DIMENSION, 0);
                 return;
             }
         }
         if (session.availability != null && player instanceof ServerPlayerEntity serverPlayer) {
             SearchAvailabilityPacket.send(serverPlayer, session.requestId, session.availability);
         }
-        finishSearch(player, SearchResultPacket.NOT_FOUND, session.radiusLimit);
+        finishFailure(player, session, SearchResultPacket.NOT_FOUND, session.radiusLimit);
 	}
 
 	public boolean isActive(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			return getState(stack) != CompassState.INACTIVE;
-		}
-
-		return false;
+		return ItemUtils.verifyNBT(stack) && getState(stack) != CompassState.INACTIVE;
 	}
 
 	public void setSearching(ItemStack stack, Identifier structureID) {
-		if (ItemUtils.verifyNBT(stack)) {
-            stack.getNbt().remove(CompassTransfer.INHERITED);
-			stack.getNbt().putString("StructureID", structureID.toString());
-			stack.getNbt().putInt("State", CompassState.SEARCHING.getID());
-			stack.getNbt().putInt("SearchRadius", 0);
-			stack.getNbt().putInt("Samples", 0);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) CompassSearchData.writeSearching(data, structureID);
 	}
 
 	public void setFound(ItemStack stack, Identifier structureID, int x, int z, int samples) {
 		clearSearchData(stack);
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putString("StructureID", structureID.toString());
-			stack.getNbt().putInt("State", CompassState.FOUND.getID());
-			stack.getNbt().putInt("FoundX", x);
-			stack.getNbt().putInt("FoundZ", z);
-			stack.getNbt().putInt("Samples", samples);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) CompassSearchData.writeFound(data, structureID, x, z, samples);
 	}
 
 	public void setNotFound(ItemStack stack, int searchRadius, int samples) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putInt("State", CompassState.NOT_FOUND.getID());
-			stack.getNbt().putInt("SearchRadius", searchRadius);
-			stack.getNbt().putInt("Samples", samples);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) CompassSearchData.writeNotFound(data, searchRadius, samples);
 	}
 
 	public void setInactive(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putInt("State", CompassState.INACTIVE.getID());
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putInt(CompassSearchData.STATE, CompassState.INACTIVE.getID());
 	}
 
 	public void setState(ItemStack stack, BlockPos pos, CompassState state) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putInt("State", state.getID());
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putInt(CompassSearchData.STATE, state.getID());
 	}
 
 	public void setFoundStructureX(ItemStack stack, int x) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putInt("FoundX", x);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putInt(CompassSearchData.FOUND_X, x);
 	}
 
 	public void setFoundStructureZ(ItemStack stack, int z) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putInt("FoundZ", z);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putInt(CompassSearchData.FOUND_Z, z);
 	}
 
 	public void setStructureKey(ItemStack stack, Identifier structureID) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putString("StructureID", structureID.toString());
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putString(CompassSearchData.STRUCTURE_ID, structureID.toString());
 	}
 
     public void reportSearchProgress(PlayerEntity player, ItemStack stack, int radius) {
-        SearchSession session = searches.get(player.getUuid());
-        if (session == null || session.stack != stack) return;
+        Session session = sessions.forStack(player, stack);
+        if (session == null) return;
         int previousRadius = getSearchRadius(stack);
         setSearchRadius(stack, radius);
         int updatedRadius = getSearchRadius(stack);
@@ -650,57 +497,49 @@ public class ExplorersCompassItem extends Item {
     }
 
 	public void setSearchRadius(ItemStack stack, int searchRadius) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putInt("SearchRadius", Math.max(stack.getNbt().getInt("SearchRadius"), searchRadius));
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) {
+			data.putInt(CompassSearchData.SEARCH_RADIUS, Math.max(data.getInt(CompassSearchData.SEARCH_RADIUS), searchRadius));
 		}
 	}
 
 	public void setSamples(ItemStack stack, int samples) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putInt("Samples", samples);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putInt(CompassSearchData.SAMPLES, samples);
 	}
 
 	public void setDisplayCoordinates(ItemStack stack, boolean displayPosition) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putBoolean("DisplayCoordinates", displayPosition);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putBoolean(CompassSearchData.DISPLAY_COORDINATES, displayPosition);
 	}
 
 	public void setDisplayDistance(ItemStack stack, boolean displayDistance) {
-		if (ItemUtils.verifyNBT(stack)) {
-			stack.getNbt().putBoolean("DisplayDistance", displayDistance);
-		}
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) data.putBoolean(CompassSearchData.DISPLAY_DISTANCE, displayDistance);
 	}
 
 	public CompassState getState(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			return CompassState.fromID(stack.getNbt().getInt("State"));
-		}
-
-		return null;
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		return data == null ? null : CompassState.fromID(data.getInt(CompassSearchData.STATE));
 	}
 
 	public int getFoundStructureX(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			return stack.getNbt().getInt("FoundX");
-		}
-
-		return 0;
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		return data == null ? 0 : data.getInt(CompassSearchData.FOUND_X);
 	}
 
 	public int getFoundStructureZ(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			return stack.getNbt().getInt("FoundZ");
-		}
-
-		return 0;
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		return data == null ? 0 : data.getInt(CompassSearchData.FOUND_Z);
 	}
 
 	public Identifier getFoundDimension(ItemStack stack) {
-		if (!ItemUtils.verifyNBT(stack)) return null;
-		if (stack.getNbt().contains("FoundDimension")) return Identifier.tryParse(stack.getNbt().getString("FoundDimension"));
-		Identifier structureId = Identifier.tryParse(stack.getNbt().getString("StructureID"));
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data == null) return null;
+		if (data.contains(CompassSearchData.FOUND_DIMENSION)) {
+			return Identifier.tryParse(data.getString(CompassSearchData.FOUND_DIMENSION));
+		}
+		Identifier structureId = Identifier.tryParse(data.getString(CompassSearchData.STRUCTURE_ID));
 		if (structureId == null || ExplorersCompass.allowedStructureIDsToDimensionIDs == null) return null;
 		List<Identifier> dimensions = ExplorersCompass.allowedStructureIDsToDimensionIDs.get(structureId);
 		return dimensions.stream().distinct().count() == 1 ? dimensions.get(0) : null;
@@ -712,51 +551,41 @@ public class ExplorersCompassItem extends Item {
 	}
 
 	public Identifier getStructureID(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			return new Identifier(stack.getNbt().getString("StructureID"));
-		}
-
-		return new Identifier("");
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		return new Identifier(data == null ? "" : data.getString(CompassSearchData.STRUCTURE_ID));
 	}
 
 	public int getSearchRadius(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			return stack.getNbt().getInt("SearchRadius");
-		}
-
-		return -1;
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		return data == null ? -1 : data.getInt(CompassSearchData.SEARCH_RADIUS);
 	}
 
 	public int getSamples(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack)) {
-			return stack.getNbt().getInt("Samples");
-		}
-
-		return -1;
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		return data == null ? -1 : data.getInt(CompassSearchData.SAMPLES);
 	}
 
+	/** Legacy name for the horizontal distance to the compass's structure target. */
 	public int getDistanceToBiome(PlayerEntity player, ItemStack stack) {
 		return StructureUtils.getHorizontalDistanceToLocation(player, getFoundStructureX(stack), getFoundStructureZ(stack));
 	}
 
 	public boolean shouldDisplayCoordinates(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack) && stack.getNbt().contains("DisplayCoordinates")) {
-			return stack.getNbt().getBoolean("DisplayCoordinates");
-		}
-
-		return true;
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		return data == null || !data.contains(CompassSearchData.DISPLAY_COORDINATES)
+				|| data.getBoolean(CompassSearchData.DISPLAY_COORDINATES);
 	}
 
 	public boolean shouldDisplayDistance(ItemStack stack) {
-		if (ItemUtils.verifyNBT(stack) && stack.getNbt().contains("DisplayDistance")) {
-			return stack.getNbt().getBoolean("DisplayDistance");
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null && data.contains(CompassSearchData.DISPLAY_DISTANCE)) {
+			return data.getBoolean(CompassSearchData.DISPLAY_DISTANCE);
 		}
-
 		return shouldDisplayCoordinates(stack);
 	}
 
 	private void clearSearchData(ItemStack stack) {
-        if (ItemUtils.verifyNBT(stack)) CompassSearchData.clear(stack.getNbt());
-    }
-
+		var data = ItemUtils.getOrCreateCompassNbt(stack);
+		if (data != null) CompassSearchData.clear(data);
+	}
 }

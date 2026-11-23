@@ -4,6 +4,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -63,6 +64,31 @@ class SearchTaskQueueTest {
         assertEquals(List.of(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), candidates);
         assertEquals(3, validations.get());
         assertTrue(serverTasks.isEmpty(), "An idle search must stop scheduling tasks");
+    }
+
+    @Test void completingAnOldChunkAfterCancellationDoesNotResumeTheOldWorker() {
+        var chunk = new CompletableFuture<Void>();
+        var steps = new AtomicInteger();
+        var stopped = new java.util.concurrent.atomic.AtomicBoolean();
+        queue.add(new WorldWorkerManager.IWorker() {
+            @Override public boolean hasWork() { return !stopped.get(); }
+            @Override public boolean doWork() {
+                assertEquals(1, steps.incrementAndGet(), "A stopped worker resumed");
+                return false;
+            }
+            @Override public CompletableFuture<?> pendingWork() { return chunk; }
+        });
+        drain();
+        assertEquals(1, steps.get());
+
+        stopped.set(true);
+        var replacement = new Worker(1, () -> {});
+        queue.add(replacement);
+        chunk.complete(null);
+        drain();
+
+        assertEquals(1, steps.get());
+        assertEquals(1, replacement.calls);
     }
 
     @Test void yieldsToCancellationBetweenSlicesAndSkipsStaleWork() {
