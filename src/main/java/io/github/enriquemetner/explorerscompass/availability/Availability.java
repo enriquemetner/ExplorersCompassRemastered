@@ -19,6 +19,11 @@ public record Availability(Status status, Reason reason, String modName, List<Id
     public static Availability decide(Availability yung, Availability structurify, boolean anyWorld, boolean currentWorld) {
         if (yung != null) return yung;
         if (structurify != null) return structurify;
-        return !anyWorld ? generic() : currentWorld ? available() : wrongDimension();
+        return forDimensions(anyWorld, currentWorld);
+    }
+
+    static Availability forDimensions(boolean anyWorld, boolean currentWorld) {
+        if (!anyWorld) return generic();
+        return currentWorld ? available() : wrongDimension();
     }
 }

@@ -63,28 +63,37 @@ public final class OptionalDisablingRules {
         catch (ReflectiveOperationException | RuntimeException e) { env.unknown("structurify",e); return fallback; }
     }
     static Availability structurifyConfig(Object config, Identifier structure, List<Identifier> sets) throws ReflectiveOperationException {
-        if (Boolean.TRUE.equals(path(config,"disableAllStructures"))) return structurifyDisabled();
-        Map<?,?> structures = (Map<?,?>) config.getClass().getMethod("getStructureData").invoke(config);
-        Object entry = structures.get(structure.toString());
+        if (Boolean.TRUE.equals(path(config, "disableAllStructures"))) return structurifyDisabled();
+        String structureId = structure.toString();
+        Map<?, ?> structures = (Map<?, ?>) config.getClass().getMethod("getStructureData").invoke(config);
+        Object entry = structures.get(structureId);
         if (entry != null && Boolean.TRUE.equals(entry.getClass().getMethod("isDisabled").invoke(entry))) return structurifyDisabled();
-        // A zero override on every containing set also prevents generation, even if the base field remains nonzero.
-        Map<?,?> setData = (Map<?,?>) config.getClass().getMethod("getStructureSetData").invoke(config);
-        if (!sets.isEmpty()) {
-            boolean allBlocked = true, changed = false;
-            for (Identifier set : sets) {
-                Object data = setData.get(set.toString());
-                if (data == null) { allBlocked = false; break; }
-                if (Boolean.TRUE.equals(data.getClass().getMethod("isDisabled").invoke(data))) { changed = true; continue; }
-                Map<?,?> weights = (Map<?,?>)data.getClass().getMethod("getStructureWeights").invoke(data);
-                Object weight = weights.get(structure.toString());
-                if (weight instanceof Number number && number.intValue() == 0) { changed = true; continue; }
-                float frequency = ((Number)data.getClass().getMethod("getFrequency").invoke(data)).floatValue();
-                if (frequency > 0) { allBlocked = false; break; }
-                if (!Boolean.TRUE.equals(data.getClass().getMethod("isUsingDefaultFrequency").invoke(data))) changed = true;
-            }
-            if (allBlocked && changed) return structurifyDisabled();
+
+        Map<?, ?> setData = (Map<?, ?>) config.getClass().getMethod("getStructureSetData").invoke(config);
+        boolean explicitlyBlocked = false;
+        for (Identifier set : sets) {
+            var decision = setDecision(setData.get(set.toString()), structureId);
+            if (decision == SetDecision.PERMITS_GENERATION) return null;
+            explicitlyBlocked |= decision == SetDecision.EXPLICITLY_BLOCKED;
         }
-        return null;
+        return explicitlyBlocked ? structurifyDisabled() : null;
+    }
+
+    private enum SetDecision { PERMITS_GENERATION, EXPLICITLY_BLOCKED, BLOCKED_BY_DEFAULT_FREQUENCY }
+
+    private static SetDecision setDecision(Object data, String structureId) throws ReflectiveOperationException {
+        if (data == null) return SetDecision.PERMITS_GENERATION;
+        var type = data.getClass();
+        if (Boolean.TRUE.equals(type.getMethod("isDisabled").invoke(data))) return SetDecision.EXPLICITLY_BLOCKED;
+
+        Map<?, ?> weights = (Map<?, ?>) type.getMethod("getStructureWeights").invoke(data);
+        Object weight = weights.get(structureId);
+        if (weight instanceof Number number && number.intValue() == 0) return SetDecision.EXPLICITLY_BLOCKED;
+
+        float frequency = ((Number) type.getMethod("getFrequency").invoke(data)).floatValue();
+        if (frequency > 0) return SetDecision.PERMITS_GENERATION;
+        return Boolean.TRUE.equals(type.getMethod("isUsingDefaultFrequency").invoke(data))
+                ? SetDecision.BLOCKED_BY_DEFAULT_FREQUENCY : SetDecision.EXPLICITLY_BLOCKED;
     }
     private static Availability structurifyDisabled() { return Availability.disabled(Availability.Reason.STRUCTURIFY,"Structurify",List.of()); }
     static Object path(Object object, String path) throws ReflectiveOperationException {

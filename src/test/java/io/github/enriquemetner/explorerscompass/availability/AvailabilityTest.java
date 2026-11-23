@@ -8,14 +8,18 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class AvailabilityTest {
     private final Identifier target=new Identifier("minecraft:desert_pyramid");
-    @Test void precedenceAndDimensionDecisions() {
+    @Test void optionalOverridesTakePrecedenceOverDimensionResults() {
         var yung=Availability.disabled(Availability.Reason.YUNG,"YUNG",List.of());
         var structurify=Availability.disabled(Availability.Reason.STRUCTURIFY,"Structurify",List.of());
         assertSame(yung,Availability.decide(yung,structurify,false,false));
         assertSame(structurify,Availability.decide(null,structurify,false,false));
-        assertEquals(Availability.Status.DISABLED,Availability.decide(null,null,false,false).status());
-        assertEquals(Availability.Status.WRONG_DIMENSION,Availability.decide(null,null,true,false).status());
-        assertEquals(Availability.Status.AVAILABLE,Availability.decide(null,null,true,true).status());
+        assertEquals(Availability.forDimensions(true, false), Availability.decide(null, null, true, false));
+    }
+
+    @Test void distinguishesNoViableWorldFromAnotherViableDimension() {
+        assertEquals(Availability.generic(), Availability.forDimensions(false, false));
+        assertEquals(Availability.wrongDimension(), Availability.forDimensions(true, false));
+        assertEquals(Availability.available(), Availability.forDimensions(true, true));
     }
     @Test void genericRulesRequireBiomesAndAtLeastOnePermittedPlacement() {
         assertFalse(Availability.canGenerate(true,List.of()));
@@ -102,5 +106,30 @@ class AvailabilityTest {
         entry.defaultFrequency=true;assertNull(OptionalDisablingRules.structurifyConfig(config,target,List.of(a)),"An unchanged default zero is generic, not caused by Structurify");
         entry.frequency=1;entry.weights.put(target.toString(),0);
         assertNotNull(OptionalDisablingRules.structurifyConfig(config,target,List.of(a)));
+    }
+
+    @Test void attributesMixedBlockedSetsToStructurifyOnlyWhenEverySetBlocks() throws Exception {
+        var config = new StructConfig();
+        var overridden = new Identifier("test:overridden");
+        var defaultZero = new Identifier("test:default_zero");
+        var other = new Identifier("test:other");
+        var override = new Entry();
+        override.weights.put(target.toString(), 0);
+        var defaultBlocked = new Entry();
+        defaultBlocked.frequency = 0;
+        config.sets.put(overridden.toString(), override);
+        config.sets.put(defaultZero.toString(), defaultBlocked);
+
+        assertEquals(Availability.Reason.STRUCTURIFY,
+                OptionalDisablingRules.structurifyConfig(config, target, List.of(defaultZero, overridden)).reason());
+        assertEquals(Availability.Reason.STRUCTURIFY,
+                OptionalDisablingRules.structurifyConfig(config, target, List.of(overridden, defaultZero)).reason());
+        assertNull(OptionalDisablingRules.structurifyConfig(config, target, List.of(overridden, defaultZero, other)));
+        config.sets.put(other.toString(), new Entry());
+        assertNull(OptionalDisablingRules.structurifyConfig(config, target, List.of(overridden, defaultZero, other)));
+
+        override.weights.clear();
+        override.frequency = 0;
+        assertNull(OptionalDisablingRules.structurifyConfig(config, target, List.of(overridden, defaultZero)));
     }
 }
