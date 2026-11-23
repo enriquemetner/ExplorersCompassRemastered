@@ -80,7 +80,7 @@ public final class SavedStructureIndex extends PersistentState {
     }
 
     private static long regionKey(ChunkPos pos) { return ChunkPos.toLong(pos.getRegionX(), pos.getRegionZ()); }
-    private static int slot(ChunkPos pos) { return pos.getRegionRelativeX() + (pos.getRegionRelativeZ() << 5); }
+    private static int slot(ChunkPos pos) { return RegionSlotMask.slot(pos.x, pos.z); }
 
     private static SavedStructureIndex read(NbtCompound nbt) {
         var result = new SavedStructureIndex();

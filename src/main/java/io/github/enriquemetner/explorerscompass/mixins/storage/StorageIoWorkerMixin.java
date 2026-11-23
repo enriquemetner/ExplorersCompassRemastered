@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import io.github.enriquemetner.explorerscompass.storage.IndexedRegionFile;
+import io.github.enriquemetner.explorerscompass.storage.RegionSlotMask;
 import io.github.enriquemetner.explorerscompass.storage.SavedStructureIndex;
 import io.github.enriquemetner.explorerscompass.storage.SavedStructureReader;
 import net.minecraft.SharedConstants;
@@ -115,7 +116,8 @@ public abstract class StorageIoWorkerMixin implements EmptyChunkStorage {
                 return this.<long[]>run(() -> {
                     try {
                         // Both header and pending-save map are read exclusively on Minecraft's IO executor.
-                        return Either.left(explorerscompass$snapshotRegion(pos));
+                        long[] pending = RegionSlotMask.pending(pos, results.keySet());
+                        return Either.left(explorerscompass$snapshotRegion(pos, pending));
                     } catch (Exception exception) {
                         return Either.right(exception);
                     }
@@ -138,13 +140,8 @@ public abstract class StorageIoWorkerMixin implements EmptyChunkStorage {
             try {
                 var access = (RegionBasedStorageAccessor) (Object) storage;
                 String revision = SavedStructureIndex.revision(explorerscompass$regionPath(access, pos));
-                long[] pending = new long[16];
-                for (ChunkPos chunk : results.keySet()) {
-                    if (chunk.getRegionX() != pos.getRegionX() || chunk.getRegionZ() != pos.getRegionZ()) continue;
-                    int slot = chunk.getRegionRelativeX() + (chunk.getRegionRelativeZ() << 5);
-                    pending[slot >>> 6] |= 1L << (slot & 63);
-                }
-                return Either.left(new RegionSnapshot(explorerscompass$snapshotRegion(pos), pending, revision, stamp));
+                long[] pending = RegionSlotMask.pending(pos, results.keySet());
+                return Either.left(new RegionSnapshot(explorerscompass$snapshotRegion(pos, pending), pending, revision, stamp));
             } catch (IOException e) {
                 return Either.right(e);
             }
@@ -152,33 +149,16 @@ public abstract class StorageIoWorkerMixin implements EmptyChunkStorage {
     }
 
     @Unique
-    private long[] explorerscompass$snapshotRegion(ChunkPos pos) throws IOException {
+    private long[] explorerscompass$snapshotRegion(ChunkPos pos, long[] pending) throws IOException {
         var regionStorage = (RegionBasedStorageAccessor) (Object) storage;
-        int regionX = pos.getRegionX();
-        int regionZ = pos.getRegionZ();
-        long[] occupied = new long[16];
+        long key = ChunkPos.toLong(pos.getRegionX(), pos.getRegionZ());
         // Preserve the normal lookup for open files and paths whose absence we cannot confirm.
-        if (!regionStorage.explorerscompass$getCachedRegionFiles().containsKey(ChunkPos.toLong(regionX, regionZ))
-                && Files.notExists(regionStorage.explorerscompass$getDirectory().resolve(
-                        "r." + regionX + "." + regionZ + RegionBasedStorage.MCA_EXTENSION), LinkOption.NOFOLLOW_LINKS)) {
-            for (ChunkPos pending : results.keySet()) {
-                if (pending.getRegionX() == regionX && pending.getRegionZ() == regionZ) {
-                    int index = pending.getRegionRelativeX() + (pending.getRegionRelativeZ() << 5);
-                    occupied[index >>> 6] |= 1L << (index & 63);
-                }
-            }
-            return occupied;
+        if (!regionStorage.explorerscompass$getCachedRegionFiles().containsKey(key)
+                && Files.notExists(explorerscompass$regionPath(regionStorage, pos), LinkOption.NOFOLLOW_LINKS)) {
+            return pending.clone();
         }
 
         RegionFile file = regionStorage.explorerscompass$getRegionFile(pos);
-        int baseX = pos.x & ~31;
-        int baseZ = pos.z & ~31;
-        for (int index = 0; index < 1024; index++) {
-            ChunkPos chunk = new ChunkPos(baseX + (index & 31), baseZ + (index >> 5));
-            if (file.hasChunk(chunk) || results.containsKey(chunk)) {
-                occupied[index >>> 6] |= 1L << (index & 63);
-            }
-        }
-        return occupied;
+        return RegionSlotMask.withDiskOccupancy(pos, pending, file::hasChunk);
     }
 }

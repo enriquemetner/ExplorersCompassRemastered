@@ -36,12 +36,11 @@ public final class EmptyChunkCache {
             occupied = snapshot.get();
             // A queued save can precede its appearance in the storage thread's pending map.
             // Reject snapshots spanning any submission, even if it has already finished.
-            if (occupied == null || occupied.length != 16 || state.stamp() != stamp) return false;
+            if (occupied == null || occupied.length != RegionSlotMask.WORD_COUNT || state.stamp() != stamp) return false;
             regions.put(key, occupied.clone());
             if (regions.size() > MAX_REGIONS) regions.remove(regions.keySet().iterator().next());
         }
-        int index = (chunkX & 31) + ((chunkZ & 31) << 5);
-        return (occupied[index >>> 6] & (1L << (index & 63))) == 0 && state.stamp() == stamp;
+        return !RegionSlotMask.contains(occupied, RegionSlotMask.slot(chunkX, chunkZ)) && state.stamp() == stamp;
     }
 
     public void clear() { regions.clear(); owner = null; version = -1; }

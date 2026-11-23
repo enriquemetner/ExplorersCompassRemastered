@@ -31,7 +31,7 @@ public final class SavedStructureReader {
             return ids;
         }
 
-        int slot = pos.getRegionRelativeX() + (pos.getRegionRelativeZ() << 5);
+        int slot = RegionSlotMask.slot(pos.x, pos.z);
         var storage = world.getChunkManager().threadedAnvilChunkStorage;
         var backend = storage.getWorker() instanceof EmptyChunkStorage worker ? worker : null;
         boolean cacheable = snapshot != null && !snapshot.revision().isEmpty() && !snapshot.hasPendingWrite(slot)

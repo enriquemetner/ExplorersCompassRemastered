@@ -6,7 +6,7 @@ import net.minecraft.util.math.ChunkPos;
 public interface EmptyChunkStorage {
     record RegionSnapshot(long[] occupied, long[] pending, String revision, long writeStamp) {
         public boolean hasPendingWrite(int slot) {
-            return (pending[slot >>> 6] & (1L << (slot & 63))) != 0;
+            return RegionSlotMask.contains(pending, slot);
         }
     }
 
