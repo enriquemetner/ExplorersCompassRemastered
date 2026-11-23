@@ -26,7 +26,6 @@ import io.github.enriquemetner.explorerscompass.util.PlayerUtils;
 import io.github.enriquemetner.explorerscompass.structure.StructureDestination;
 import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
-import io.github.enriquemetner.explorerscompass.workers.SearchWorkerManager;
 import io.github.enriquemetner.explorerscompass.workers.SearchWorker;
 import com.google.common.collect.ListMultimap;
 
@@ -78,7 +77,7 @@ public class ExplorersCompassItem extends Item {
             UUID token = data.getUuid(CompassSearchData.TOKEN);
             SearchSession active = searches.get(player.getUuid());
             if (active == null || active.stack != stack || !active.token.equals(token)) {
-                // Stop the old owner's workers before importing any unlocks or recording a new holder.
+                // Stop the old owner's search before importing any unlocks or recording a new holder.
                 for (UUID owner : List.copyOf(searches.keySet())) {
                     SearchSession old = searches.get(owner);
                     if (old.token.equals(token)) stopDetachedSearch(owner, old);
@@ -145,13 +144,13 @@ public class ExplorersCompassItem extends Item {
     public void abortFailedSearch(PlayerEntity player, SearchWorker worker, RuntimeException error) {
         UUID owner = player.getUuid();
         SearchSession session = searches.get(owner);
-        if (session != null && session.workers.ownsWorker(worker)) {
+        if (worker != null && session != null && session.worker == worker) {
             failSearch(owner, session, error);
         }
     }
 
     private void failSearch(UUID owner, SearchSession session, RuntimeException error) {
-        int radius = session.workers.currentRadius();
+        int radius = session.currentRadius();
         if (removeSearch(owner, session)) {
             ExplorersCompass.LOGGER.error("Search {} error at radius {} blocks after {} ms",
                     session.logId, radius, session.elapsedMillis(), error);
@@ -169,7 +168,7 @@ public class ExplorersCompassItem extends Item {
     }
 
     private boolean stopSearch(UUID owner, SearchSession session) {
-        int radius = session.workers.currentRadius();
+        int radius = session.currentRadius();
         if (!removeSearch(owner, session)) return false;
         ExplorersCompass.LOGGER.info("Search {} cancelled at radius {} blocks after {} ms",
                 session.logId, radius, session.elapsedMillis());
@@ -178,8 +177,7 @@ public class ExplorersCompassItem extends Item {
 
     private boolean removeSearch(UUID owner, SearchSession session) {
         if (!searches.remove(owner, session)) return false;
-        session.workers.stop();
-        session.workers.clear();
+        session.stopWorker();
         if (session.stack.hasNbt()) CompassSearchData.restore(session.stack.getNbt(), session.token);
         return true;
     }
@@ -193,7 +191,7 @@ public class ExplorersCompassItem extends Item {
     private static class SearchSession {
         final long logId = SEARCH_IDS.updateAndGet(id -> id == 9999 ? 1 : id + 1);
         final long startedNanos = System.nanoTime();
-        final SearchWorkerManager workers = new SearchWorkerManager();
+        SearchWorker worker;
         final ItemStack stack;
         final NbtCompound previousNbt;
         final UUID token = UUID.randomUUID();
@@ -215,6 +213,17 @@ public class ExplorersCompassItem extends Item {
 
         long elapsedMillis() {
             return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
+        }
+
+        int currentRadius() {
+            return worker == null ? 0 : worker.getRadius();
+        }
+
+        void stopWorker() {
+            if (worker != null) {
+                worker.stop();
+                worker = null;
+            }
         }
 
         void logNotFound() {
@@ -255,8 +264,7 @@ public class ExplorersCompassItem extends Item {
     private void finishSearch(PlayerEntity player, int result, int radius, Identifier foundId, int foundX, int foundZ, boolean displayCoordinates, boolean displayDistance, List<Identifier> biomes, int validBiomeMask, Boolean visited) {
         SearchSession session = searches.remove(player.getUuid());
         if (session != null) {
-            session.workers.stop();
-            session.workers.clear();
+            session.stopWorker();
             if (result == SearchResultPacket.FOUND) {
                 ExplorersCompass.LOGGER.info("Search {} located {} at radius {} blocks in {} ms",
                         session.logId, foundId, radius, session.elapsedMillis());
@@ -456,12 +464,13 @@ public class ExplorersCompassItem extends Item {
             setSearching(stack, firstId);
             SearchAvailabilityPacket.send(player, requestId, includeSaved
                     ? new AvailabilitySelection(searchable, List.of(), 0, selection.locked()) : selection);
-            session.workers.createWorkers(world, player, stack, generation, structures, excludeVisited, creativeBypass, pos);
-            session.workers.setRadiusLimit(session.radiusLimit);
-            if (session.workers.start()) {
-                SearchProgressPacket.send(player, requestId, 0);
-            } else {
+            session.worker = SearchWorker.create(world, player, stack, generation, structures, excludeVisited, creativeBypass, pos);
+            if (session.worker == null || !session.worker.hasWork()) {
                 fail(player, stack, false);
+            } else {
+                session.worker.setRadiusLimit(session.radiusLimit);
+                session.worker.start();
+                SearchProgressPacket.send(player, requestId, 0);
             }
         } catch (RuntimeException error) {
             if (searches.get(player.getUuid()) != session) throw error;
@@ -541,29 +550,24 @@ public class ExplorersCompassItem extends Item {
         if (session == null) return;
         if (!holdsSession(player, session)) { stopDetachedSearch(player.getUuid(), session); return; }
         session.reachedRadiusLimit |= reachedRadiusLimit;
-        session.workers.pop();
-        boolean started = session.workers.start();
-		if (!started) {
-			CompassSearchData.restore(stack.getOrCreateNbt(), session.previousNbt);
-            if (session.availability != null && session.availability.eligible().isEmpty()) {
-                var selection = session.availability;
-                if (!selection.disabled().isEmpty() && player instanceof ServerPlayerEntity serverPlayer
-                        && ServerPlayNetworking.canSend(serverPlayer, SearchAvailabilityPacket.ID)) {
-                    if (removeSearch(player.getUuid(), session)) session.logNotFound();
-                    SearchAvailabilityPacket.send(serverPlayer, session.requestId, selection);
-                    return;
-                }
-                if (selection.wrongDimension() > 0) {
-                    finishSearch(player, SearchResultPacket.WRONG_DIMENSION, 0);
-                    return;
-                }
+        CompassSearchData.restore(stack.getOrCreateNbt(), session.previousNbt);
+        if (session.availability != null && session.availability.eligible().isEmpty()) {
+            var selection = session.availability;
+            if (!selection.disabled().isEmpty() && player instanceof ServerPlayerEntity serverPlayer
+                    && ServerPlayNetworking.canSend(serverPlayer, SearchAvailabilityPacket.ID)) {
+                if (removeSearch(player.getUuid(), session)) session.logNotFound();
+                SearchAvailabilityPacket.send(serverPlayer, session.requestId, selection);
+                return;
             }
-            if (session.availability != null && player instanceof ServerPlayerEntity serverPlayer) {
-                var original = session.availability;
-                SearchAvailabilityPacket.send(serverPlayer, session.requestId, original);
+            if (selection.wrongDimension() > 0) {
+                finishSearch(player, SearchResultPacket.WRONG_DIMENSION, 0);
+                return;
             }
-            finishSearch(player, SearchResultPacket.NOT_FOUND, session.radiusLimit);
-		}
+        }
+        if (session.availability != null && player instanceof ServerPlayerEntity serverPlayer) {
+            SearchAvailabilityPacket.send(serverPlayer, session.requestId, session.availability);
+        }
+        finishSearch(player, SearchResultPacket.NOT_FOUND, session.radiusLimit);
 	}
 
 	public boolean isActive(ItemStack stack) {
@@ -639,7 +643,7 @@ public class ExplorersCompassItem extends Item {
         int previousRadius = getSearchRadius(stack);
         setSearchRadius(stack, radius);
         int updatedRadius = getSearchRadius(stack);
-        // Multiple placement workers can report smaller distances; only send a new high-water mark.
+        // Send progress only when the recorded radius increases.
         if (updatedRadius > previousRadius && player instanceof ServerPlayerEntity serverPlayer) {
             SearchProgressPacket.send(serverPlayer, session.requestId, updatedRadius);
         }

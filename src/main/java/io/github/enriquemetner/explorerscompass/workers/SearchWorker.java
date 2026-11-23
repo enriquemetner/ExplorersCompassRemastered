@@ -13,6 +13,8 @@ import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules;
 import io.github.enriquemetner.explorerscompass.structure.StructureDestination;
 import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
+import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
+import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.List;
@@ -157,7 +159,7 @@ public final class SearchWorker implements WorldWorkerManager.IWorker {
 		finished = true;
 	}
 
-	int getRadius() {
+	public int getRadius() {
 		return StructureUtils.getHorizontalDistanceToLocation(startPos, currentPos.getX(), currentPos.getZ());
 	}
 
@@ -172,6 +174,25 @@ public final class SearchWorker implements WorldWorkerManager.IWorker {
     private int minX, maxX, minZ, maxZ;
     private boolean warnedReadFailure;
     private final NearestFirstQueue<Target> queue;
+
+    /** Groups generation placements into one queue, with saved starts when requested. */
+    public static SearchWorker create(ServerWorld world, PlayerEntity player, ItemStack stack,
+            List<Structure> structures, List<Structure> savedStructures, boolean excludeVisited,
+            boolean creativeBypass, BlockPos origin) {
+        Map<StructurePlacement, List<Structure>> byPlacement = new Object2ObjectArrayMap<>();
+        for (Structure structure : structures) {
+            var placements = world.getChunkManager().getStructurePlacementCalculator()
+                    .getPlacements(StructureUtils.getEntryForStructure(world, structure));
+            for (StructurePlacement placement : placements) {
+                byPlacement.computeIfAbsent(placement, ignored -> new ObjectArrayList<>()).add(structure);
+            }
+        }
+        if (byPlacement.isEmpty() && savedStructures.isEmpty()) return null;
+
+        var worker = new SearchWorker(world, player, stack, origin, byPlacement, savedStructures, excludeVisited);
+        worker.setCreativeBypass(creativeBypass);
+        return worker;
+    }
 
     SearchWorker(ServerWorld world, PlayerEntity player, ItemStack stack, BlockPos origin,
             Map<StructurePlacement, List<Structure>> placements, List<Structure> searchStructures,

@@ -1,5 +1,8 @@
 package io.github.enriquemetner.explorerscompass.availability;
 
+import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
+import io.github.enriquemetner.explorerscompass.workers.SearchWorker;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.tree.*;
@@ -7,12 +10,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Check the actual request entrypoints without constructing a live player or server in JUnit. */
 class AvailabilitySearchFlowTest {
-    @Test void bothSearchTypesValidateBeforeStartingWorkers() throws Exception {
-        ClassNode node = new ClassNode();
-        try (var stream = getClass().getResourceAsStream("/io/github/enriquemetner/explorerscompass/items/ExplorersCompassItem.class")) {
-            assertNotNull(stream);
-            new ClassReader(stream).accept(node, 0);
-        }
+    @Test void bothSearchTypesValidateBeforeCreatingAWorker() throws Exception {
+        ClassNode node = readClass(ExplorersCompassItem.class);
 
         for (String name : new String[]{"searchForStructure", "searchForListedStructures"}) {
             var entry = method(node, name);
@@ -21,9 +20,31 @@ class AvailabilitySearchFlowTest {
 
         var search = method(node, "startValidatedSearch");
         assertCallsInOrder(search, "classify", "isEmpty", "sendLocked",
-                "rejectIfUnaffordable", "beginSearch", "createWorkers");
+                "rejectIfUnaffordable", "beginSearch", "create", "hasWork", "start");
         assertCallsInOrder(method(node, "succeed"), "rejectIfUnaffordable", "pay", "finishSearch");
-        assertCallsInOrder(method(node, "fail"), "pop", "start", "disabled", "finishSearch");
+    }
+
+    @Test void absentAndExhaustedWorkersUseTheSameSavedSearchFallback() throws Exception {
+        assertNull(SearchWorker.create(null, null, null, List.of(), List.of(), false, false, null));
+        ClassNode item = readClass(ExplorersCompassItem.class);
+        assertCallsInOrder(method(item, "startValidatedSearch"), "create", "hasWork", "fail");
+
+        ClassNode worker = readClass(SearchWorker.class);
+        assertCallsInOrder(method(worker, "doWork"), "canWorkAt", "fail", "advance");
+        assertCallsInOrder(method(worker, "fail"), "clear", "fail");
+
+        var fail = method(item, "fail");
+        assertCallsInOrder(fail, "restore", "disabled", "canSend", "send", "wrongDimension", "finishSearch");
+        assertEquals(-1, callIndex(fail, "start"), "Exhaustion must end the current search");
+    }
+
+    private static ClassNode readClass(Class<?> type) throws Exception {
+        ClassNode node = new ClassNode();
+        try (var stream = type.getResourceAsStream(type.getSimpleName() + ".class")) {
+            assertNotNull(stream);
+            new ClassReader(stream).accept(node, 0);
+        }
+        return node;
     }
 
     private static MethodNode method(ClassNode node, String name) {
