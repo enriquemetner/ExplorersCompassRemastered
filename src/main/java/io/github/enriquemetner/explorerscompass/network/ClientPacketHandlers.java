@@ -10,9 +10,7 @@ import io.github.enriquemetner.explorerscompass.gui.FilterSelections;
 import io.github.enriquemetner.explorerscompass.gui.UnlockToast;
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.fabricmc.api.EnvType;
@@ -91,42 +89,12 @@ public final class ClientPacketHandlers {
     }
 
     public static void applySearchResult(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
-        int requestId = buf.readInt(), result = buf.readInt(), radius = buf.readInt();
-        buf.readBoolean(); // Legacy search continuation flag.
-        Identifier foundId = null;
-        int foundX = 0, foundZ = 0;
-        boolean displayCoordinates = false, displayDistance = false;
-        if (buf.readBoolean()) {
-            foundId = buf.readIdentifier();
-            foundX = buf.readInt();
-            foundZ = buf.readInt();
-            displayCoordinates = buf.readBoolean();
-            displayDistance = buf.readBoolean();
-        }
-        List<Identifier> biomes = new ArrayList<>();
-        java.util.Set<Identifier> validBiomes = new java.util.HashSet<>();
-        if (result == SearchResultPacket.FOUND && buf.isReadable()) {
-            int count = buf.readVarInt();
-            if (count < 0 || count > io.github.enriquemetner.explorerscompass.structure.StructureDestination.MAX_BIOME_SAMPLES) {
-                throw new IllegalArgumentException("Invalid found biome count");
-            }
-            for (int i = 0; i < count; i++) biomes.add(buf.readIdentifier());
-            int validBiomeMask = buf.isReadable() ? buf.readVarInt() : 0;
-            for (int i = 0; i < count; i++) {
-                if ((validBiomeMask & (1 << i)) != 0) validBiomes.add(biomes.get(i));
-            }
-        }
-        Boolean visited = result == SearchResultPacket.FOUND && buf.isReadable() ? buf.readBoolean() : null;
-        RequirementNode requirements = result == SearchResultPacket.LOCKED ? RequirementNode.read(buf) : null;
-        final Identifier resultId = (result == SearchResultPacket.BLACKLISTED || result == SearchResultPacket.NOT_WHITELISTED) ? buf.readIdentifier() : foundId;
-        int balance = (result == SearchResultPacket.INSUFFICIENT_COST || result == SearchResultPacket.MULTI_COST)
-                ? buf.readVarInt() : 0;
-        final int resultX = foundX, resultZ = foundZ;
-        final boolean showCoordinates = displayCoordinates;
-        final boolean showDistance = displayDistance;
+        var result = SearchResultPacket.read(buf);
         client.execute(() -> {
             if (client.currentScreen instanceof ExplorersCompassScreen screen) {
-                screen.onSearchResult(requestId, result, radius, resultId, resultX, resultZ, showCoordinates, showDistance, List.copyOf(biomes), java.util.Set.copyOf(validBiomes), visited, requirements, balance);
+                screen.onSearchResult(result.requestId(), result.status(), result.radius(), result.structureId(),
+                        result.foundX(), result.foundZ(), result.displayCoordinates(), result.displayDistance(),
+                        result.biomes(), result.validBiomes(), result.visited(), result.requirements(), result.balance());
             }
         });
     }

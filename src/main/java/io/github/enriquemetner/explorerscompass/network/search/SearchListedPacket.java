@@ -4,17 +4,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
-import io.github.enriquemetner.explorerscompass.util.ItemUtils;
 
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
-import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 
 public class SearchListedPacket extends PacketByteBuf {
@@ -41,14 +37,8 @@ public class SearchListedPacket extends PacketByteBuf {
         }
         List<Identifier> ids = new ArrayList<>(count);
         for (int i = 0; i < count; i++) ids.add(buf.readIdentifier());
-        server.execute(() -> {
-            ItemStack stack = ItemUtils.getHeldItem(player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
-            if (stack.isEmpty()) {
-                SearchResultPacket.send(player, requestId, SearchResultPacket.REJECTED, 0);
-                return;
-            }
-            ((ExplorersCompassItem) stack.getItem()).searchForListedStructures((ServerWorld) player.getEntityWorld(), player,
-					player.getBlockPos(), ids, excludeVisited, creativeUnlocksAll, stack, requestId);
-        });
+        SearchDispatch.withHeldCompass(server, player, requestId, stack ->
+                ExplorersCompass.EXPLORERS_COMPASS_ITEM.searchForListedStructures(player.getServerWorld(), player,
+                        player.getBlockPos(), ids, excludeVisited, creativeUnlocksAll, stack, requestId));
     }
 }

@@ -1,17 +1,13 @@
 package io.github.enriquemetner.explorerscompass.network.search;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
-import io.github.enriquemetner.explorerscompass.util.ItemUtils;
 
 import io.netty.buffer.Unpooled;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
-import net.minecraft.item.ItemStack;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.Identifier;
 
 public class SearchPacket extends PacketByteBuf {
@@ -34,16 +30,9 @@ public class SearchPacket extends PacketByteBuf {
 		final boolean creativeUnlocksAll = buf.readBoolean();
 		final int requestId = buf.readInt();
 
-		server.execute(() -> {
-			final ItemStack stack = ItemUtils.getHeldItem(player, ExplorersCompass.EXPLORERS_COMPASS_ITEM);
-			if (!stack.isEmpty()) {
-				final ExplorersCompassItem explorersCompass = (ExplorersCompassItem) stack.getItem();
-				final ServerWorld world = (ServerWorld) player.getEntityWorld();
-				explorersCompass.searchForStructure(world, player, player.getBlockPos(), structureOrSetId, isSet, excludeVisited, creativeUnlocksAll, stack, requestId);
-			} else {
-				SearchResultPacket.send(player, requestId, SearchResultPacket.REJECTED, 0);
-			}
-		});
+		SearchDispatch.withHeldCompass(server, player, requestId, stack ->
+				ExplorersCompass.EXPLORERS_COMPASS_ITEM.searchForStructure(player.getServerWorld(), player,
+						player.getBlockPos(), structureOrSetId, isSet, excludeVisited, creativeUnlocksAll, stack, requestId));
 	}
 
 }
