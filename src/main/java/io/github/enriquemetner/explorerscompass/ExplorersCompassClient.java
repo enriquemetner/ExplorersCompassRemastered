@@ -19,7 +19,6 @@ import io.github.enriquemetner.explorerscompass.mixins.client.HandledScreenAcces
 import io.github.enriquemetner.explorerscompass.network.compass.ConsumeCompassItemsPacket;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.registry.Registries;
@@ -101,11 +100,8 @@ public class ExplorersCompassClient implements ClientModInitializer {
         }
         if (!ClientPlayNetworking.canSend(ConsumeCompassItemsPacket.ID)) return false;
 
-        var packet = PacketByteBufs.create();
-        packet.writeVarInt(handler.syncId);
-        packet.writeVarInt(slot.id);
-        packet.writeBoolean(wholeStack);
-        ClientPlayNetworking.send(ConsumeCompassItemsPacket.ID, packet);
+        ClientPlayNetworking.send(ConsumeCompassItemsPacket.ID,
+                ConsumeCompassItemsPacket.request(handler.syncId, slot.id, wholeStack));
         return true;
     }
 }

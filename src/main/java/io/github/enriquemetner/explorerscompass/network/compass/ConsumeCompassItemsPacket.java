@@ -2,6 +2,7 @@ package io.github.enriquemetner.explorerscompass.network.compass;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.fabricmc.fabric.api.networking.v1.PacketSender;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.server.MinecraftServer;
@@ -13,6 +14,14 @@ public final class ConsumeCompassItemsPacket {
     public static final Identifier ID = new Identifier(ExplorersCompass.MODID, "consume_compass_items");
 
     private ConsumeCompassItemsPacket() {}
+
+    public static PacketByteBuf request(int syncId, int slotId, boolean wholeStack) {
+        var packet = PacketByteBufs.create();
+        packet.writeVarInt(syncId);
+        packet.writeVarInt(slotId);
+        packet.writeBoolean(wholeStack);
+        return packet;
+    }
 
     public static void apply(MinecraftServer server, ServerPlayerEntity player, ServerPlayNetworkHandler connection,
                              PacketByteBuf buffer, PacketSender sender) {

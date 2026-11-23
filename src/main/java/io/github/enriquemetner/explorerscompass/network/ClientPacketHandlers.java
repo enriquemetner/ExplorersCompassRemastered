@@ -1,5 +1,6 @@
 package io.github.enriquemetner.explorerscompass.network;
 
+import io.github.enriquemetner.explorerscompass.network.compass.CompassSettingsPacket;
 import io.github.enriquemetner.explorerscompass.network.compass.RefreshCompassPacket;
 import io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket;
 import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
@@ -10,7 +11,6 @@ import io.github.enriquemetner.explorerscompass.gui.FilterSelections;
 import io.github.enriquemetner.explorerscompass.gui.UnlockToast;
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import net.fabricmc.api.EnvType;
@@ -100,17 +100,12 @@ public final class ClientPacketHandlers {
     }
 
     public static void applyCompassSettings(MinecraftClient client, ClientPlayNetworkHandler handler, PacketByteBuf buf, PacketSender sender) {
-        var type = buf.readEnumConstant(SearchCosts.Type.class);
-        int energy = buf.readVarInt();
-        var items = buf.readMap(LinkedHashMap::new, PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);
-        boolean equivalent = buf.readBoolean();
-        int defaultCost = buf.readVarInt();
-        var overrides = buf.readMap(PacketByteBuf::readIdentifier, PacketByteBuf::readVarInt);
-        boolean classic = buf.isReadable() && buf.readBoolean();
+        var settings = CompassSettingsPacket.read(buf);
         client.execute(() -> {
-            SearchCosts.setRemote(type, defaultCost, overrides, energy, items);
-            showNetherEquivalent = equivalent;
-            useClassicCompass = classic;
+            SearchCosts.setRemote(settings.type(), settings.defaultCost(), settings.overrides(),
+                    settings.initialEnergy(), settings.items());
+            showNetherEquivalent = settings.showNetherEquivalent();
+            useClassicCompass = settings.useClassicCompass();
         });
     }
 
