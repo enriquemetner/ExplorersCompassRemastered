@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.unlocking;
 
-import io.github.enriquemetner.explorerscompass.network.UnlockToastPacket;
+import io.github.enriquemetner.explorerscompass.network.unlocking.UnlockToastPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 /** Sends one notification per newly earned batch after the first compass. */
@@ -8,7 +8,7 @@ public final class UnlockNotifications {
     private UnlockNotifications() {}
 
     public static void newlyAdded(ServerPlayerEntity player, int count) {
-        if (count > 0) io.github.enriquemetner.explorerscompass.network.PartyRefreshPacket.send(player);
+        if (count > 0) io.github.enriquemetner.explorerscompass.network.unlocking.PartyRefreshPacket.send(player);
         toast(player, count, false);
     }
 

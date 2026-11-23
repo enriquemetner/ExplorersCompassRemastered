@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.sorting;
 
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;

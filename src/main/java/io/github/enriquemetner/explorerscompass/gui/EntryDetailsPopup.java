@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;

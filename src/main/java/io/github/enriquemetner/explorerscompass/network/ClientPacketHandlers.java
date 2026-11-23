@@ -1,5 +1,8 @@
 package io.github.enriquemetner.explorerscompass.network;
 
+import io.github.enriquemetner.explorerscompass.network.compass.RefreshCompassPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.gui.ExplorersCompassScreen;
 import io.github.enriquemetner.explorerscompass.gui.FilterSelections;
@@ -106,7 +109,7 @@ public final class ClientPacketHandlers {
         java.util.Set<Identifier> validBiomes = new java.util.HashSet<>();
         if (result == SearchResultPacket.FOUND && buf.isReadable()) {
             int count = buf.readVarInt();
-            if (count < 0 || count > io.github.enriquemetner.explorerscompass.util.StructureDestination.MAX_BIOME_SAMPLES) {
+            if (count < 0 || count > io.github.enriquemetner.explorerscompass.structure.StructureDestination.MAX_BIOME_SAMPLES) {
                 throw new IllegalArgumentException("Invalid found biome count");
             }
             for (int i = 0; i < count; i++) biomes.add(buf.readIdentifier());

@@ -1,10 +1,9 @@
 package io.github.enriquemetner.explorerscompass.compat.ftb;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.gui.CompassTextures;
+import io.github.enriquemetner.explorerscompass.client.CompassTextures;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules;
-import io.github.enriquemetner.explorerscompass.unlocking.VisitTaskMatch;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
 import dev.ftb.mods.ftblibrary.config.ConfigGroup;
 import dev.ftb.mods.ftblibrary.config.NameMap;
 import dev.ftb.mods.ftblibrary.config.StringConfig;

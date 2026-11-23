@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.compat.ftb;
 
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;

@@ -1,8 +1,8 @@
 package io.github.enriquemetner.explorerscompass.storage;
 
-import io.github.enriquemetner.explorerscompass.mixins.StructureChunkStorageAccessor;
-import io.github.enriquemetner.explorerscompass.util.StructureDestination;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.mixins.storage.StructureChunkStorageAccessor;
+import io.github.enriquemetner.explorerscompass.structure.StructureDestination;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.SharedConstants;

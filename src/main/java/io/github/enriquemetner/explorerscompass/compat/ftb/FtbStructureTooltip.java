@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.compat.ftb;
 
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import dev.ftb.mods.ftblibrary.ui.BaseScreen;
 import dev.ftb.mods.ftblibrary.util.TooltipList;
 import dev.ftb.mods.ftblibrary.util.client.ClientUtils;

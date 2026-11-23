@@ -1,13 +1,12 @@
 package io.github.enriquemetner.explorerscompass.client;
 
 import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
-import io.github.enriquemetner.explorerscompass.util.CompassProjection;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
-import io.github.enriquemetner.explorerscompass.util.CompassSearchData;
-import io.github.enriquemetner.explorerscompass.util.CompassState;
+import io.github.enriquemetner.explorerscompass.items.CompassSearchData;
+import io.github.enriquemetner.explorerscompass.items.CompassState;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;

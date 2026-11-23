@@ -1,11 +1,13 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentButton;
+import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentTextField;
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
-import io.github.enriquemetner.explorerscompass.util.OverlaySide;
-import io.github.enriquemetner.explorerscompass.util.RenderUtils;
+import io.github.enriquemetner.explorerscompass.config.OverlaySide;
+import io.github.enriquemetner.explorerscompass.client.RenderUtils;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

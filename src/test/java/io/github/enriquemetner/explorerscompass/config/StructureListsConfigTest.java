@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.config;
 
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import net.minecraft.util.Identifier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

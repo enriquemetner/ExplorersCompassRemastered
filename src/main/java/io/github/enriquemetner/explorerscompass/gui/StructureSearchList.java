@@ -2,7 +2,7 @@ package io.github.enriquemetner.explorerscompass.gui;
 
 import io.github.enriquemetner.explorerscompass.compat.jes.JesThumbnails;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import io.github.enriquemetner.explorerscompass.util.RenderUtils;
+import io.github.enriquemetner.explorerscompass.client.RenderUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;

@@ -5,7 +5,7 @@ import static io.github.enriquemetner.explorerscompass.config.ServerToml.quotedD
 import io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Section;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Diagnostic;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Severity;
-import io.github.enriquemetner.explorerscompass.util.StructureSelector;
+import io.github.enriquemetner.explorerscompass.structure.StructureSelector;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;

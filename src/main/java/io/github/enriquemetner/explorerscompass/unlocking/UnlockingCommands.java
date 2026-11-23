@@ -10,10 +10,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.util.CompassTeleport;
-import io.github.enriquemetner.explorerscompass.util.StructureDestination;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.CompassTeleport;
+import io.github.enriquemetner.explorerscompass.structure.StructureDestination;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
@@ -186,7 +186,7 @@ public final class UnlockingCommands {
         PartySharing.synchronize(server);
         if (!unlock && changed > 0 && online != null && online.networkHandler.isConnectionOpen()) {
             ExplorersCompass.EXPLORERS_COMPASS_ITEM.revalidateAccess(online);
-            io.github.enriquemetner.explorerscompass.network.PartyRefreshPacket.send(online);
+            io.github.enriquemetner.explorerscompass.network.unlocking.PartyRefreshPacket.send(online);
         }
         context.getSource().sendFeedback(() -> Text.literal((unlock ? "Unlocked " : "Locked ") + changed
                 + " saved structure entries for " + player + "."), true);

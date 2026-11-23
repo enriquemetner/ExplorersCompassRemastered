@@ -1,8 +1,8 @@
 package io.github.enriquemetner.explorerscompass.unlocking;
 
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures.Visit;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures.Visit;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

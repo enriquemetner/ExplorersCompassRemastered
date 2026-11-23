@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.font.TextRenderer;

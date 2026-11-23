@@ -3,7 +3,6 @@ package io.github.enriquemetner.explorerscompass.config;
 import java.util.List;
 
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig.ClientSetting;
-import io.github.enriquemetner.explorerscompass.util.OverlaySide;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

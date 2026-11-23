@@ -1,10 +1,10 @@
 package io.github.enriquemetner.explorerscompass.compat.jes;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.gui.CompassTextures;
+import io.github.enriquemetner.explorerscompass.client.CompassTextures;
 import io.github.enriquemetner.explorerscompass.gui.ExplorersCompassScreen;
 import io.github.enriquemetner.explorerscompass.util.ItemUtils;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import java.lang.reflect.Proxy;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.player.PlayerEntity;

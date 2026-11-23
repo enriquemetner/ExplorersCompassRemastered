@@ -2,20 +2,20 @@ package io.github.enriquemetner.explorerscompass;
 
 import io.github.enriquemetner.explorerscompass.gui.ExplorersCompassScreen;
 import io.github.enriquemetner.explorerscompass.network.SyncPacket;
-import io.github.enriquemetner.explorerscompass.network.StructureRequirementsPacket;
-import io.github.enriquemetner.explorerscompass.network.CurrentStructurePacket;
+import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
+import io.github.enriquemetner.explorerscompass.network.search.CurrentStructurePacket;
 import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
-import io.github.enriquemetner.explorerscompass.network.SearchResultPacket;
-import io.github.enriquemetner.explorerscompass.network.SearchProgressPacket;
-import io.github.enriquemetner.explorerscompass.network.UnlockToastPacket;
-import io.github.enriquemetner.explorerscompass.network.CompassSettingsPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchProgressPacket;
+import io.github.enriquemetner.explorerscompass.network.unlocking.UnlockToastPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.CompassSettingsPacket;
 
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
 import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.ItemStack;
-import io.github.enriquemetner.explorerscompass.mixins.HandledScreenAccessor;
-import io.github.enriquemetner.explorerscompass.network.ConsumeCompassItemsPacket;
+import io.github.enriquemetner.explorerscompass.mixins.client.HandledScreenAccessor;
+import io.github.enriquemetner.explorerscompass.network.compass.ConsumeCompassItemsPacket;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
@@ -49,10 +49,10 @@ public class ExplorersCompassClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(StructureRequirementsPacket.ID, ClientPacketHandlers::applyStructureRequirements);
 		ClientPlayNetworking.registerGlobalReceiver(SearchResultPacket.ID, ClientPacketHandlers::applySearchResult);
 		ClientPlayNetworking.registerGlobalReceiver(SearchProgressPacket.ID, ClientPacketHandlers::applySearchProgress);
-        ClientPlayNetworking.registerGlobalReceiver(io.github.enriquemetner.explorerscompass.network.SearchAvailabilityPacket.ID, ClientPacketHandlers::applySearchAvailability);
+        ClientPlayNetworking.registerGlobalReceiver(io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket.ID, ClientPacketHandlers::applySearchAvailability);
 		ClientPlayNetworking.registerGlobalReceiver(UnlockToastPacket.ID, ClientPacketHandlers::applyUnlockToast);
 		ClientPlayNetworking.registerGlobalReceiver(CompassSettingsPacket.ID, ClientPacketHandlers::applyCompassSettings);
-        ClientPlayNetworking.registerGlobalReceiver(io.github.enriquemetner.explorerscompass.network.PartyRefreshPacket.ID, ClientPacketHandlers::applyPartyRefresh);
+        ClientPlayNetworking.registerGlobalReceiver(io.github.enriquemetner.explorerscompass.network.unlocking.PartyRefreshPacket.ID, ClientPacketHandlers::applyPartyRefresh);
         // Minecraft can discard queued client work during disconnect.
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> ExplorersCompassScreen.clearWorldSearchState());
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {

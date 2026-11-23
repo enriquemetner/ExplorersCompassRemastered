@@ -10,20 +10,20 @@ import org.apache.logging.log4j.Logger;
 
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.recipe.ClassicCompassRecipe;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
 import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
 import io.github.enriquemetner.explorerscompass.workers.WorldWorkerManager;
-import io.github.enriquemetner.explorerscompass.network.SearchPacket;
-import io.github.enriquemetner.explorerscompass.network.SearchListedPacket;
-import io.github.enriquemetner.explorerscompass.network.CancelSearchPacket;
-import io.github.enriquemetner.explorerscompass.network.ContinueSearchPacket;
-import io.github.enriquemetner.explorerscompass.network.ResetCompassPacket;
-import io.github.enriquemetner.explorerscompass.network.StructureRequirementsPacket;
-import io.github.enriquemetner.explorerscompass.network.CurrentStructurePacket;
-import io.github.enriquemetner.explorerscompass.network.ConsumeCompassItemsPacket;
-import io.github.enriquemetner.explorerscompass.network.TeleportPacket;
-import io.github.enriquemetner.explorerscompass.network.CompassSettingsPacket;
-import io.github.enriquemetner.explorerscompass.network.RefreshCompassPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchListedPacket;
+import io.github.enriquemetner.explorerscompass.network.search.CancelSearchPacket;
+import io.github.enriquemetner.explorerscompass.network.search.ContinueSearchPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.ResetCompassPacket;
+import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
+import io.github.enriquemetner.explorerscompass.network.search.CurrentStructurePacket;
+import io.github.enriquemetner.explorerscompass.network.compass.ConsumeCompassItemsPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.TeleportPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.CompassSettingsPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.RefreshCompassPacket;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 
@@ -77,7 +77,7 @@ public class ExplorersCompass implements ModInitializer {
         net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             var rules = io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.reload(server);
             var costs = io.github.enriquemetner.explorerscompass.config.SearchCosts.load(server);
-            var available = io.github.enriquemetner.explorerscompass.util.StructureUtils.getEligibleStructureIDs(server.getOverworld());
+            var available = io.github.enriquemetner.explorerscompass.structure.StructureUtils.getEligibleStructureIDs(server.getOverworld());
             ExplorersCompassConfig.logStartup(available, rules, costs);
             io.github.enriquemetner.explorerscompass.unlocking.UnlockReloads.tick(server);
         });

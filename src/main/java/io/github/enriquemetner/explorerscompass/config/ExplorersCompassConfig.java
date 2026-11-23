@@ -24,8 +24,7 @@ import io.github.enriquemetner.explorerscompass.config.StartupConfigReport.Secti
 import io.github.enriquemetner.explorerscompass.config.StructureListLoader.StructureListLoad;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Diagnostic;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules.Severity;
-import io.github.enriquemetner.explorerscompass.util.OverlaySide;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.core.io.ParsingMode;
 import com.electronwill.nightconfig.toml.TomlFormat;

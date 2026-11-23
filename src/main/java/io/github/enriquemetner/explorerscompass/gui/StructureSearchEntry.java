@@ -4,8 +4,8 @@ import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
 import io.github.enriquemetner.explorerscompass.compat.jes.JesThumbnails;
-import io.github.enriquemetner.explorerscompass.util.RenderUtils;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.client.RenderUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import com.mojang.blaze3d.systems.RenderSystem;
 
 import net.fabricmc.api.EnvType;

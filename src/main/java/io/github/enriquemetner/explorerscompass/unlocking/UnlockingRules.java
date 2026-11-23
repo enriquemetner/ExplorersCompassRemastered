@@ -23,9 +23,9 @@ import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
-import io.github.enriquemetner.explorerscompass.util.StructureSelector;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.structure.StructureSelector;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;

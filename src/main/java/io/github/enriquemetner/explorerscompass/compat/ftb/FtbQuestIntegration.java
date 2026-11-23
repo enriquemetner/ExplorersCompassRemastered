@@ -1,7 +1,7 @@
 package io.github.enriquemetner.explorerscompass.compat.ftb;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.gui.CompassTextures;
+import io.github.enriquemetner.explorerscompass.client.CompassTextures;
 import io.github.enriquemetner.explorerscompass.unlocking.FtbStructureRewards;
 import io.github.enriquemetner.explorerscompass.unlocking.UnlockingRules;
 import dev.ftb.mods.ftblibrary.config.ConfigGroup;

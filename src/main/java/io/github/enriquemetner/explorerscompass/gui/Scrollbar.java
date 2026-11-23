@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
-import io.github.enriquemetner.explorerscompass.util.RenderUtils;
+import io.github.enriquemetner.explorerscompass.client.RenderUtils;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.math.MathHelper;
 

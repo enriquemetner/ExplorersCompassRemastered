@@ -1,5 +1,8 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
+import io.github.enriquemetner.explorerscompass.client.CompassTextures;
+import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentButton;
+import io.github.enriquemetner.explorerscompass.gui.widgets.TransparentTextField;
 import io.github.enriquemetner.explorerscompass.config.SearchCosts;
 import java.text.Collator;
 import java.util.ArrayList;
@@ -20,20 +23,20 @@ import io.github.enriquemetner.explorerscompass.compat.jes.JesThumbnails;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
 import io.github.enriquemetner.explorerscompass.items.ExplorersCompassItem;
 import io.github.enriquemetner.explorerscompass.network.ClientPacketHandlers;
-import io.github.enriquemetner.explorerscompass.network.CurrentStructurePacket;
-import io.github.enriquemetner.explorerscompass.network.SearchPacket;
-import io.github.enriquemetner.explorerscompass.network.SearchListedPacket;
-import io.github.enriquemetner.explorerscompass.network.CancelSearchPacket;
-import io.github.enriquemetner.explorerscompass.network.SearchResultPacket;
+import io.github.enriquemetner.explorerscompass.network.search.CurrentStructurePacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchListedPacket;
+import io.github.enriquemetner.explorerscompass.network.search.CancelSearchPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import io.github.enriquemetner.explorerscompass.network.RefreshCompassPacket;
-import io.github.enriquemetner.explorerscompass.network.StructureRequirementsPacket;
-import io.github.enriquemetner.explorerscompass.network.TeleportPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.RefreshCompassPacket;
+import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
+import io.github.enriquemetner.explorerscompass.network.compass.TeleportPacket;
 import io.github.enriquemetner.explorerscompass.sorting.SortCriterion;
-import io.github.enriquemetner.explorerscompass.util.CompassState;
+import io.github.enriquemetner.explorerscompass.items.CompassState;
 import io.github.enriquemetner.explorerscompass.util.ItemUtils;
-import io.github.enriquemetner.explorerscompass.util.RenderUtils;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.client.RenderUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -43,7 +46,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.tooltip.TooltipComponent;
 import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;
 import net.minecraft.client.font.TextRenderer;
-import io.github.enriquemetner.explorerscompass.mixins.DrawContextAccessor;
+import io.github.enriquemetner.explorerscompass.mixins.client.DrawContextAccessor;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -1615,7 +1618,7 @@ public class ExplorersCompassScreen extends Screen {
         ClientPlayNetworking.send(SearchListedPacket.ID, new SearchListedPacket(selected, searchedExcludeVisited, ExplorersCompassConfig.creativeUnlocksAll, activeRequestId));
     }
 
-    public void onSearchAvailability(io.github.enriquemetner.explorerscompass.network.SearchAvailabilityPacket.Response response) {
+    public void onSearchAvailability(io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket.Response response) {
         if (!response.appliesTo(activeRequestId,dialog == Dialog.SEARCHING)) return;
         listedSkippedCount = response.wrongDimension();
         listedDisabledCount = response.disabled().size();

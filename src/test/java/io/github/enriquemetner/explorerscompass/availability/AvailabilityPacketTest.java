@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.availability;
 
-import io.github.enriquemetner.explorerscompass.network.SearchAvailabilityPacket;
+import io.github.enriquemetner.explorerscompass.network.search.SearchAvailabilityPacket;
 import io.netty.buffer.Unpooled;
 import net.minecraft.network.PacketByteBuf;
 import net.minecraft.util.Identifier;

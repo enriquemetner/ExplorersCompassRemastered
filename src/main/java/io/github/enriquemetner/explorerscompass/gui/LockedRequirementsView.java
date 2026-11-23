@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.function.Predicate;
 import io.github.enriquemetner.explorerscompass.compat.ftb.FtbQuestNavigation;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.tooltip.HoveredTooltipPositioner;

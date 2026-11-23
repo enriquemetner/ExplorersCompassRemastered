@@ -7,7 +7,7 @@ import java.util.Set;
 import java.util.List;
 import java.util.UUID;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
 import com.google.gson.JsonParser;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;

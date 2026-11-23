@@ -1,7 +1,7 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
 import io.github.enriquemetner.explorerscompass.availability.*;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.text.*;

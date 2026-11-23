@@ -1,8 +1,8 @@
 package io.github.enriquemetner.explorerscompass.gui;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.util.RenderUtils;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.client.RenderUtils;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Comparator;

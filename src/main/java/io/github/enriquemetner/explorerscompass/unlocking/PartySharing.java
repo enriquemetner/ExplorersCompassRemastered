@@ -2,10 +2,10 @@ package io.github.enriquemetner.explorerscompass.unlocking;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
 import io.github.enriquemetner.explorerscompass.config.ExplorersCompassConfig;
-import io.github.enriquemetner.explorerscompass.network.PartyRefreshPacket;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures;
-import io.github.enriquemetner.explorerscompass.util.VisitedStructures.Visit;
+import io.github.enriquemetner.explorerscompass.network.unlocking.PartyRefreshPacket;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
+import io.github.enriquemetner.explorerscompass.structure.VisitedStructures.Visit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;

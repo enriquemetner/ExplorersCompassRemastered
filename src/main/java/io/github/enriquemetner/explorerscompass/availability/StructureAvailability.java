@@ -1,8 +1,8 @@
 package io.github.enriquemetner.explorerscompass.availability;
 
 import io.github.enriquemetner.explorerscompass.ExplorersCompass;
-import io.github.enriquemetner.explorerscompass.mixins.StructurePlacementAccessor;
-import io.github.enriquemetner.explorerscompass.util.StructureUtils;
+import io.github.enriquemetner.explorerscompass.mixins.search.StructurePlacementAccessor;
+import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import java.util.*;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.registry.*;
