@@ -49,6 +49,21 @@ class PartySharingTest {
         }
     }
 
+    @Test void clearingWorldStateKeepsTheRegisteredProvider() {
+        boolean previous = ExplorersCompassConfig.opacPartySharing;
+        try {
+            ExplorersCompassConfig.opacPartySharing = true;
+            PartySharing.register(server -> Map.of(firstParty, Set.of(alice, bob)));
+            PartySharing.clear();
+            assertTrue(PartySharing.enabled());
+            assertFalse(PartySharing.grants(alice, fortress));
+        } finally {
+            PartySharing.register(null);
+            PartySharing.clear();
+            ExplorersCompassConfig.opacPartySharing = previous;
+        }
+    }
+
     @Test void switchingPartiesAndDisbandingUpdateBothSides() {
         var state = new UnlockedStructures();
         state.add(alice, Set.of(fortress));
@@ -153,5 +168,23 @@ class PartySharingTest {
         assertEquals(List.of(first, duplicate, newFirst, newSecond), reloaded.list(bob, Set.of(fortress)));
         assertTrue(reloaded.hasVisitedType(bob, fortress));
         assertTrue(reloaded.savedVisits(alice).isEmpty());
+    }
+
+    @Test void visitsRefreshAfterAnEditWithTheSameMembershipAndStayCachedBetweenReads() {
+        var visits = new VisitedStructures();
+        var unlocked = new UnlockedStructures();
+        unlocked.add(alice, Set.of(fortress));
+        var visit = new Visit(new Identifier("minecraft:the_nether"), fortress, 2, -3);
+        var snapshot = PartySharing.build(unlocked, Map.of(firstParty, Set.of(alice, bob)), id -> true);
+        var cache = new PartySharing.VisitCache();
+        assertTrue(cache.refresh(true, snapshot.membership(), () -> visits).get(firstParty).isEmpty());
+
+        visits.addVisits(alice, List.of(visit));
+        cache.invalidate();
+        var refreshed = cache.refresh(true, snapshot.membership(), () -> visits);
+        assertEquals(Set.of(visit), refreshed.get(firstParty));
+        assertSame(refreshed, cache.refresh(true, snapshot.membership(), () -> fail("Cache was already current")));
+        assertEquals(Set.of(fortress), snapshot.forPlayer(bob));
+        assertTrue(visits.savedVisits(bob).isEmpty());
     }
 }

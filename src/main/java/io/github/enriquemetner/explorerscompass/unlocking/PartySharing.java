@@ -6,12 +6,15 @@ import io.github.enriquemetner.explorerscompass.network.unlocking.PartyRefreshPa
 import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import io.github.enriquemetner.explorerscompass.structure.VisitedStructures;
 import io.github.enriquemetner.explorerscompass.structure.VisitedStructures.Visit;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.Identifier;
@@ -22,17 +25,15 @@ public final class PartySharing {
 
     private static Provider provider;
     private static boolean dirty = true;
-    private static boolean visitsDirty = true;
-    private static Map<UUID, Set<Visit>> visitsByParty = Map.of();
-    private static Map<UUID, Set<UUID>> membership = Map.of();
-    private static Snapshot snapshot = new Snapshot(Map.of(), Map.of());
+    private static final VisitCache visits = new VisitCache();
+    private static Snapshot snapshot = Snapshot.EMPTY;
 
     private PartySharing() {}
 
     public static void register(Provider source) { provider = source; }
     public static boolean enabled() { return provider != null && ExplorersCompassConfig.opacPartySharing; }
     public static void changed() { dirty = true; }
-    public static void visitsChanged() { visitsDirty = true; }
+    public static void visitsChanged() { visits.invalidate(); }
 
     static boolean visitsEnabled() {
         return enabled() && ExplorersCompassConfig.visitsSharing;
@@ -40,17 +41,18 @@ public final class PartySharing {
 
     public static void clear() {
         dirty = true;
-        visitsDirty = true;
-        visitsByParty = Map.of();
-        membership = Map.of();
-        snapshot = new Snapshot(Map.of(), Map.of());
+        visits.invalidate();
+        snapshot = Snapshot.EMPTY;
     }
 
     static boolean grants(UUID player, Identifier id) {
         return enabled() && snapshot.forPlayer(player).contains(id);
     }
 
-    record Snapshot(Map<UUID, Set<Identifier>> unlocksByParty, Map<UUID, UUID> partyByPlayer) {
+    record Snapshot(Map<UUID, Set<UUID>> membership, Map<UUID, Set<Identifier>> unlocksByParty,
+                    Map<UUID, UUID> partyByPlayer) {
+        private static final Snapshot EMPTY = new Snapshot(Map.of(), Map.of(), Map.of());
+
         Set<Identifier> forPlayer(UUID player) {
             UUID party = partyByPlayer.get(player);
             return party == null ? Set.of() : unlocksByParty.get(party);
@@ -79,7 +81,7 @@ public final class PartySharing {
             union.removeIf(allowed.negate());
             unlocksByParty.put(party, Set.copyOf(union));
         });
-        return new Snapshot(Map.copyOf(unlocksByParty), Map.copyOf(partyByPlayer));
+        return new Snapshot(parties, Map.copyOf(unlocksByParty), Map.copyOf(partyByPlayer));
     }
 
     static Map<UUID, Set<Visit>> buildVisitUnions(VisitedStructures state, Map<UUID, Set<UUID>> parties) {
@@ -94,50 +96,69 @@ public final class PartySharing {
 
     public static boolean hasVisit(MinecraftServer server, UUID player, Visit visit) {
         if (!visitsEnabled()) return false;
-        UUID party = snapshot.partyByPlayer().get(player);
+        Snapshot current = snapshot;
+        UUID party = current.partyByPlayer().get(player);
         if (party == null) return false;
-        refreshVisitUnions(server, membership, false);
-        return visitsByParty.getOrDefault(party, Set.of()).contains(visit);
+        return visits.refresh(true, current.membership(), () -> VisitedStructures.get(server))
+                .getOrDefault(party, Set.of()).contains(visit);
     }
 
-    private static void refreshVisitUnions(MinecraftServer server, Map<UUID, Set<UUID>> parties, boolean membershipChanged) {
-        if (!visitsEnabled() || parties.isEmpty()) {
-            visitsByParty = Map.of();
-            visitsDirty = true;
-        } else if (visitsDirty || membershipChanged) {
-            visitsByParty = buildVisitUnions(VisitedStructures.get(server), parties);
-            visitsDirty = false;
+    static final class VisitCache {
+        private Map<UUID, Set<UUID>> membership;
+        private Map<UUID, Set<Visit>> unions = Map.of();
+
+        void invalidate() {
+            membership = null;
+            unions = Map.of();
+        }
+
+        Map<UUID, Set<Visit>> refresh(boolean enabled, Map<UUID, Set<UUID>> parties, Supplier<VisitedStructures> state) {
+            if (!enabled || parties.isEmpty()) {
+                invalidate();
+            } else if (membership != parties) {
+                // Synchronization reuses the same membership instance until it changes.
+                unions = buildVisitUnions(state.get(), parties);
+                membership = parties;
+            }
+            return unions;
         }
     }
 
     public static void synchronize(MinecraftServer server) {
+        Snapshot before = snapshot;
         Map<UUID, Set<UUID>> parties = enabled() ? provider.parties(server) : Map.of();
-        boolean membershipChanged = !parties.equals(membership);
-        refreshVisitUnions(server, parties, membershipChanged);
+        boolean membershipChanged = !parties.equals(before.membership());
+        Map<UUID, Set<UUID>> membership = membershipChanged ? copyMembership(parties) : before.membership();
+        visits.refresh(visitsEnabled(), membership, () -> VisitedStructures.get(server));
         if (!membershipChanged && (!dirty || parties.isEmpty())) return;
 
         UnlockedStructures state = UnlockedStructures.get(server);
         var known = server.getRegistryManager().get(RegistryKeys.STRUCTURE);
-        Snapshot before = snapshot;
-        snapshot = build(state, parties, id -> known.containsId(id) && !StructureUtils.structureIdIsExcluded(id));
-        membership = parties;
+        Snapshot current = build(state, membership, id -> known.containsId(id) && !StructureUtils.structureIdIsExcluded(id));
+        snapshot = current;
         dirty = false;
         var compass = ExplorersCompass.EXPLORERS_COMPASS_ITEM;
         for (var player : server.getPlayerManager().getPlayerList()) {
             UUID id = player.getUuid();
             if (!player.networkHandler.isConnectionOpen()) continue;
-            Set<Identifier> changes = snapshot.changesSince(before, id, state);
+            Set<Identifier> changes = current.changesSince(before, id, state);
             if (changes.isEmpty()) continue;
 
             int gained = 0;
             boolean lost = false;
             for (Identifier structure : changes) {
-                if (snapshot.forPlayer(id).contains(structure)) gained++;
+                if (current.forPlayer(id).contains(structure)) gained++;
                 else lost = true;
             }
             if (lost) compass.revalidateAccess(player);
             UnlockNotifications.toast(player, gained, true);
             PartyRefreshPacket.send(player);
         }
+    }
+
+    private static Map<UUID, Set<UUID>> copyMembership(Map<UUID, Set<UUID>> parties) {
+        Map<UUID, Set<UUID>> copy = new LinkedHashMap<>();
+        parties.forEach((party, members) -> copy.put(party, Set.copyOf(members)));
+        return Collections.unmodifiableMap(copy);
     }
 }
