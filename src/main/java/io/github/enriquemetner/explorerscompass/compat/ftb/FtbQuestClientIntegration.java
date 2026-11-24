@@ -5,17 +5,15 @@ import dev.ftb.mods.ftbquests.client.gui.quests.QuestScreen;
 import dev.ftb.mods.ftbquests.quest.Quest;
 import dev.ftb.mods.ftbquests.quest.QuestObject;
 import dev.ftb.mods.ftbquests.quest.TeamData;
-import java.util.HashMap;
-import java.util.Map;
+import io.github.enriquemetner.explorerscompass.compat.ftb.FtbPreviewDelivery.Kind;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.util.Identifier;
 
 /** Loaded only on clients with FTB Quests installed. */
 public final class FtbQuestClientIntegration {
-    private static final Map<Long, FtbRewardPreview> pendingPreviews = new HashMap<>();
-    private static final Map<Long, FtbRewardPreview> pendingTaskPreviews = new HashMap<>();
-    private static ClientQuestFile pendingFile;
+    private static final FtbPreviewDelivery<ClientQuestFile> previews = new FtbPreviewDelivery<>();
 
     private FtbQuestClientIntegration() {}
 
@@ -53,43 +51,33 @@ public final class FtbQuestClientIntegration {
                 return false;
             }
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            pendingPreviews.clear();
-            pendingTaskPreviews.clear();
-            pendingFile = null;
-        });
-        ClientPlayNetworking.registerGlobalReceiver(FtbVisitStructuresTask.PREVIEW_PACKET_ID, (client, handler, buf, sender) -> {
-            long taskId = buf.readLong();
-            FtbRewardPreview preview = FtbRewardPreview.read(buf);
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> previews.clear());
+        registerPreviewReceiver(FtbVisitStructuresTask.PREVIEW_PACKET_ID, Kind.TASK);
+        registerPreviewReceiver(FtbQuestIntegration.PREVIEW_PACKET_ID, Kind.REWARD);
+    }
+
+    private static void registerPreviewReceiver(Identifier channel, Kind kind) {
+        ClientPlayNetworking.registerGlobalReceiver(channel, (client, handler, buf, sender) -> {
+            FtbPreviewPacket packet = FtbPreviewPacket.read(buf);
             client.execute(() -> {
                 ClientQuestFile file = ClientQuestFile.INSTANCE;
-                if (file == null) return;
-                useFile(file);
-                if (file.getBase(taskId) instanceof FtbVisitStructuresTask task) {
-                    task.setPreview(preview);
-                    task.editedFromGUI();
-                } else {
-                    pendingTaskPreviews.put(taskId, preview);
-                }
+                previews.receive(file, kind, packet, update -> deliver(file, kind, update));
             });
         });
-        ClientPlayNetworking.registerGlobalReceiver(FtbQuestIntegration.PREVIEW_PACKET_ID, (client, handler, buf, sender) -> {
-            long rewardId = buf.readLong();
-            FtbRewardPreview preview = FtbRewardPreview.read(buf);
-            client.execute(() -> {
-                ClientQuestFile file = ClientQuestFile.INSTANCE;
-                if (file == null) return;
-                useFile(file);
-                if (file.getBase(rewardId) instanceof FtbQuestIntegration.UnlockStructuresReward reward) {
-                    reward.setPreview(preview);
-                    // FTB buttons cache their titles too; rebuild the visible reward buttons.
-                    reward.editedFromGUI();
-                } else {
-                    // The server sends this before FTB's create response introduces the reward.
-                    pendingPreviews.put(rewardId, preview);
-                }
-            });
-        });
+    }
+
+    private static boolean deliver(ClientQuestFile file, Kind kind, FtbPreviewPacket packet) {
+        var object = file.getBase(packet.objectId());
+        if (kind == Kind.TASK && object instanceof FtbVisitStructuresTask task) {
+            task.setPreview(packet.preview());
+        } else if (kind == Kind.REWARD && object instanceof FtbQuestIntegration.UnlockStructuresReward reward) {
+            reward.setPreview(packet.preview());
+        } else {
+            return false;
+        }
+        // FTB's visible buttons cache titles and need to be rebuilt after an edit.
+        object.editedFromGUI();
+        return true;
     }
 
     private static Quest quest(long questId) {
@@ -101,24 +89,14 @@ public final class FtbQuestClientIntegration {
 
     static void applyPendingPreview(FtbQuestIntegration.UnlockStructuresReward reward) {
         if (!(reward.getQuestFile() instanceof ClientQuestFile file)) return;
-        useFile(file);
-        FtbRewardPreview preview = pendingPreviews.remove(reward.getId());
+        FtbRewardPreview preview = previews.take(file, Kind.REWARD, reward.getId());
         if (preview != null) reward.setPreview(preview);
-        // FTB refreshes its ID map and visible buttons immediately after onCreated returns.
+        // FTB refreshes its ID map and visible buttons after onCreated returns.
     }
 
     static void applyPendingTaskPreview(FtbVisitStructuresTask task) {
         if (!(task.getQuestFile() instanceof ClientQuestFile file)) return;
-        useFile(file);
-        FtbRewardPreview preview = pendingTaskPreviews.remove(task.getId());
+        FtbRewardPreview preview = previews.take(file, Kind.TASK, task.getId());
         if (preview != null) task.setPreview(preview);
-    }
-
-    private static void useFile(ClientQuestFile file) {
-        if (pendingFile != file) {
-            pendingPreviews.clear();
-            pendingTaskPreviews.clear();
-            pendingFile = file;
-        }
     }
 }

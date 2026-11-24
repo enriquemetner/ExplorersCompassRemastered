@@ -19,8 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
@@ -196,13 +194,7 @@ public final class FtbVisitStructuresTask extends AbstractBooleanTask {
     private void syncPreview() {
         if (!(getQuestFile() instanceof ServerQuestFile file) || file.isLoading()) return;
         setPreview(currentPreview());
-        for (ServerPlayerEntity player : file.server.getPlayerManager().getPlayerList()) {
-            if (!ServerPlayNetworking.canSend(player, PREVIEW_PACKET_ID)) continue;
-            PacketByteBuf buf = PacketByteBufs.create();
-            buf.writeLong(getId());
-            preview.write(buf);
-            ServerPlayNetworking.send(player, PREVIEW_PACKET_ID, buf);
-        }
+        new FtbPreviewPacket(getId(), preview).broadcast(file.server, PREVIEW_PACKET_ID);
     }
 
     private Set<Identifier> resolve(MinecraftServer server) {
