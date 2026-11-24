@@ -1,6 +1,6 @@
 package io.github.enriquemetner.explorerscompass.gui.dialog;
 
-import io.github.enriquemetner.explorerscompass.sorting.SortCriterion;
+import io.github.enriquemetner.explorerscompass.gui.SortCriterion;
 
 import java.util.ArrayList;
 import java.util.List;

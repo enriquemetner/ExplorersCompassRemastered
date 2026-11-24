@@ -32,7 +32,6 @@ import io.github.enriquemetner.explorerscompass.network.search.SearchListedPacke
 import io.github.enriquemetner.explorerscompass.network.search.SearchPacket;
 import io.github.enriquemetner.explorerscompass.network.search.SearchResultPacket;
 import io.github.enriquemetner.explorerscompass.network.unlocking.StructureRequirementsPacket;
-import io.github.enriquemetner.explorerscompass.sorting.SortCriterion;
 import io.github.enriquemetner.explorerscompass.structure.StructureUtils;
 import io.github.enriquemetner.explorerscompass.unlocking.RequirementNode;
 import io.github.enriquemetner.explorerscompass.util.ItemUtils;
