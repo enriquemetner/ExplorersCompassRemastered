@@ -27,6 +27,21 @@ public final class CompassRenderContexts {
         Context resolve(ItemStack stack, ClientWorld world, LivingEntity holder, int seed);
     }
     public interface Scope extends AutoCloseable { @Override void close(); }
+
+    /** Pairs render callbacks, including invocations that leave the enclosing context in place. */
+    public static final class ScopeStack {
+        private static final Scope EMPTY = () -> {};
+        private final Deque<Scope> frames = new ArrayDeque<>();
+
+        public void begin(Context context) {
+            frames.push(context == null ? EMPTY : push(context));
+        }
+
+        public void end() {
+            frames.pop().close();
+        }
+    }
+
     private static final ThreadLocal<Deque<Context>> SCOPES = ThreadLocal.withInitial(ArrayDeque::new);
     private static final List<Provider> PROVIDERS = new ArrayList<>();
     private CompassRenderContexts() {}
